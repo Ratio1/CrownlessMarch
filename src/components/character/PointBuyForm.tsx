@@ -58,7 +58,8 @@ export function PointBuyForm() {
       }
 
       if (body.character) {
-        setMessage(`Character ${body.character.name} created as ${body.character.classId}.`);
+        window.location.assign('/play');
+        return;
       } else {
         setMessage('Character created.');
       }

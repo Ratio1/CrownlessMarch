@@ -1,2 +1,81 @@
 # Thornwrithe
-A 4th edition D20 old-school MUD inspired web-browser multi-user RPG
+
+Thornwrithe is a Next.js browser RPG vertical slice with:
+- account registration + email verification
+- character creation with 22-point buy validation
+- world snapshots, movement, and encounter polling
+- a HUD-based `/play` interface
+
+## Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+
+## Install
+
+```bash
+pnpm install
+```
+
+## Local Development
+
+Start the app:
+
+```bash
+pnpm dev
+```
+
+App URL: `http://127.0.0.1:3020`
+
+## Local Persistence Modes
+
+`src/server/platform/cstore.ts` supports three modes:
+- in-memory for tests (`NODE_ENV=test` or `THORNWRITHE_USE_IN_MEMORY_CSTORE=1`)
+- file-backed local store (default for non-production when no `EE_CHAINSTORE_API_URL` is set)
+- edge-backed store (when configured and file mode is not forced)
+
+Useful env flags:
+- `THORNWRITHE_USE_FILE_CSTORE=1` force file store
+- `THORNWRITHE_CSTORE_FILE=<path>` choose local file path (default: `.thornwrithe/cstore.local.json`)
+- `THORNWRITHE_USE_IN_MEMORY_CSTORE=1` force process-local in-memory store
+
+## Seed Demo Data
+
+Seed a repeatable demo account and starter mobs:
+
+```bash
+pnpm run seed:dev
+```
+
+This command is idempotent and prints the demo credentials used by E2E.
+
+Default seeded login:
+- username: `demo-ranger`
+- password: `ThornwritheDemo!2026`
+
+## E2E First Session Flow
+
+Install Playwright browser binaries (once per machine):
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Run the first-session E2E spec:
+
+```bash
+pnpm run test:e2e -- tests/e2e/first-session.spec.ts
+```
+
+Expected flow:
+1. Login with seeded credentials
+2. Create a character
+3. Redirect to `/play`
+
+## Quality Commands
+
+```bash
+pnpm run typecheck
+pnpm run test
+pnpm run test:e2e -- tests/e2e/first-session.spec.ts
+```
