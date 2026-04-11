@@ -11,6 +11,7 @@
     "typecheck": "next typegen && tsc --noEmit --incremental false",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
+    "pretest:e2e": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "test:e2e": "playwright test",
     "seed:dev": "tsx scripts/seed-dev.ts",
     "simulate:balance": "tsx scripts/simulate-combat.ts"

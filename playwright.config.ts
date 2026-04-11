@@ -9,6 +9,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'pnpm dev',
+    cwd: __dirname,
     url: 'http://localhost:3020',
     reuseExistingServer: true
   }
