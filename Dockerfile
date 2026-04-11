@@ -12,6 +12,7 @@ RUN pnpm build
 
 FROM base AS runner
 ENV NODE_ENV=production
+ENV PORT=3020
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
