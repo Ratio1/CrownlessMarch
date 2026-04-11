@@ -34,6 +34,9 @@ export async function POST(request: Request) {
       if (error.code === 'INVALID_INPUT') {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
+      if (error.code === 'INVALID_CREDENTIALS') {
+        return NextResponse.json({ error: error.message }, { status: 401 });
+      }
       if (error.code === 'VERIFICATION_UNAVAILABLE') {
         return NextResponse.json({ error: error.message }, { status: 503 });
       }

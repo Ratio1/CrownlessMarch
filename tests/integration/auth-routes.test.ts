@@ -325,4 +325,45 @@ describe('auth routes', () => {
       }
     );
   });
+
+  it('rejects retry with a different password for a pending unverified account', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        THORNWRITHE_USE_IN_MEMORY_CSTORE: '1',
+        THORNWRITHE_EXPOSE_VERIFICATION_TOKEN: undefined,
+        RESEND_API_KEY: 'test-resend-key',
+        THORNWRITHE_EMAIL_FROM: 'thornwrithe@example.com'
+      },
+      async () => {
+        mockResendSend.mockResolvedValueOnce({ data: null, error: { message: 'delivery failed' } });
+
+        const firstAttempt = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'pwretry',
+            email: 'pwretry@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(firstAttempt.status).toBe(503);
+        expect(mockResendSend).toHaveBeenCalledTimes(1);
+
+        mockResendSend.mockResolvedValueOnce({ data: { id: 'email-4' }, error: null });
+
+        const secondAttempt = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'pwretry',
+            email: 'pwretry@example.com',
+            password: 'DifferentPassw0rd!'
+          })
+        );
+
+        expect(secondAttempt.status).toBe(401);
+        const secondBody = (await secondAttempt.json()) as { error?: string };
+        expect(secondBody.error).toMatch(/password/i);
+        expect(mockResendSend).toHaveBeenCalledTimes(1);
+      }
+    );
+  });
 });

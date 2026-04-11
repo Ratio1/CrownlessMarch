@@ -129,7 +129,7 @@ export async function registerAccount(input: {
     await getCStore().setJson(keys.account(account.id), account);
   } catch (error) {
     if (error instanceof UserExistsError) {
-      account = await loadPendingAccountForRetry(auth, input.username, email);
+      account = await loadPendingAccountForRetry(auth, input.username, email, input.password);
     } else if (error instanceof InvalidUsernameError) {
       throw new AccountServiceError('INVALID_INPUT', error.message);
     } else {
@@ -254,11 +254,20 @@ export async function loginAccount(input: {
 async function loadPendingAccountForRetry(
   auth: CStoreAuth,
   username: string,
-  normalizedEmail: string
+  normalizedEmail: string,
+  retryPassword: string
 ): Promise<AccountRecord> {
-  const existingUser = await auth.simple.getUser<AccountMetadata>(username);
-  if (!existingUser) {
-    throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
+  let existingUser;
+  try {
+    existingUser = await auth.simple.authenticate<AccountMetadata>(username, retryPassword);
+  } catch (error) {
+    if (error instanceof InvalidCredentialsError) {
+      throw new AccountServiceError(
+        'INVALID_CREDENTIALS',
+        'Pending account exists with a different password. Use the original password to retry verification.'
+      );
+    }
+    throw error;
   }
 
   const metadata = existingUser.metadata;
