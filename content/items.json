@@ -1,0 +1,7 @@
+[
+  { "id": "rusted-sword", "slot": "weapon", "label": "Rusted Sword", "bonus": 0, "effect": "+0 attack, 1d8 damage" },
+  { "id": "briar-axe-1", "slot": "weapon", "label": "Briar Axe +1", "bonus": 1, "effect": "+1 attack, +1 damage" },
+  { "id": "leather-armor", "slot": "armor", "label": "Leather Armor", "bonus": 0, "effect": "+0 AC" },
+  { "id": "shield-2", "slot": "shield", "label": "Shield +2", "bonus": 2, "effect": "+2 AC" },
+  { "id": "health-potion", "slot": "consumable", "label": "Health Potion", "bonus": 0, "effect": "Restore 2d6 + 4 HP" }
+]

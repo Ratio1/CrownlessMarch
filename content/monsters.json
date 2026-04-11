@@ -1,0 +1,32 @@
+[
+  {
+    "id": "briar-goblin",
+    "label": "Briar Goblin",
+    "level": 1,
+    "defenses": { "ac": 14, "fortitude": 12, "reflex": 13, "will": 11 },
+    "hitPoints": 18,
+    "attackBonus": 4,
+    "damage": { "dice": "1d6", "bonus": 2 },
+    "behavior": "skirmisher"
+  },
+  {
+    "id": "sap-wolf",
+    "label": "Sap Wolf",
+    "level": 2,
+    "defenses": { "ac": 15, "fortitude": 13, "reflex": 14, "will": 11 },
+    "hitPoints": 24,
+    "attackBonus": 5,
+    "damage": { "dice": "1d8", "bonus": 3 },
+    "behavior": "skirmisher"
+  },
+  {
+    "id": "root-troll",
+    "label": "Root Troll",
+    "level": 5,
+    "defenses": { "ac": 18, "fortitude": 18, "reflex": 13, "will": 14 },
+    "hitPoints": 64,
+    "attackBonus": 8,
+    "damage": { "dice": "2d8", "bonus": 4 },
+    "behavior": "bruiser"
+  }
+]

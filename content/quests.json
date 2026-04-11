@@ -1,0 +1,16 @@
+[
+  {
+    "id": "survey-the-briar-edge",
+    "label": "Survey the Briar Edge",
+    "type": "scout",
+    "objective": "Reveal six forest tiles east of town.",
+    "rewardXp": 120
+  },
+  {
+    "id": "burn-the-first-nest",
+    "label": "Burn the First Nest",
+    "type": "purge",
+    "objective": "Defeat two Briar Goblins near the ruined watchpost.",
+    "rewardXp": 180
+  }
+]
