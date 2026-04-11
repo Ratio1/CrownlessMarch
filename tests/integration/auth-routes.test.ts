@@ -3,6 +3,16 @@
  */
 import { __resetCStoreForTests } from '@/server/platform/cstore';
 
+const mockResendSend = jest.fn();
+
+jest.mock('resend', () => ({
+  Resend: jest.fn().mockImplementation(() => ({
+    emails: {
+      send: mockResendSend
+    }
+  }))
+}));
+
 type RouteHandler = (request: Request) => Promise<Response>;
 
 let registerPost: RouteHandler;
@@ -58,6 +68,8 @@ describe('auth routes', () => {
 
   beforeEach(() => {
     __resetCStoreForTests();
+    mockResendSend.mockReset();
+    mockResendSend.mockResolvedValue({ data: { id: 'email-1' }, error: null });
   });
 
   it('registers, verifies, logs in, and creates a character', async () => {
@@ -232,6 +244,84 @@ describe('auth routes', () => {
         );
 
         expect(loginResponse.status).toBe(401);
+      }
+    );
+  });
+
+  it('allows registration retry after provider send failure result', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        THORNWRITHE_USE_IN_MEMORY_CSTORE: '1',
+        THORNWRITHE_EXPOSE_VERIFICATION_TOKEN: undefined,
+        RESEND_API_KEY: 'test-resend-key',
+        THORNWRITHE_EMAIL_FROM: 'thornwrithe@example.com'
+      },
+      async () => {
+        mockResendSend.mockResolvedValueOnce({ data: null, error: { message: 'delivery failed' } });
+
+        const firstAttempt = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'retrysend',
+            email: 'retrysend@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(firstAttempt.status).toBe(503);
+        expect(mockResendSend).toHaveBeenCalledTimes(1);
+
+        mockResendSend.mockResolvedValueOnce({ data: { id: 'email-2' }, error: null });
+
+        const secondAttempt = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'retrysend',
+            email: 'retrysend@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(secondAttempt.status).toBe(201);
+        expect(mockResendSend).toHaveBeenCalledTimes(2);
+      }
+    );
+  });
+
+  it('allows registration retry after provider send throws', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        THORNWRITHE_USE_IN_MEMORY_CSTORE: '1',
+        THORNWRITHE_EXPOSE_VERIFICATION_TOKEN: undefined,
+        RESEND_API_KEY: 'test-resend-key',
+        THORNWRITHE_EMAIL_FROM: 'thornwrithe@example.com'
+      },
+      async () => {
+        mockResendSend.mockRejectedValueOnce(new Error('network failure'));
+
+        const firstAttempt = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'retrythrow',
+            email: 'retrythrow@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(firstAttempt.status).toBe(503);
+        expect(mockResendSend).toHaveBeenCalledTimes(1);
+
+        mockResendSend.mockResolvedValueOnce({ data: { id: 'email-3' }, error: null });
+
+        const secondAttempt = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'retrythrow',
+            email: 'retrythrow@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(secondAttempt.status).toBe(201);
+        expect(mockResendSend).toHaveBeenCalledTimes(2);
       }
     );
   });

@@ -5,7 +5,8 @@ import { getCStore } from '@/server/platform/cstore';
 import {
   consumeEmailVerificationToken,
   issueEmailVerificationToken,
-  sendVerificationEmail
+  sendVerificationEmail,
+  VerificationDeliveryError
 } from '@/server/auth/email-verification';
 
 const AUTH_HKEY = process.env.THORNWRITHE_AUTH_HKEY ?? 'thornwrithe:auth:users';
@@ -102,11 +103,12 @@ export async function registerAccount(input: {
   const auth = getAuthClient();
   await auth.simple.init();
 
-  const accountId = randomUUID();
-  const nowIso = new Date().toISOString();
   const email = normalizeEmail(input.email);
+  let account: AccountRecord;
 
   try {
+    const accountId = randomUUID();
+    const nowIso = new Date().toISOString();
     const user = await auth.simple.createUser<AccountMetadata>(input.username, input.password, {
       metadata: {
         accountId,
@@ -115,7 +117,7 @@ export async function registerAccount(input: {
       }
     });
 
-    const account: AccountRecord = {
+    account = {
       id: accountId,
       username: user.username,
       email,
@@ -125,32 +127,42 @@ export async function registerAccount(input: {
     };
 
     await getCStore().setJson(keys.account(account.id), account);
+  } catch (error) {
+    if (error instanceof UserExistsError) {
+      account = await loadPendingAccountForRetry(auth, input.username, email);
+    } else if (error instanceof InvalidUsernameError) {
+      throw new AccountServiceError('INVALID_INPUT', error.message);
+    } else {
+      throw error;
+    }
+  }
 
-    const verification = await issueEmailVerificationToken({
-      accountId: account.id,
-      username: account.username,
-      email: account.email
-    });
+  const verification = await issueEmailVerificationToken({
+    accountId: account.id,
+    username: account.username,
+    email: account.email
+  });
 
+  try {
     await sendVerificationEmail({
       email: account.email,
       username: account.username,
       token: verification.token
     });
-
-    return {
-      account,
-      verificationToken: verification.token
-    };
   } catch (error) {
-    if (error instanceof UserExistsError) {
-      throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
-    }
-    if (error instanceof InvalidUsernameError) {
-      throw new AccountServiceError('INVALID_INPUT', error.message);
+    if (error instanceof VerificationDeliveryError) {
+      throw new AccountServiceError(
+        'VERIFICATION_UNAVAILABLE',
+        'Failed to deliver verification email. Please retry registration to reissue verification.'
+      );
     }
     throw error;
   }
+
+  return {
+    account,
+    verificationToken: verification.token
+  };
 }
 
 export async function verifyAccountEmail(token: string): Promise<AccountRecord> {
@@ -237,4 +249,44 @@ export async function loginAccount(input: {
     }
     throw error;
   }
+}
+
+async function loadPendingAccountForRetry(
+  auth: CStoreAuth,
+  username: string,
+  normalizedEmail: string
+): Promise<AccountRecord> {
+  const existingUser = await auth.simple.getUser<AccountMetadata>(username);
+  if (!existingUser) {
+    throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
+  }
+
+  const metadata = existingUser.metadata;
+  if (!metadata || !metadata.accountId || !metadata.email || metadata.emailVerified) {
+    throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
+  }
+
+  if (normalizeEmail(metadata.email) !== normalizedEmail) {
+    throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
+  }
+
+  const existingAccount = await getCStore().getJson<AccountRecord>(keys.account(metadata.accountId));
+  if (existingAccount) {
+    if (existingAccount.emailVerified) {
+      throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
+    }
+    return existingAccount;
+  }
+
+  const rebuiltAccount: AccountRecord = {
+    id: metadata.accountId,
+    username: existingUser.username,
+    email: normalizeEmail(metadata.email),
+    emailVerified: false,
+    createdAt: existingUser.createdAt,
+    updatedAt: existingUser.updatedAt
+  };
+
+  await getCStore().setJson(keys.account(rebuiltAccount.id), rebuiltAccount);
+  return rebuiltAccount;
 }

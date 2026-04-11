@@ -5,6 +5,13 @@ import { getCStore } from '@/server/platform/cstore';
 
 const EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24;
 
+export class VerificationDeliveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VerificationDeliveryError';
+  }
+}
+
 export interface EmailVerificationRecord {
   token: string;
   accountId: string;
@@ -70,10 +77,23 @@ export async function sendVerificationEmail(params: {
   const verifyUrl = `${appOrigin}/api/auth/verify?token=${encodeURIComponent(params.token)}`;
   const resend = new Resend(apiKey);
 
-  await resend.emails.send({
-    from,
-    to: params.email,
-    subject: 'Verify your Thornwrithe account',
-    text: `Hello ${params.username}, verify your account: ${verifyUrl}`
-  });
+  try {
+    const result = await resend.emails.send({
+      from,
+      to: params.email,
+      subject: 'Verify your Thornwrithe account',
+      text: `Hello ${params.username}, verify your account: ${verifyUrl}`
+    });
+
+    if (!result || result.error || !result.data) {
+      const detail = result?.error ? ` ${String(result.error)}` : '';
+      throw new VerificationDeliveryError(`Verification email delivery failed.${detail}`);
+    }
+  } catch (error) {
+    if (error instanceof VerificationDeliveryError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new VerificationDeliveryError(`Verification email delivery failed. ${message}`);
+  }
 }
