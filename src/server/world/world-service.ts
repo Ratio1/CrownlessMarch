@@ -167,5 +167,14 @@ async function loadActiveEncounter(character: CharacterRecord): Promise<Encounte
   if (!character.activeEncounterId) {
     return null;
   }
-  return getCStore().getJson<EncounterSnapshot>(keys.encounter(character.activeEncounterId));
+  const encounter = await getCStore().getJson<EncounterSnapshot>(keys.encounter(character.activeEncounterId));
+  if (encounter?.status === 'active') {
+    return encounter;
+  }
+
+  await getCStore().setJson(keys.character(character.id), {
+    ...character,
+    activeEncounterId: undefined
+  });
+  return null;
 }

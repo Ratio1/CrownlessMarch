@@ -103,6 +103,28 @@ describe('world service', () => {
     const savedCharacter = await getCStore().getJson<CharacterRecord>(keys.character(character.id));
     expect(savedCharacter?.activeEncounterId).toBe(result.encounter?.id);
   });
+
+  it('returns null activeEncounter in world snapshot immediately after encounter resolution', async () => {
+    const character = await seedCharacter({
+      id: 'char-snapshot-clears-ended',
+      activeEncounterId: 'enc-ended-snapshot'
+    });
+
+    await getCStore().setJson(keys.encounter('enc-ended-snapshot'), {
+      id: 'enc-ended-snapshot',
+      characterId: character.id,
+      status: 'won',
+      round: 3,
+      nextRoundAt: new Date().toISOString(),
+      logs: [{ round: 1, text: 'A Briar Goblin lunges from the roots.' }]
+    });
+
+    const snapshot = await getWorldSnapshot(character.id);
+
+    expect(snapshot.activeEncounter).toBeNull();
+    const savedCharacter = await getCStore().getJson<CharacterRecord>(keys.character(character.id));
+    expect(savedCharacter?.activeEncounterId).toBeUndefined();
+  });
 });
 
 async function seedCharacter(overrides?: Partial<CharacterRecord>) {
