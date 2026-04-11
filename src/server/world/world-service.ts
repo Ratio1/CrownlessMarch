@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { loadStarterRegion, type RegionRecord } from '@/server/world/region-loader';
 import { getCStore } from '@/server/platform/cstore';
+import { createEncounter } from '@/server/combat/encounter-service';
 import { type EncounterSnapshot } from '@/shared/domain/combat';
 import { getVisionWindow } from '@/shared/domain/fog';
 import { type CharacterRecord } from '@/shared/domain/types';
@@ -155,16 +155,12 @@ async function maybeStartEncounter(
     }
   }
 
-  const encounter: EncounterSnapshot = {
-    id: randomUUID(),
-    status: 'active',
-    round: 1,
-    nextRoundAt: new Date().toISOString(),
-    logs: [{ round: 1, text: `A Briar Goblin lunges from the ${tile.kind}.` }]
-  };
-
-  await getCStore().setJson(keys.encounter(encounter.id), encounter);
-  return encounter;
+  return createEncounter({
+    characterId: character.id,
+    characterName: character.name,
+    monsterName: 'Briar Goblin',
+    tileKind: tile.kind
+  });
 }
 
 async function loadActiveEncounter(character: CharacterRecord): Promise<EncounterSnapshot | null> {
