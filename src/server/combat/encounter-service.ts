@@ -70,11 +70,15 @@ export async function getEncounterSnapshot(encounterId: string): Promise<Encount
 }
 
 export async function pollEncounter(encounterId: string, characterId?: string): Promise<EncounterSnapshot> {
-  const encounter = await getEncounterSnapshot(encounterId);
-  if (characterId && encounter.characterId && encounter.characterId !== characterId) {
+  const rawEncounter = await loadEncounter(encounterId);
+  if (!rawEncounter) {
+    throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
+  }
+  if (characterId && rawEncounter.characterId && rawEncounter.characterId !== characterId) {
     throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
   }
 
+  const encounter = hydrateEncounterSnapshot(rawEncounter);
   const scopedEncounter: EncounterSnapshot = {
     ...encounter,
     characterId: encounter.characterId ?? characterId
@@ -98,11 +102,15 @@ export async function queueEncounterOverride(
     throw new EncounterServiceError('INVALID_OVERRIDE', 'Override command cannot be empty.');
   }
 
-  const encounter = await getEncounterSnapshot(encounterId);
-  if (input.characterId && encounter.characterId && encounter.characterId !== input.characterId) {
+  const rawEncounter = await loadEncounter(encounterId);
+  if (!rawEncounter) {
+    throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
+  }
+  if (input.characterId && rawEncounter.characterId && rawEncounter.characterId !== input.characterId) {
     throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
   }
 
+  const encounter = hydrateEncounterSnapshot(rawEncounter);
   const heroActorId = resolveHeroActorId(encounter, input.characterId);
   const queued: EncounterSnapshot = {
     ...encounter,
