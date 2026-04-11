@@ -51,7 +51,7 @@ interface UseGameSnapshotState {
   error: string | null;
   refresh: () => Promise<void>;
   move: (direction: MoveDirection) => Promise<void>;
-  queueOverride: (command: string) => Promise<void>;
+  queueOverride: (command: string) => Promise<boolean>;
 }
 
 const POLL_INTERVAL_MS = 2_500;
@@ -64,49 +64,68 @@ export function useGameSnapshot(): UseGameSnapshotState {
   const [overridePending, setOverridePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasBootstrappedRef = useRef(false);
+  const latestRequestIdRef = useRef(0);
+
+  const beginRequest = () => {
+    latestRequestIdRef.current += 1;
+    return latestRequestIdRef.current;
+  };
+
+  const isLatestRequest = (requestId: number) => requestId === latestRequestIdRef.current;
+
+  async function loadWorldSnapshot() {
+    const worldResponse = await fetch('/api/world/snapshot', {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store'
+    });
+    const worldBody = (await worldResponse.json()) as WorldSnapshotResponse;
+    if (!worldResponse.ok || !worldBody.snapshot) {
+      throw new Error(worldBody.error ?? 'Failed to load world snapshot.');
+    }
+    return worldBody.snapshot;
+  }
+
+  async function loadEncounterSnapshot(encounterId: string) {
+    const encounterResponse = await fetch(`/api/encounters/${encounterId}/snapshot`, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store'
+    });
+    const encounterBody = (await encounterResponse.json()) as EncounterSnapshotResponse;
+    if (!encounterResponse.ok || !encounterBody.encounter) {
+      throw new Error(encounterBody.error ?? 'Failed to poll encounter snapshot.');
+    }
+    return encounterBody.encounter;
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     const poll = async () => {
+      const requestId = beginRequest();
       try {
-        const worldResponse = await fetch('/api/world/snapshot', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store'
-        });
-        const worldBody = (await worldResponse.json()) as WorldSnapshotResponse;
-        if (!worldResponse.ok || !worldBody.snapshot) {
-          throw new Error(worldBody.error ?? 'Failed to load world snapshot.');
-        }
-        if (cancelled) {
+        const snapshot = await loadWorldSnapshot();
+        if (cancelled || !isLatestRequest(requestId)) {
           return;
         }
 
-        setWorldSnapshot(worldBody.snapshot);
-
-        const encounterId = worldBody.snapshot.activeEncounter?.id;
-        if (!encounterId) {
-          setEncounterSnapshot(null);
-          setError(null);
-          return;
+        let encounter: EncounterSnapshot | null = null;
+        const encounterId = snapshot.activeEncounter?.id;
+        if (encounterId) {
+          encounter = await loadEncounterSnapshot(encounterId);
+          if (cancelled || !isLatestRequest(requestId)) {
+            return;
+          }
         }
 
-        const encounterResponse = await fetch(`/api/encounters/${encounterId}/snapshot`, {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store'
-        });
-        const encounterBody = (await encounterResponse.json()) as EncounterSnapshotResponse;
-        if (!encounterResponse.ok || !encounterBody.encounter) {
-          throw new Error(encounterBody.error ?? 'Failed to poll encounter snapshot.');
-        }
-        if (!cancelled) {
-          setEncounterSnapshot(encounterBody.encounter);
+        if (!cancelled && isLatestRequest(requestId)) {
+          setWorldSnapshot(snapshot);
+          setEncounterSnapshot(encounter);
           setError(null);
         }
       } catch (caught) {
-        if (!cancelled) {
+        if (!cancelled && isLatestRequest(requestId)) {
           setError(caught instanceof Error ? caught.message : 'Failed to load world state.');
         }
       } finally {
@@ -129,31 +148,40 @@ export function useGameSnapshot(): UseGameSnapshotState {
   }, []);
 
   async function refresh() {
+    const requestId = beginRequest();
     setLoading(true);
     setError(null);
     try {
-      const worldResponse = await fetch('/api/world/snapshot', {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store'
-      });
-      const worldBody = (await worldResponse.json()) as WorldSnapshotResponse;
-      if (!worldResponse.ok || !worldBody.snapshot) {
-        throw new Error(worldBody.error ?? 'Failed to load world snapshot.');
+      const snapshot = await loadWorldSnapshot();
+      if (!isLatestRequest(requestId)) {
+        return;
       }
 
-      setWorldSnapshot(worldBody.snapshot);
-      if (!worldBody.snapshot.activeEncounter) {
-        setEncounterSnapshot(null);
+      let encounter: EncounterSnapshot | null = null;
+      const encounterId = snapshot.activeEncounter?.id;
+      if (encounterId) {
+        encounter = await loadEncounterSnapshot(encounterId);
+        if (!isLatestRequest(requestId)) {
+          return;
+        }
+      }
+
+      if (isLatestRequest(requestId)) {
+        setWorldSnapshot(snapshot);
+        setEncounterSnapshot(encounter);
+        setError(null);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to load world state.');
+      if (isLatestRequest(requestId)) {
+        setError(caught instanceof Error ? caught.message : 'Failed to load world state.');
+      }
     } finally {
       setLoading(false);
     }
   }
 
   async function move(direction: MoveDirection) {
+    const requestId = beginRequest();
     setMoving(true);
     setError(null);
     try {
@@ -168,21 +196,27 @@ export function useGameSnapshot(): UseGameSnapshotState {
         throw new Error(moveBody.error ?? 'Move failed.');
       }
 
-      setWorldSnapshot(moveBody.snapshot);
-      setEncounterSnapshot(moveBody.encounter ?? moveBody.snapshot.activeEncounter ?? null);
+      if (isLatestRequest(requestId)) {
+        setWorldSnapshot(moveBody.snapshot);
+        setEncounterSnapshot(moveBody.encounter ?? moveBody.snapshot.activeEncounter ?? null);
+        setError(null);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Move failed.');
+      if (isLatestRequest(requestId)) {
+        setError(caught instanceof Error ? caught.message : 'Move failed.');
+      }
     } finally {
       setMoving(false);
     }
   }
 
   async function queueOverride(command: string) {
+    const requestId = beginRequest();
     const trimmedCommand = command.trim();
     const encounterId = encounterSnapshot?.id ?? worldSnapshot?.activeEncounter?.id;
 
     if (!trimmedCommand || !encounterId) {
-      return;
+      return false;
     }
 
     setOverridePending(true);
@@ -201,9 +235,16 @@ export function useGameSnapshot(): UseGameSnapshotState {
         throw new Error(body.error ?? 'Failed to queue override.');
       }
 
-      setEncounterSnapshot(body.encounter);
+      if (isLatestRequest(requestId)) {
+        setEncounterSnapshot(body.encounter);
+        setError(null);
+      }
+      return true;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to queue override.');
+      if (isLatestRequest(requestId)) {
+        setError(caught instanceof Error ? caught.message : 'Failed to queue override.');
+      }
+      return false;
     } finally {
       setOverridePending(false);
     }

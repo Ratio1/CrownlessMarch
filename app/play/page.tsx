@@ -36,7 +36,12 @@ export default function PlayPage() {
           <CombatLogPanel encounter={activeEncounter} loading={loading} />
           <QuestPanel snapshot={worldSnapshot} />
           <MovementPad disabled={encounterIsActive} moving={moving} onMove={move} />
-          <OverrideBar encounterId={activeEncounter?.id ?? null} pending={overridePending} onQueue={queueOverride} />
+          <OverrideBar
+            encounterId={activeEncounter?.id ?? null}
+            encounterStatus={activeEncounter?.status ?? null}
+            pending={overridePending}
+            onQueue={queueOverride}
+          />
         </aside>
       </section>
     </main>
