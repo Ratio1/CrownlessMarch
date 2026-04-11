@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import createEdgeSdk from '@ratio1/edge-sdk-ts';
 import type { CStoreLikeClient } from '@ratio1/cstore-auth-ts';
@@ -12,6 +12,10 @@ interface PersistedCStoreData {
   keyStore: Record<string, string>;
   hashStore: Record<string, Record<string, string>>;
 }
+
+const FILE_LOCK_RETRY_MS = 25;
+const FILE_LOCK_TIMEOUT_MS = 5_000;
+const FILE_LOCK_STALE_MS = 30_000;
 
 class InMemoryPlatformCStore implements PlatformCStore {
   private readonly hashStore = new Map<string, Map<string, string>>();
@@ -55,8 +59,11 @@ class InMemoryPlatformCStore implements PlatformCStore {
 
 class FilePlatformCStore implements PlatformCStore {
   private writeQueue = Promise.resolve();
+  private readonly lockPath: string;
 
-  constructor(private readonly filePath: string) {}
+  constructor(private readonly filePath: string) {
+    this.lockPath = `${this.filePath}.lock`;
+  }
 
   async getJson<T>(key: string): Promise<T | null> {
     const data = await this.readData();
@@ -96,7 +103,14 @@ class FilePlatformCStore implements PlatformCStore {
   }
 
   private async withWriteLock(action: () => Promise<void>) {
-    this.writeQueue = this.writeQueue.then(action);
+    this.writeQueue = this.writeQueue.then(async () => {
+      await this.acquireCrossProcessLock();
+      try {
+        await action();
+      } finally {
+        await this.releaseCrossProcessLock();
+      }
+    });
     await this.writeQueue;
   }
 
@@ -115,8 +129,70 @@ class FilePlatformCStore implements PlatformCStore {
 
   private async writeData(data: PersistedCStoreData): Promise<void> {
     await mkdir(path.dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(data), 'utf8');
+    const payload = JSON.stringify(data);
+    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+
+    await writeFile(tempPath, payload, 'utf8');
+    try {
+      await rename(tempPath, this.filePath);
+    } catch (error) {
+      await unlink(tempPath).catch(() => {});
+      throw error;
+    }
   }
+
+  private async acquireCrossProcessLock() {
+    const startedAt = Date.now();
+
+    while (true) {
+      try {
+        const handle = await open(this.lockPath, 'wx');
+        await handle.writeFile(`${process.pid}\n${new Date().toISOString()}\n`);
+        await handle.close();
+        return;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== 'EEXIST') {
+          throw error;
+        }
+
+        await this.maybeClearStaleLock();
+        if (Date.now() - startedAt >= FILE_LOCK_TIMEOUT_MS) {
+          throw new Error(`Timed out acquiring local CStore lock at ${this.lockPath}`);
+        }
+        await sleep(FILE_LOCK_RETRY_MS);
+      }
+    }
+  }
+
+  private async maybeClearStaleLock() {
+    try {
+      const lockStats = await stat(this.lockPath);
+      if (Date.now() - lockStats.mtimeMs > FILE_LOCK_STALE_MS) {
+        await unlink(this.lockPath);
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  private async releaseCrossProcessLock() {
+    try {
+      await unlink(this.lockPath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 class EdgePlatformCStore implements PlatformCStore {

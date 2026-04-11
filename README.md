@@ -67,6 +67,8 @@ Run the first-session E2E spec:
 pnpm run test:e2e -- tests/e2e/first-session.spec.ts
 ```
 
+This command runs `seed:dev` automatically via Playwright global setup.
+
 Expected flow:
 1. Login with seeded credentials
 2. Create a character
