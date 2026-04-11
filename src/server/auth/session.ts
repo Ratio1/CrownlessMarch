@@ -10,6 +10,7 @@ export interface SessionRecord {
   id: string;
   accountId: string;
   username: string;
+  characterId?: string;
   createdAt: string;
   expiresAt: string;
 }

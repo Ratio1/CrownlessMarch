@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     };
 
     await getCStore().setJson(keys.character(character.id), character);
+    await getCStore().setJson(keys.session(session.id), { ...session, characterId: character.id });
     return NextResponse.json({ character }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
