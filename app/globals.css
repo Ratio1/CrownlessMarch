@@ -190,12 +190,12 @@ body {
   gap: 8px;
 }
 
-button,
-input {
+.play-shell button,
+.play-shell input {
   font: inherit;
 }
 
-button {
+.play-shell button {
   border: 1px solid var(--border);
   background: var(--panel-strong);
   color: var(--ink);
@@ -203,12 +203,12 @@ button {
   cursor: pointer;
 }
 
-button:disabled {
+.play-shell button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-input {
+.play-shell input {
   border: 1px solid var(--border);
   background: rgba(10, 14, 11, 0.9);
   color: var(--ink);

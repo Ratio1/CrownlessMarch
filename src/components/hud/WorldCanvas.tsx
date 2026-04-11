@@ -11,6 +11,9 @@ interface WorldCanvasProps {
 export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<ThornwritheGameBridge | null>(null);
+  const latestSnapshotRef = useRef<WorldSnapshot | null>(snapshot);
+
+  latestSnapshotRef.current = snapshot;
 
   useEffect(() => {
     let disposed = false;
@@ -25,8 +28,9 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
         return;
       }
       gameRef.current = game;
-      if (snapshot) {
-        game.render(snapshot);
+      const queuedSnapshot = latestSnapshotRef.current;
+      if (queuedSnapshot) {
+        game.render(queuedSnapshot);
       }
     });
 
