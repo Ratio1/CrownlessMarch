@@ -44,7 +44,7 @@ export interface MoveCharacterResult {
 
 export class WorldServiceError extends Error {
   constructor(
-    readonly code: 'CHARACTER_NOT_FOUND' | 'MOVE_BLOCKED' | 'OUT_OF_BOUNDS',
+    readonly code: 'CHARACTER_NOT_FOUND' | 'MOVE_BLOCKED' | 'OUT_OF_BOUNDS' | 'ENCOUNTER_ACTIVE',
     message: string
   ) {
     super(message);
@@ -59,6 +59,10 @@ export async function getWorldSnapshot(characterId: string): Promise<WorldSnapsh
 
 export async function moveCharacter(characterId: string, direction: MoveDirection): Promise<MoveCharacterResult> {
   const [character, region] = await Promise.all([loadCharacter(characterId), loadStarterRegion()]);
+  const activeEncounter = await loadActiveEncounter(character);
+  if (activeEncounter?.status === 'active') {
+    throw new WorldServiceError('ENCOUNTER_ACTIVE', 'Cannot move while an encounter is active.');
+  }
   const delta = directionDelta[direction];
   const nextPosition = {
     x: character.position.x + delta.x,
@@ -95,13 +99,11 @@ async function buildSnapshot(character: CharacterRecord, region: RegionRecord): 
 
   for (let y = character.position.y - vision.radius; y <= character.position.y + vision.radius; y += 1) {
     for (let x = character.position.x - vision.radius; x <= character.position.x + vision.radius; x += 1) {
+      if (!isWithinBounds({ x, y }, region)) {
+        continue;
+      }
       visibleTiles.push(getTileAt(region, x, y));
     }
-  }
-
-  let activeEncounter: EncounterSnapshot | null = null;
-  if (character.activeEncounterId) {
-    activeEncounter = await getCStore().getJson<EncounterSnapshot>(keys.encounter(character.activeEncounterId));
   }
 
   return {
@@ -109,7 +111,7 @@ async function buildSnapshot(character: CharacterRecord, region: RegionRecord): 
     position: { ...character.position },
     vision,
     visibleTiles,
-    activeEncounter
+    activeEncounter: await loadActiveEncounter(character)
   };
 }
 
@@ -163,4 +165,11 @@ async function maybeStartEncounter(
 
   await getCStore().setJson(keys.encounter(encounter.id), encounter);
   return encounter;
+}
+
+async function loadActiveEncounter(character: CharacterRecord): Promise<EncounterSnapshot | null> {
+  if (!character.activeEncounterId) {
+    return null;
+  }
+  return getCStore().getJson<EncounterSnapshot>(keys.encounter(character.activeEncounterId));
 }

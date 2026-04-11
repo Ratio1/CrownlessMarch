@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSessionFromRequest } from '@/server/auth/session';
+import type { AccountRecord } from '@/server/auth/account-service';
 import { getCStore } from '@/server/platform/cstore';
 import { validatePointBuy } from '@/shared/domain/point-buy';
 import { type CharacterRecord, characterClasses } from '@/shared/domain/types';
@@ -61,6 +62,14 @@ export async function POST(request: Request) {
     };
 
     await getCStore().setJson(keys.character(character.id), character);
+    const account = await getCStore().getJson<AccountRecord>(keys.account(session.accountId));
+    if (account) {
+      await getCStore().setJson(keys.account(account.id), {
+        ...account,
+        activeCharacterId: character.id,
+        updatedAt: new Date().toISOString()
+      });
+    }
     await getCStore().setJson(keys.session(session.id), { ...session, characterId: character.id });
     return NextResponse.json({ character }, { status: 201 });
   } catch (error) {

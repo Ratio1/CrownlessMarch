@@ -34,11 +34,53 @@ describe('world service', () => {
     const savedCharacter = await getCStore().getJson<CharacterRecord>(keys.character(character.id));
     expect(savedCharacter?.activeEncounterId).toBeTruthy();
   });
+
+  it('does not include out-of-bounds coordinates in edge snapshots', async () => {
+    const character = await seedCharacter({
+      id: 'char-edge-test',
+      position: { x: 0, y: 0 }
+    });
+
+    const snapshot = await getWorldSnapshot(character.id);
+
+    expect(snapshot.visibleTiles).toHaveLength(4);
+    expect(snapshot.visibleTiles.every((tile) => tile.x >= 0 && tile.y >= 0)).toBe(true);
+    expect(snapshot.visibleTiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ x: 0, y: 0 }),
+        expect.objectContaining({ x: 1, y: 0 }),
+        expect.objectContaining({ x: 0, y: 1 }),
+        expect.objectContaining({ x: 1, y: 1 })
+      ])
+    );
+  });
+
+  it('blocks movement while the character has an active encounter', async () => {
+    const character = await seedCharacter({
+      id: 'char-encounter-lock',
+      activeEncounterId: 'enc-lock-1'
+    });
+
+    await getCStore().setJson(keys.encounter('enc-lock-1'), {
+      id: 'enc-lock-1',
+      status: 'active',
+      round: 2,
+      nextRoundAt: new Date().toISOString(),
+      logs: [{ round: 1, text: 'Encounter started.' }]
+    });
+
+    await expect(moveCharacter(character.id, 'east')).rejects.toMatchObject({
+      code: 'ENCOUNTER_ACTIVE'
+    });
+
+    const savedCharacter = await getCStore().getJson<CharacterRecord>(keys.character(character.id));
+    expect(savedCharacter?.position).toEqual({ x: 5, y: 5 });
+  });
 });
 
-async function seedCharacter() {
+async function seedCharacter(overrides?: Partial<CharacterRecord>) {
   const character: CharacterRecord = {
-    id: 'char-world-test',
+    id: overrides?.id ?? 'char-world-test',
     accountId: 'acct-world-test',
     name: 'Mossblade',
     classId: 'fighter',
@@ -52,14 +94,15 @@ async function seedCharacter() {
       wisdom: 9,
       charisma: 8
     },
-    position: { x: 5, y: 5 },
+    position: overrides?.position ?? { x: 5, y: 5 },
     hitPoints: {
       current: 12,
       max: 12
     },
     inventory: ['rusted-sword'],
     equipped: { weapon: 'rusted-sword' },
-    activeQuestIds: []
+    activeQuestIds: [],
+    activeEncounterId: overrides?.activeEncounterId
   };
 
   await getCStore().setJson(keys.character(character.id), character);

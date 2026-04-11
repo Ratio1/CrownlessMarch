@@ -18,6 +18,7 @@ export interface AccountRecord {
   username: string;
   email: string;
   emailVerified: boolean;
+  activeCharacterId?: string;
   createdAt: string;
   updatedAt: string;
 }
