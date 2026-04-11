@@ -21,6 +21,11 @@ export interface EmailVerificationRecord {
   expiresAt: string;
 }
 
+export function getVerificationEmailFrom(): string | null {
+  const configuredFrom = process.env.THORNWRITHE_EMAIL_FROM?.trim() || process.env.RESEND_FROM?.trim();
+  return configuredFrom || null;
+}
+
 export async function issueEmailVerificationToken(params: {
   accountId: string;
   username: string;
@@ -67,7 +72,7 @@ export async function sendVerificationEmail(params: {
   token: string;
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.THORNWRITHE_EMAIL_FROM;
+  const from = getVerificationEmailFrom();
 
   if (!apiKey || !from) {
     return;

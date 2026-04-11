@@ -4,6 +4,7 @@ import { keys } from '@/shared/persistence/keys';
 import { getCStore } from '@/server/platform/cstore';
 import {
   consumeEmailVerificationToken,
+  getVerificationEmailFrom,
   issueEmailVerificationToken,
   sendVerificationEmail,
   VerificationDeliveryError
@@ -83,7 +84,7 @@ function validateRegisterInput(input: { username: string; email: string; passwor
 function canDeliverOrExposeVerificationToken(): boolean {
   const exposeVerificationToken =
     process.env.NODE_ENV === 'test' || process.env.THORNWRITHE_EXPOSE_VERIFICATION_TOKEN === '1';
-  const emailDeliveryConfigured = Boolean(process.env.RESEND_API_KEY && process.env.THORNWRITHE_EMAIL_FROM);
+  const emailDeliveryConfigured = Boolean(process.env.RESEND_API_KEY && getVerificationEmailFrom());
 
   return exposeVerificationToken || emailDeliveryConfigured;
 }

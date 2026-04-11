@@ -248,6 +248,36 @@ describe('auth routes', () => {
     );
   });
 
+  it('allows production registration when only the legacy resend sender env is configured', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        THORNWRITHE_USE_IN_MEMORY_CSTORE: '1',
+        THORNWRITHE_EXPOSE_VERIFICATION_TOKEN: undefined,
+        RESEND_API_KEY: 'test-resend-key',
+        THORNWRITHE_EMAIL_FROM: undefined,
+        RESEND_FROM: 'thornwrithe@example.com'
+      },
+      async () => {
+        const registerResponse = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'legacysender',
+            email: 'legacysender@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(registerResponse.status).toBe(201);
+        expect(mockResendSend).toHaveBeenCalledWith(
+          expect.objectContaining({
+            from: 'thornwrithe@example.com',
+            to: 'legacysender@example.com'
+          })
+        );
+      }
+    );
+  });
+
   it('allows registration retry after provider send failure result', async () => {
     await withEnv(
       {

@@ -17,6 +17,15 @@ Thornwrithe is a Next.js browser RPG vertical slice with:
 pnpm install
 ```
 
+Copy the checked-in env template before running the app:
+
+```bash
+cp .env.example .env.local
+```
+
+Email verification expects `THORNWRITHE_EMAIL_FROM` as the canonical sender variable.
+`RESEND_FROM` is still accepted as a legacy fallback for existing local setups.
+
 ## Local Development
 
 Start the app:
@@ -38,6 +47,7 @@ Useful env flags:
 - `THORNWRITHE_USE_FILE_CSTORE=1` force file store
 - `THORNWRITHE_CSTORE_FILE=<path>` choose local file path (default: `.thornwrithe/cstore.local.json`)
 - `THORNWRITHE_USE_IN_MEMORY_CSTORE=1` force process-local in-memory store
+- `THORNWRITHE_APP_ORIGIN=<url>` choose the verification-link origin (default: `http://localhost:3020`)
 
 ## Seed Demo Data
 
