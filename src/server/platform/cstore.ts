@@ -143,6 +143,7 @@ class FilePlatformCStore implements PlatformCStore {
 
   private async acquireCrossProcessLock() {
     const startedAt = Date.now();
+    await mkdir(path.dirname(this.lockPath), { recursive: true });
 
     while (true) {
       try {
@@ -287,6 +288,10 @@ function createEmptyPersistedData(): PersistedCStoreData {
 }
 
 function parsePersistedData(raw: string): PersistedCStoreData {
+  if (raw.trim().length === 0) {
+    return createEmptyPersistedData();
+  }
+
   const parsed = JSON.parse(raw) as Partial<PersistedCStoreData> | null;
   if (!parsed || typeof parsed !== 'object') {
     return createEmptyPersistedData();
