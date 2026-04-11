@@ -1,12 +1,11 @@
+import { fileURLToPath } from 'node:url';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  experimental: {
-    typedRoutes: true
-  },
-  webpack(config) {
-    config.resolve.alias.canvas = false;
-    return config;
+  typedRoutes: true,
+  turbopack: {
+    root: fileURLToPath(new URL('.', import.meta.url))
   }
 };
 
