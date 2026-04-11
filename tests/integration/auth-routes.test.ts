@@ -22,6 +22,32 @@ function jsonRequest(url: string, payload: unknown, init?: RequestInit) {
   });
 }
 
+async function withEnv(overrides: Record<string, string | undefined>, run: () => Promise<void>) {
+  const previousValues = Object.fromEntries(
+    Object.keys(overrides).map((key) => [key, process.env[key]])
+  ) as Record<string, string | undefined>;
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  try {
+    await run();
+  } finally {
+    for (const [key, value] of Object.entries(previousValues)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 describe('auth routes', () => {
   beforeAll(async () => {
     ({ POST: registerPost } = await import('@/app/api/auth/register/route'));
@@ -160,5 +186,53 @@ describe('auth routes', () => {
     expect(createCharacterResponse.status).toBe(400);
     const errorBody = (await createCharacterResponse.json()) as { error?: string };
     expect(errorBody.error).toMatch(/point-buy/i);
+  });
+
+  it('returns a client error for invalid usernames', async () => {
+    const registerResponse = await registerPost(
+      jsonRequest('http://localhost/api/auth/register', {
+        username: 'bad username',
+        email: 'invalid-name@example.com',
+        password: 'S3curePassw0rd!'
+      })
+    );
+
+    expect(registerResponse.status).toBe(400);
+    const body = (await registerResponse.json()) as { error?: string };
+    expect(body.error).toMatch(/username/i);
+  });
+
+  it('fails registration when verification delivery is unavailable in non-test flows', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        THORNWRITHE_USE_IN_MEMORY_CSTORE: '1',
+        THORNWRITHE_EXPOSE_VERIFICATION_TOKEN: undefined,
+        RESEND_API_KEY: undefined,
+        THORNWRITHE_EMAIL_FROM: undefined
+      },
+      async () => {
+        const registerResponse = await registerPost(
+          jsonRequest('http://localhost/api/auth/register', {
+            username: 'nodelivery',
+            email: 'nodelivery@example.com',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(registerResponse.status).toBe(503);
+        const registerBody = (await registerResponse.json()) as { error?: string };
+        expect(registerBody.error).toMatch(/verification/i);
+
+        const loginResponse = await loginPost(
+          jsonRequest('http://localhost/api/auth/login', {
+            username: 'nodelivery',
+            password: 'S3curePassw0rd!'
+          })
+        );
+
+        expect(loginResponse.status).toBe(401);
+      }
+    );
   });
 });

@@ -34,6 +34,9 @@ export async function POST(request: Request) {
       if (error.code === 'INVALID_INPUT') {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
+      if (error.code === 'VERIFICATION_UNAVAILABLE') {
+        return NextResponse.json({ error: error.message }, { status: 503 });
+      }
     }
 
     return NextResponse.json({ error: 'Failed to register account.' }, { status: 500 });

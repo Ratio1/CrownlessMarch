@@ -19,7 +19,10 @@ describe('CreateCharacterPage', () => {
     const submitButton = screen.getByRole('button', { name: /create character/i });
     expect(submitButton).toBeDisabled();
 
-    await user.type(screen.getByLabelText(/character name/i), 'Mossblade');
+    await user.type(screen.getByLabelText(/character name/i), 'ab');
+    expect(submitButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/character name/i), 'c');
     expect(submitButton).toBeEnabled();
   });
 });

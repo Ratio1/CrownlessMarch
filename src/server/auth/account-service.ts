@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { CStoreAuth, InvalidCredentialsError, UserExistsError } from '@ratio1/cstore-auth-ts';
+import { CStoreAuth, InvalidCredentialsError, InvalidUsernameError, UserExistsError } from '@ratio1/cstore-auth-ts';
 import { keys } from '@/shared/persistence/keys';
 import { getCStore } from '@/server/platform/cstore';
 import {
@@ -35,7 +35,8 @@ export class AccountServiceError extends Error {
       | 'INVALID_CREDENTIALS'
       | 'EMAIL_NOT_VERIFIED'
       | 'INVALID_VERIFICATION_TOKEN'
-      | 'ACCOUNT_NOT_FOUND',
+      | 'ACCOUNT_NOT_FOUND'
+      | 'VERIFICATION_UNAVAILABLE',
     message: string
   ) {
     super(message);
@@ -77,12 +78,26 @@ function validateRegisterInput(input: { username: string; email: string; passwor
   }
 }
 
+function canDeliverOrExposeVerificationToken(): boolean {
+  const exposeVerificationToken =
+    process.env.NODE_ENV === 'test' || process.env.THORNWRITHE_EXPOSE_VERIFICATION_TOKEN === '1';
+  const emailDeliveryConfigured = Boolean(process.env.RESEND_API_KEY && process.env.THORNWRITHE_EMAIL_FROM);
+
+  return exposeVerificationToken || emailDeliveryConfigured;
+}
+
 export async function registerAccount(input: {
   username: string;
   email: string;
   password: string;
 }): Promise<{ account: AccountRecord; verificationToken: string }> {
   validateRegisterInput(input);
+  if (!canDeliverOrExposeVerificationToken()) {
+    throw new AccountServiceError(
+      'VERIFICATION_UNAVAILABLE',
+      'Verification delivery is unavailable. Configure email delivery or token exposure.'
+    );
+  }
 
   const auth = getAuthClient();
   await auth.simple.init();
@@ -130,6 +145,9 @@ export async function registerAccount(input: {
   } catch (error) {
     if (error instanceof UserExistsError) {
       throw new AccountServiceError('ACCOUNT_EXISTS', 'Username is already taken.');
+    }
+    if (error instanceof InvalidUsernameError) {
+      throw new AccountServiceError('INVALID_INPUT', error.message);
     }
     throw error;
   }
@@ -210,6 +228,9 @@ export async function loginAccount(input: {
   } catch (error) {
     if (error instanceof AccountServiceError) {
       throw error;
+    }
+    if (error instanceof InvalidUsernameError) {
+      throw new AccountServiceError('INVALID_INPUT', error.message);
     }
     if (error instanceof InvalidCredentialsError) {
       throw new AccountServiceError('INVALID_CREDENTIALS', 'Invalid username or password.');

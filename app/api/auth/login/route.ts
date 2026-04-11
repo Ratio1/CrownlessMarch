@@ -22,6 +22,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid login payload.' }, { status: 400 });
     }
     if (error instanceof AccountServiceError) {
+      if (error.code === 'INVALID_INPUT') {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
       if (error.code === 'INVALID_CREDENTIALS') {
         return NextResponse.json({ error: error.message }, { status: 401 });
       }

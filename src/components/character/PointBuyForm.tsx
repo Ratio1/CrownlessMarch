@@ -26,7 +26,8 @@ export function PointBuyForm() {
   const [pending, setPending] = useState(false);
 
   const pointBuyState = validatePointBuy(attributeValues);
-  const hasName = name.trim().length > 0;
+  const trimmedNameLength = name.trim().length;
+  const hasValidName = trimmedNameLength >= 3 && trimmedNameLength <= 24;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +79,13 @@ export function PointBuyForm() {
 
       <form onSubmit={onSubmit}>
         <label htmlFor="character-name">Character Name</label>
-        <input id="character-name" value={name} onChange={(event) => setName(event.target.value)} />
+        <input
+          id="character-name"
+          minLength={3}
+          maxLength={24}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
 
         <label htmlFor="character-class">Class</label>
         <select
@@ -115,7 +122,7 @@ export function PointBuyForm() {
         {error ? <p role="alert">{error}</p> : null}
         {message ? <p>{message}</p> : null}
 
-        <button type="submit" disabled={pending || !pointBuyState.valid || !hasName}>
+        <button type="submit" disabled={pending || !pointBuyState.valid || !hasValidName}>
           {pending ? 'Creating...' : 'Create Character'}
         </button>
       </form>
