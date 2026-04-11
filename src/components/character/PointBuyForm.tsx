@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { validatePointBuy } from '@/shared/domain/point-buy';
 import { attributes, characterClasses, type AttributeSet, type CharacterClass } from '@/shared/domain/types';
 
@@ -24,6 +24,11 @@ export function PointBuyForm() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const pointBuyState = validatePointBuy(attributeValues);
   const trimmedNameLength = name.trim().length;
@@ -79,51 +84,53 @@ export function PointBuyForm() {
       </p>
 
       <form onSubmit={onSubmit}>
-        <label htmlFor="character-name">Character Name</label>
-        <input
-          id="character-name"
-          minLength={3}
-          maxLength={24}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
+        <fieldset disabled={!hydrated || pending}>
+          <label htmlFor="character-name">Character Name</label>
+          <input
+            id="character-name"
+            minLength={3}
+            maxLength={24}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
 
-        <label htmlFor="character-class">Class</label>
-        <select
-          id="character-class"
-          value={classId}
-          onChange={(event) => setClassId(event.target.value as CharacterClass)}
-        >
-          {characterClasses.map((classOption) => (
-            <option key={classOption} value={classOption}>
-              {toLabel(classOption)}
-            </option>
+          <label htmlFor="character-class">Class</label>
+          <select
+            id="character-class"
+            value={classId}
+            onChange={(event) => setClassId(event.target.value as CharacterClass)}
+          >
+            {characterClasses.map((classOption) => (
+              <option key={classOption} value={classOption}>
+                {toLabel(classOption)}
+              </option>
+            ))}
+          </select>
+
+          {attributes.map((attributeName) => (
+            <div key={attributeName}>
+              <label htmlFor={`attribute-${attributeName}`}>{toLabel(attributeName)}</label>
+              <input
+                id={`attribute-${attributeName}`}
+                type="number"
+                min={8}
+                max={18}
+                value={attributeValues[attributeName]}
+                onChange={(event) =>
+                  setAttributeValues((previous) => ({
+                    ...previous,
+                    [attributeName]: Number(event.target.value)
+                  }))
+                }
+              />
+            </div>
           ))}
-        </select>
-
-        {attributes.map((attributeName) => (
-          <div key={attributeName}>
-            <label htmlFor={`attribute-${attributeName}`}>{toLabel(attributeName)}</label>
-            <input
-              id={`attribute-${attributeName}`}
-              type="number"
-              min={8}
-              max={18}
-              value={attributeValues[attributeName]}
-              onChange={(event) =>
-                setAttributeValues((previous) => ({
-                  ...previous,
-                  [attributeName]: Number(event.target.value)
-                }))
-              }
-            />
-          </div>
-        ))}
+        </fieldset>
 
         {error ? <p role="alert">{error}</p> : null}
         {message ? <p>{message}</p> : null}
 
-        <button type="submit" disabled={pending || !pointBuyState.valid || !hasValidName}>
+        <button type="submit" disabled={!hydrated || pending || !pointBuyState.valid || !hasValidName}>
           {pending ? 'Creating...' : 'Create Character'}
         </button>
       </form>
