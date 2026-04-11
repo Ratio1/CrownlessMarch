@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { advanceEncounterSnapshot, hydrateEncounterSnapshot, ROUND_CADENCE_MS } from '@/server/combat/engine';
 import { getCStore } from '@/server/platform/cstore';
 import type { EncounterSnapshot } from '@/shared/domain/combat';
+import type { CharacterRecord } from '@/shared/domain/types';
 import { keys } from '@/shared/persistence/keys';
 
 const DEFAULT_MONSTER_NAME = 'Briar Goblin';
@@ -74,14 +75,12 @@ export async function pollEncounter(encounterId: string, characterId?: string): 
   if (!rawEncounter) {
     throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
   }
-  if (characterId && rawEncounter.characterId && rawEncounter.characterId !== characterId) {
-    throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
-  }
+  const scopedCharacterId = await resolveScopedCharacterId(rawEncounter, encounterId, characterId);
 
   const encounter = hydrateEncounterSnapshot(rawEncounter);
   const scopedEncounter: EncounterSnapshot = {
     ...encounter,
-    characterId: encounter.characterId ?? characterId
+    characterId: encounter.characterId ?? scopedCharacterId
   };
   const advanced = advanceEncounterSnapshot(scopedEncounter, { now: new Date() });
   await getCStore().setJson(keys.encounter(encounterId), advanced);
@@ -106,15 +105,13 @@ export async function queueEncounterOverride(
   if (!rawEncounter) {
     throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
   }
-  if (input.characterId && rawEncounter.characterId && rawEncounter.characterId !== input.characterId) {
-    throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
-  }
+  const scopedCharacterId = await resolveScopedCharacterId(rawEncounter, encounterId, input.characterId);
 
   const encounter = hydrateEncounterSnapshot(rawEncounter);
-  const heroActorId = resolveHeroActorId(encounter, input.characterId);
+  const heroActorId = resolveHeroActorId(encounter, scopedCharacterId);
   const queued: EncounterSnapshot = {
     ...encounter,
-    characterId: encounter.characterId ?? input.characterId,
+    characterId: encounter.characterId ?? scopedCharacterId,
     queuedOverrides: [
       ...(encounter.queuedOverrides ?? []),
       {
@@ -139,4 +136,27 @@ function resolveHeroActorId(encounter: EncounterSnapshot, characterId?: string) 
     return hero.id;
   }
   return `hero:${characterId ?? encounter.characterId ?? encounter.id}`;
+}
+
+async function resolveScopedCharacterId(
+  encounter: EncounterSnapshot,
+  encounterId: string,
+  characterId?: string
+): Promise<string | undefined> {
+  if (!characterId) {
+    return encounter.characterId;
+  }
+
+  if (encounter.characterId) {
+    if (encounter.characterId !== characterId) {
+      throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
+    }
+    return encounter.characterId;
+  }
+
+  const character = await getCStore().getJson<CharacterRecord>(keys.character(characterId));
+  if (!character || character.activeEncounterId !== encounterId) {
+    throw new EncounterServiceError('ENCOUNTER_NOT_FOUND', 'Encounter not found.');
+  }
+  return characterId;
 }

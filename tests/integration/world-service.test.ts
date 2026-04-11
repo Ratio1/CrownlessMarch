@@ -76,6 +76,33 @@ describe('world service', () => {
     const savedCharacter = await getCStore().getJson<CharacterRecord>(keys.character(character.id));
     expect(savedCharacter?.position).toEqual({ x: 5, y: 5 });
   });
+
+  it('replaces stale ended encounter ids when entering a hostile tile again', async () => {
+    const character = await seedCharacter({
+      id: 'char-ended-encounter',
+      activeEncounterId: 'enc-ended-1'
+    });
+
+    await getCStore().setJson(keys.encounter('enc-ended-1'), {
+      id: 'enc-ended-1',
+      characterId: character.id,
+      status: 'escaped',
+      round: 2,
+      nextRoundAt: new Date().toISOString(),
+      logs: [{ round: 1, text: 'A Briar Goblin lunges from the roots.' }]
+    });
+
+    const result = await moveCharacter(character.id, 'east');
+
+    expect(result.encounter).toMatchObject({
+      status: 'active',
+      round: 1
+    });
+    expect(result.encounter?.id).not.toBe('enc-ended-1');
+
+    const savedCharacter = await getCStore().getJson<CharacterRecord>(keys.character(character.id));
+    expect(savedCharacter?.activeEncounterId).toBe(result.encounter?.id);
+  });
 });
 
 async function seedCharacter(overrides?: Partial<CharacterRecord>) {

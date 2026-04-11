@@ -82,7 +82,7 @@ export async function moveCharacter(characterId: string, direction: MoveDirectio
   const updatedCharacter: CharacterRecord = {
     ...character,
     position: nextPosition,
-    activeEncounterId: encounter?.id ?? character.activeEncounterId
+    activeEncounterId: encounter?.id
   };
 
   await getCStore().setJson(keys.character(updatedCharacter.id), updatedCharacter);
@@ -150,7 +150,7 @@ async function maybeStartEncounter(
 
   if (character.activeEncounterId) {
     const existing = await getCStore().getJson<EncounterSnapshot>(keys.encounter(character.activeEncounterId));
-    if (existing) {
+    if (existing?.status === 'active') {
       return existing;
     }
   }
