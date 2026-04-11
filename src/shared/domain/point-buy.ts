@@ -17,7 +17,7 @@ const pointCosts: Record<number, number> = {
 export function validatePointBuy(input: AttributeSet) {
   const spent = attributes.reduce((sum, key) => sum + (pointCosts[input[key]] ?? Number.POSITIVE_INFINITY), 0);
   return {
-    valid: Number.isFinite(spent) && spent <= 28,
+    valid: Number.isFinite(spent) && spent <= 22,
     spent,
     attributes: input
   };
