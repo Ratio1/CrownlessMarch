@@ -26,6 +26,7 @@ export function PointBuyForm() {
   const [pending, setPending] = useState(false);
 
   const pointBuyState = validatePointBuy(attributeValues);
+  const hasName = name.trim().length > 0;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,7 +115,7 @@ export function PointBuyForm() {
         {error ? <p role="alert">{error}</p> : null}
         {message ? <p>{message}</p> : null}
 
-        <button type="submit" disabled={pending || !pointBuyState.valid}>
+        <button type="submit" disabled={pending || !pointBuyState.valid || !hasName}>
           {pending ? 'Creating...' : 'Create Character'}
         </button>
       </form>

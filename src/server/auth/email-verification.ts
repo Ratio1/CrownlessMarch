@@ -67,7 +67,7 @@ export async function sendVerificationEmail(params: {
   }
 
   const appOrigin = (process.env.THORNWRITHE_APP_ORIGIN ?? 'http://localhost:3020').replace(/\/$/, '');
-  const verifyUrl = `${appOrigin}/verify?token=${encodeURIComponent(params.token)}`;
+  const verifyUrl = `${appOrigin}/api/auth/verify?token=${encodeURIComponent(params.token)}`;
   const resend = new Resend(apiKey);
 
   await resend.emails.send({

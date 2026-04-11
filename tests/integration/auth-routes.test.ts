@@ -7,7 +7,7 @@ type RouteHandler = (request: Request) => Promise<Response>;
 
 let registerPost: RouteHandler;
 let loginPost: RouteHandler;
-let verifyPost: RouteHandler;
+let verifyGet: RouteHandler;
 let createCharacterPost: RouteHandler;
 
 function jsonRequest(url: string, payload: unknown, init?: RequestInit) {
@@ -26,7 +26,7 @@ describe('auth routes', () => {
   beforeAll(async () => {
     ({ POST: registerPost } = await import('@/app/api/auth/register/route'));
     ({ POST: loginPost } = await import('@/app/api/auth/login/route'));
-    ({ POST: verifyPost } = await import('@/app/api/auth/verify/route'));
+    ({ GET: verifyGet } = await import('@/app/api/auth/verify/route'));
     ({ POST: createCharacterPost } = await import('@/app/api/characters/route'));
   });
 
@@ -56,9 +56,9 @@ describe('auth routes', () => {
 
     expect(preVerifyLoginResponse.status).toBe(403);
 
-    const verifyResponse = await verifyPost(
-      jsonRequest('http://localhost/api/auth/verify', {
-        token: registerBody.verificationToken
+    const verifyResponse = await verifyGet(
+      new Request(`http://localhost/api/auth/verify?token=${encodeURIComponent(registerBody.verificationToken ?? '')}`, {
+        method: 'GET'
       })
     );
     expect(verifyResponse.status).toBe(200);
@@ -119,9 +119,9 @@ describe('auth routes', () => {
     );
     const registerBody = (await registerResponse.json()) as { verificationToken?: string };
 
-    await verifyPost(
-      jsonRequest('http://localhost/api/auth/verify', {
-        token: registerBody.verificationToken
+    await verifyGet(
+      new Request(`http://localhost/api/auth/verify?token=${encodeURIComponent(registerBody.verificationToken ?? '')}`, {
+        method: 'GET'
       })
     );
 
