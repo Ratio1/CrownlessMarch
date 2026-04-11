@@ -2,7 +2,8 @@ export const attributes = ['strength', 'dexterity', 'constitution', 'intelligenc
 export type AttributeName = (typeof attributes)[number];
 export type AttributeSet = Record<AttributeName, number>;
 
-export type CharacterClass = 'fighter' | 'rogue' | 'wizard' | 'cleric';
+export const characterClasses = ['fighter', 'rogue', 'wizard', 'cleric'] as const;
+export type CharacterClass = (typeof characterClasses)[number];
 
 export interface CharacterRecord {
   id: string;

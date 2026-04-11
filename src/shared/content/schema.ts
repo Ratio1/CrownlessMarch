@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { attributes, characterClasses } from '@/shared/domain/types';
 
 export const classSchema = z.object({
-  id: z.enum(['fighter', 'rogue', 'wizard', 'cleric']),
+  id: z.enum(characterClasses),
   label: z.string(),
-  primaryAttributes: z.array(z.string()).min(1),
+  primaryAttributes: z.array(z.enum(attributes)).min(1),
   passive: z.string(),
   encounterAbility: z.string(),
   utilityAbility: z.string()
@@ -46,13 +47,13 @@ export const questSchema = z.object({
 
 export const regionSchema = z.object({
   id: z.literal('briar-march'),
-  width: z.number().positive(),
-  height: z.number().positive(),
-  spawn: z.object({ x: z.number(), y: z.number() }),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  spawn: z.object({ x: z.number().int(), y: z.number().int() }),
   tiles: z.array(
     z.object({
-      x: z.number(),
-      y: z.number(),
+      x: z.number().int(),
+      y: z.number().int(),
       kind: z.enum(['town', 'road', 'forest', 'roots', 'ruin', 'shrine', 'water']),
       blocked: z.boolean().default(false)
     })
