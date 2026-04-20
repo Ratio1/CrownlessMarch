@@ -1,0 +1,285 @@
+import * as http from 'node:http';
+import { once } from 'node:events';
+import WebSocket, { WebSocketServer } from 'ws';
+import { issueAttachToken, verifyAttachToken } from '../../src/server/auth/attach-token';
+import { createSessionHost } from '../../src/server/runtime/connection-manager';
+import type { PresenceLease } from '../../src/shared/domain/types';
+
+jest.setTimeout(10_000);
+
+type LeaseRecord = PresenceLease;
+
+function encode(message: unknown) {
+  return JSON.stringify(message);
+}
+
+function parseMessage(data: WebSocket.RawData) {
+  return JSON.parse(data.toString('utf8')) as { type: string; [key: string]: unknown };
+}
+
+async function openSocket(url: string) {
+  const socket = new WebSocket(url);
+  await once(socket, 'open');
+  return socket;
+}
+
+function waitForSocketMessage(socket: WebSocket, expectedType: string) {
+  return new Promise<{ type: string; [key: string]: unknown }>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${expectedType}`));
+    }, 3_000);
+    let closeTimer: NodeJS.Timeout | null = null;
+
+    const onMessage = (data: WebSocket.RawData) => {
+      const message = parseMessage(data);
+      if (message.type !== expectedType) {
+        return;
+      }
+
+      cleanup();
+      resolve(message);
+    };
+
+    const onClose = () => {
+      if (closeTimer) {
+        return;
+      }
+
+      closeTimer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`Socket closed before ${expectedType}`));
+      }, 500);
+    };
+
+    function cleanup() {
+      clearTimeout(timeout);
+      if (closeTimer) {
+        clearTimeout(closeTimer);
+      }
+      socket.off('message', onMessage);
+      socket.off('close', onClose);
+    }
+
+    socket.on('message', onMessage);
+    socket.on('close', onClose);
+  });
+}
+
+async function waitForClose(socket: WebSocket) {
+  await once(socket, 'close');
+}
+
+function createHarness() {
+  const events: string[] = [];
+  const leases = new Map<string, LeaseRecord>();
+  const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
+  const sockets = new Set<WebSocket>();
+  let nextConnectionNumber = 0;
+
+  const sessionHost = createSessionHost({
+    nodeId: 'node-a',
+    shardWorldInstanceId: 'shard-a',
+    heartbeatGraceMs: 1_000,
+    now: () => Date.now(),
+    createConnectionId: () => {
+      nextConnectionNumber += 1;
+      const connectionId = `conn-${nextConnectionNumber}`;
+      events.push(`connection_id:${connectionId}`);
+      return connectionId;
+    },
+    verifyAttachToken,
+    readPresenceLease: async (characterId) => {
+      events.push(`read:${characterId}`);
+      return leases.get(characterId) ?? null;
+    },
+    writePresenceLease: async (characterId, lease) => {
+      events.push(`write:${characterId}:${lease.connection_id}`);
+      leases.set(characterId, lease);
+      return lease;
+    },
+    loadCharacterByCid: async (cid) => {
+      events.push(`load:${cid}`);
+      const current = records.get(cid);
+
+      if (!current) {
+        throw new Error(`Missing record for ${cid}`);
+      }
+
+      return {
+        cid,
+        persist_revision: current.persist_revision,
+        snapshot: current.snapshot,
+      };
+    },
+  });
+
+  records.set('cid-1', {
+    persist_revision: 1,
+    snapshot: {
+      name: 'Warden',
+      position: { x: 3, y: 7 },
+    },
+  });
+
+  const httpServer = http.createServer();
+  const wss = new WebSocketServer({ noServer: true });
+  sessionHost.bindWebSocketServer(wss);
+
+  httpServer.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  });
+
+  return {
+    events,
+    sockets,
+    httpServer,
+    trackSocket(socket: WebSocket) {
+      sockets.add(socket);
+      socket.once('close', () => {
+        sockets.delete(socket);
+      });
+    },
+    async listen() {
+      await new Promise<void>((resolve) => {
+        httpServer.listen(0, '127.0.0.1', () => resolve());
+      });
+
+      const address = httpServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Server failed to bind');
+      }
+
+      return `ws://127.0.0.1:${address.port}`;
+    },
+    close() {
+      for (const socket of sockets) {
+        socket.close();
+      }
+
+      wss.close();
+      return new Promise<void>((resolve) => {
+        httpServer.close(() => resolve());
+      });
+    },
+  };
+}
+
+async function issueToken(characterId: string) {
+  const result = await issueAttachToken({
+    accountId: 'account-1',
+    characterId,
+  });
+
+  return result.token;
+}
+
+describe('websocket session host', () => {
+  let harness: ReturnType<typeof createHarness> | null = null;
+
+  beforeEach(() => {
+    jest.useRealTimers();
+    process.env.ATTACH_TOKEN_SECRET = 'test-attach-secret-0123456789012345';
+  });
+
+  afterEach(async () => {
+    await harness?.close();
+    harness = null;
+    jest.useRealTimers();
+  });
+
+  it('claims a new connection_id before loading the PC', async () => {
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    socket.send(encode({ type: 'attach', attachToken: token }));
+
+    const attached = await waitForSocketMessage(socket, 'attached');
+
+    expect(attached).toMatchObject({
+      type: 'attached',
+      shardWorldInstanceId: 'shard-a',
+      character: {
+        name: 'Warden',
+      },
+    });
+    expect(harness.events.indexOf('connection_id:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
+    expect(harness.events.indexOf('write:cid-1:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
+
+    socket.close();
+  });
+
+  it('treats the newest connection as authoritative', async () => {
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket1 = await openSocket(url);
+    const socket2 = await openSocket(url);
+    harness.trackSocket(socket1);
+    harness.trackSocket(socket2);
+    const firstToken = await issueToken('cid-1');
+    const secondToken = await issueToken('cid-1');
+
+    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
+    await waitForSocketMessage(socket1, 'attached');
+
+    const takenOver = waitForSocketMessage(socket1, 'taken_over');
+    const attached = waitForSocketMessage(socket2, 'attached');
+    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
+
+    expect(await takenOver).toEqual({ type: 'taken_over' });
+    expect(await attached).toMatchObject({
+      type: 'attached',
+      shardWorldInstanceId: 'shard-a',
+    });
+
+    socket1.close();
+    socket2.close();
+  });
+
+  it('closes the old socket after connection_id takeover', async () => {
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket1 = await openSocket(url);
+    const socket2 = await openSocket(url);
+    harness.trackSocket(socket1);
+    harness.trackSocket(socket2);
+    const firstToken = await issueToken('cid-1');
+    const secondToken = await issueToken('cid-1');
+
+    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
+    await waitForSocketMessage(socket1, 'attached');
+
+    const takenOver = waitForSocketMessage(socket1, 'taken_over');
+    const attached = waitForSocketMessage(socket2, 'attached');
+    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
+    await attached;
+    await takenOver;
+    await waitForClose(socket1);
+
+    socket2.close();
+  });
+
+  it('expires the session after heartbeat grace elapses', async () => {
+    jest.useFakeTimers();
+
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await waitForSocketMessage(socket, 'attached');
+
+    const expired = waitForSocketMessage(socket, 'session_expired');
+    await jest.advanceTimersByTimeAsync(1_200);
+
+    expect(await expired).toEqual({ type: 'session_expired' });
+    await waitForClose(socket);
+  });
+});
