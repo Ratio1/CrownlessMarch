@@ -203,14 +203,14 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     await dependencies.writePresenceLease(session.characterId, nextLease);
 
     if (session.ended) {
-      await clearSessionLease(session);
+      clearSessionLeaseSafely(session);
       return false;
     }
 
     const confirm = await getOwnershipStatus(session);
 
     if (session.ended) {
-      await clearSessionLease(session);
+      clearSessionLeaseSafely(session);
       return false;
     }
 

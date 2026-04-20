@@ -479,11 +479,16 @@ describe('websocket session host', () => {
   });
 
   it('clears the ended session lease even if a heartbeat write resolves after logout', async () => {
-    harness = createHarness({ deferHeartbeatWrite: true });
+    harness = createHarness({ deferHeartbeatWrite: true, rejectClear: true });
     const url = await harness.listen();
     const socket = await openSocket(url);
     harness.trackSocket(socket);
     const token = await issueToken('cid-1');
+    const messages: Array<{ type: string; [key: string]: unknown }> = [];
+
+    socket.on('message', (data) => {
+      messages.push(parseMessage(data));
+    });
 
     socket.send(encode({ type: 'attach', attachToken: token }));
     await waitForSocketMessage(socket, 'attached');
@@ -498,7 +503,8 @@ describe('websocket session host', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
-    expect(harness.readLease('cid-1')).toBeNull();
+    expect(harness.clearEvents('cid-1', 'conn-1')).toBe(2);
+    expect(messages.some((message) => message.type === 'error')).toBe(false);
   });
 
   it('clears a pending lease when attach fails after the lease write', async () => {
