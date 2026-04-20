@@ -29,6 +29,7 @@ export interface SessionHostDependencies {
 interface ActiveSession {
   characterId: string;
   connectionId: string;
+  connectionStartedAt: number;
   socket: WebSocket;
   heartbeatTimer: NodeJS.Timeout | null;
   ended: boolean;
@@ -59,6 +60,22 @@ function isPosition(value: unknown): value is { x: number; y: number } {
   );
 }
 
+function getLeaseStartedAt(lease: PresenceLease) {
+  const startedAt = (lease as PresenceLease & { connection_started_at?: unknown }).connection_started_at;
+
+  return typeof startedAt === 'number' ? startedAt : 0;
+}
+
+function compareLeaseToSession(lease: PresenceLease, session: ActiveSession) {
+  const leaseStartedAt = getLeaseStartedAt(lease);
+
+  if (leaseStartedAt !== session.connectionStartedAt) {
+    return leaseStartedAt - session.connectionStartedAt;
+  }
+
+  return lease.connection_id.localeCompare(session.connectionId);
+}
+
 function createError(code: string): ErrorOutboundMessage {
   return { type: 'error', code };
 }
@@ -68,6 +85,13 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   const shardRuntime = dependencies.shardRuntime ?? new ShardRuntime();
   const now = dependencies.now ?? Date.now;
   const createConnectionId = dependencies.createConnectionId ?? (() => crypto.randomUUID());
+  let lastConnectionStartedAt = 0;
+
+  function allocateConnectionStartedAt() {
+    const connectionStartedAt = Math.max(now(), lastConnectionStartedAt + 1);
+    lastConnectionStartedAt = connectionStartedAt;
+    return connectionStartedAt;
+  }
 
   function send(socket: WebSocket, message: OutboundMessage) {
     if (socket.readyState === WebSocket.OPEN) {
@@ -106,6 +130,21 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     void clearSessionLease(session).catch(() => undefined);
   }
 
+  function createSessionLease(session: ActiveSession, lease?: PresenceLease): PresenceLease {
+    return {
+      current_character_cid: session.characterId,
+      shard_world_instance_id: dependencies.shardWorldInstanceId,
+      session_host_node_id: dependencies.nodeId,
+      connection_id: session.connectionId,
+      connection_started_at: session.connectionStartedAt,
+      position: lease?.position ?? null,
+      buffs_debuffs: lease?.buffs_debuffs ?? [],
+      lease_expires_at: new Date(now() + dependencies.heartbeatGraceMs).toISOString(),
+      last_persisted_at: lease?.last_persisted_at ?? null,
+      persist_revision: lease?.persist_revision ?? 0,
+    };
+  }
+
   function endSession(session: ActiveSession, message?: OutboundMessage) {
     if (session.ended) {
       return;
@@ -134,17 +173,25 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     const lease = await dependencies.readPresenceLease(session.characterId);
 
     if (!lease) {
-      return { status: 'expired' as const };
+      const repairedLease = createSessionLease(session);
+      await dependencies.writePresenceLease(session.characterId, repairedLease);
+      return { status: 'current' as const, lease: repairedLease };
     }
 
-    const leaseExpired = Date.parse(lease.lease_expires_at) <= now();
-    const ownsConnection =
-      lease.connection_id === session.connectionId && lease.session_host_node_id === dependencies.nodeId;
+    const leaseComparison = compareLeaseToSession(lease, session);
+    if (leaseComparison < 0) {
+      const repairedLease = createSessionLease(session, lease);
+      await dependencies.writePresenceLease(session.characterId, repairedLease);
+      return { status: 'current' as const, lease: repairedLease };
+    }
 
-    if (!ownsConnection) {
+    if (leaseComparison > 0) {
+      const leaseExpired = Date.parse(lease.lease_expires_at) <= now();
+
       return { status: leaseExpired ? ('expired' as const) : ('taken_over' as const) };
     }
 
+    const leaseExpired = Date.parse(lease.lease_expires_at) <= now();
     if (leaseExpired) {
       return { status: 'expired' as const };
     }
@@ -245,6 +292,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
       try {
         const attachPayload = await dependencies.verifyAttachToken(message.attachToken);
+        const connectionStartedAt = allocateConnectionStartedAt();
         const connectionId = createConnectionId();
         const pendingAttach: PendingAttach = {
           characterId: attachPayload.characterId,
@@ -255,9 +303,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           shard_world_instance_id: dependencies.shardWorldInstanceId,
           session_host_node_id: dependencies.nodeId,
           connection_id: connectionId,
+          connection_started_at: connectionStartedAt,
           position: null,
           buffs_debuffs: [],
-          lease_expires_at: new Date(now() + dependencies.heartbeatGraceMs).toISOString(),
+          lease_expires_at: new Date(connectionStartedAt + dependencies.heartbeatGraceMs).toISOString(),
           last_persisted_at: null,
           persist_revision: 0,
         };
@@ -268,6 +317,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         const ownership = await getOwnershipStatus({
           characterId: attachPayload.characterId,
           connectionId,
+          connectionStartedAt,
           socket,
           heartbeatTimer: null,
           ended: false,
@@ -285,6 +335,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         const postLoadOwnership = await getOwnershipStatus({
           characterId: attachPayload.characterId,
           connectionId,
+          connectionStartedAt,
           socket,
           heartbeatTimer: null,
           ended: false,
@@ -310,6 +361,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         const session: ActiveSession = {
           characterId: attachPayload.characterId,
           connectionId,
+          connectionStartedAt,
           socket,
           heartbeatTimer: null,
           ended: false,
@@ -352,6 +404,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     }
 
     const ownership = await getOwnershipStatus(session);
+
+    if (session.ended) {
+      return;
+    }
 
     if (ownership.status !== 'current') {
       endSession(session, ownership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
