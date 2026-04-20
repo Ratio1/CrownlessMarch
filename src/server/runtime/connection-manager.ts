@@ -113,6 +113,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     await dependencies.clearPresenceLease(pending.characterId, pending.connectionId);
   }
 
+  function clearPendingLeaseSafely(pending: PendingAttach) {
+    void clearPendingLease(pending).catch(() => undefined);
+  }
+
   function endSession(session: ActiveSession, message: OutboundMessage) {
     if (session.ended) {
       return;
@@ -353,7 +357,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
       socket.on('close', () => {
         if (sessionRef.pending && !sessionRef.current) {
-          void clearPendingLease(sessionRef.pending);
+          clearPendingLeaseSafely(sessionRef.pending);
           sessionRef.pending = null;
         }
       });

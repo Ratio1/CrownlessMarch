@@ -93,7 +93,7 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
   }
 }
 
-function createHarness(options: { deferLoad?: boolean; failLoad?: boolean } = {}) {
+function createHarness(options: { deferLoad?: boolean; failLoad?: boolean; rejectClear?: boolean } = {}) {
   const events: string[] = [];
   const leases = new Map<string, LeaseRecord>();
   const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
@@ -124,6 +124,10 @@ function createHarness(options: { deferLoad?: boolean; failLoad?: boolean } = {}
     },
     clearPresenceLease: async (characterId, connectionId) => {
       events.push(`clear:${characterId}:${connectionId}`);
+      if (options.rejectClear) {
+        throw new Error('clear failed');
+      }
+
       const current = leases.get(characterId);
       if (!current || current.connection_id !== connectionId) {
         return false;
@@ -409,5 +413,35 @@ describe('websocket session host', () => {
     await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
 
     expect(harness.readLease('cid-1')).toBeNull();
+  });
+
+  it('swallows pending lease cleanup failures on socket close', async () => {
+    harness = createHarness({ deferLoad: true, rejectClear: true });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    try {
+      socket.send(encode({ type: 'attach', attachToken: token }));
+      await waitForEventCount(harness.events, 'load:cid-1', 1);
+
+      socket.close();
+      await waitForClose(socket);
+      harness.releaseLoadAt(0);
+      await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+      socket.close();
+    }
   });
 });
