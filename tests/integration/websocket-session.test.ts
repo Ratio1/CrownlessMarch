@@ -70,11 +70,35 @@ async function waitForClose(socket: WebSocket) {
   await once(socket, 'close');
 }
 
-function createHarness() {
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
+}
+
+async function waitForEventCount(events: string[], eventName: string, expectedCount: number) {
+  const deadline = Date.now() + 3_000;
+
+  while (events.filter((event) => event === eventName).length < expectedCount) {
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for ${eventName} x${expectedCount}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+function createHarness(options: { deferLoad?: boolean } = {}) {
   const events: string[] = [];
   const leases = new Map<string, LeaseRecord>();
   const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
   const sockets = new Set<WebSocket>();
+  const loadRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
 
   const sessionHost = createSessionHost({
@@ -100,6 +124,13 @@ function createHarness() {
     },
     loadCharacterByCid: async (cid) => {
       events.push(`load:${cid}`);
+      const request = createDeferred<void>();
+      loadRequests.push(request);
+      if (!options.deferLoad) {
+        request.resolve();
+      }
+
+      await request.promise;
       const current = records.get(cid);
 
       if (!current) {
@@ -135,6 +166,14 @@ function createHarness() {
   return {
     events,
     sockets,
+    releaseLoadAt(index: number) {
+      const request = loadRequests[index];
+      if (!request) {
+        throw new Error(`Missing deferred load at index ${index}`);
+      }
+
+      request.resolve();
+    },
     httpServer,
     trackSocket(socket: WebSocket) {
       sockets.add(socket);
@@ -281,5 +320,38 @@ describe('websocket session host', () => {
 
     expect(await expired).toEqual({ type: 'session_expired' });
     await waitForClose(socket);
+  });
+
+  it('does not let an older attach steal authority after a takeover during load', async () => {
+    harness = createHarness({ deferLoad: true });
+    const url = await harness.listen();
+    const socket1 = await openSocket(url);
+    const socket2 = await openSocket(url);
+    harness.trackSocket(socket1);
+    harness.trackSocket(socket2);
+    const firstToken = await issueToken('cid-1');
+    const secondToken = await issueToken('cid-1');
+
+    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
+    await waitForEventCount(harness.events, 'load:cid-1', 1);
+
+    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
+    await waitForEventCount(harness.events, 'load:cid-1', 2);
+
+    const secondAttached = waitForSocketMessage(socket2, 'attached');
+    harness.releaseLoadAt(1);
+
+    expect(await secondAttached).toMatchObject({
+      type: 'attached',
+      shardWorldInstanceId: 'shard-a',
+    });
+
+    const firstTakenOver = waitForSocketMessage(socket1, 'taken_over');
+    harness.releaseLoadAt(0);
+
+    expect(await firstTakenOver).toEqual({ type: 'taken_over' });
+
+    socket1.close();
+    socket2.close();
   });
 });

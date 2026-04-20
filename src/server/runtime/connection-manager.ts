@@ -239,6 +239,30 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         }
 
         const checkpoint = await dependencies.loadCharacterByCid(attachPayload.characterId);
+        const postLoadOwnership = await getOwnershipStatus({
+          characterId: attachPayload.characterId,
+          connectionId,
+          socket,
+          heartbeatTimer: null,
+          ended: false,
+          state: null,
+        });
+
+        if (postLoadOwnership.status !== 'current') {
+          endSession(
+            {
+              characterId: attachPayload.characterId,
+              connectionId,
+              socket,
+              heartbeatTimer: null,
+              ended: false,
+              state: null,
+            },
+            postLoadOwnership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' }
+          );
+          return;
+        }
+
         const existingSession = activeSessions.get(attachPayload.characterId);
         const session: ActiveSession = {
           characterId: attachPayload.characterId,
