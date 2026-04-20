@@ -94,14 +94,21 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
   }
 }
 
-function createHarness(options: { deferLoad?: boolean; failLoad?: boolean; rejectClear?: boolean } = {}) {
+function createHarness(options: {
+  deferLoad?: boolean;
+  deferHeartbeatWrite?: boolean;
+  failLoad?: boolean;
+  rejectClear?: boolean;
+} = {}) {
   const events: string[] = [];
   const runtimeEvents: string[] = [];
   const leases = new Map<string, LeaseRecord>();
   const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
   const sockets = new Set<WebSocket>();
   const loadRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
+  const writeRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
+  let writeCount = 0;
   const baseRuntime = new ShardRuntime();
   const shardRuntime = {
     addPlayer(character: Parameters<ShardRuntime['addPlayer']>[0]) {
@@ -139,6 +146,14 @@ function createHarness(options: { deferLoad?: boolean; failLoad?: boolean; rejec
       return leases.get(characterId) ?? null;
     },
     writePresenceLease: async (characterId, lease) => {
+      writeCount += 1;
+      if (options.deferHeartbeatWrite && writeCount === 2) {
+        events.push(`write_started:${characterId}:${lease.connection_id}`);
+        const request = createDeferred<void>();
+        writeRequests.push(request);
+        await request.promise;
+      }
+
       events.push(`write:${characterId}:${lease.connection_id}`);
       leases.set(characterId, lease);
       return lease;
@@ -218,6 +233,14 @@ function createHarness(options: { deferLoad?: boolean; failLoad?: boolean; rejec
       const request = loadRequests[index];
       if (!request) {
         throw new Error(`Missing deferred load at index ${index}`);
+      }
+
+      request.resolve();
+    },
+    releaseHeartbeatWrite(index: number = 0) {
+      const request = writeRequests[index];
+      if (!request) {
+        throw new Error(`Missing deferred heartbeat write at index ${index}`);
       }
 
       request.resolve();
@@ -453,6 +476,29 @@ describe('websocket session host', () => {
     expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(1);
     expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
     expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
+  });
+
+  it('stops a heartbeat refresh after logout before confirming lease ownership', async () => {
+    harness = createHarness({ deferHeartbeatWrite: true });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await waitForSocketMessage(socket, 'attached');
+
+    socket.send(encode({ type: 'heartbeat' }));
+    await waitForEventCount(harness.events, 'write_started:cid-1:conn-1', 1);
+
+    socket.send(encode({ type: 'logout' }));
+    await waitForClose(socket);
+
+    harness.releaseHeartbeatWrite(0);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
+    expect(harness.events.filter((event) => event === 'read:cid-1')).toHaveLength(5);
   });
 
   it('clears a pending lease when attach fails after the lease write', async () => {

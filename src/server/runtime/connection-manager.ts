@@ -167,10 +167,22 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   }
 
   async function refreshHeartbeat(session: ActiveSession) {
+    if (session.ended) {
+      return false;
+    }
+
     const ownership = await getOwnershipStatus(session);
+
+    if (session.ended) {
+      return false;
+    }
 
     if (ownership.status !== 'current') {
       endSession(session, ownership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
+      return false;
+    }
+
+    if (session.ended) {
       return false;
     }
 
@@ -181,7 +193,15 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
     await dependencies.writePresenceLease(session.characterId, nextLease);
 
+    if (session.ended) {
+      return false;
+    }
+
     const confirm = await getOwnershipStatus(session);
+
+    if (session.ended) {
+      return false;
+    }
 
     if (confirm.status !== 'current') {
       endSession(session, confirm.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
