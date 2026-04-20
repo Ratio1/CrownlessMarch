@@ -66,6 +66,7 @@ export async function createServer() {
     verifyAttachToken,
     readPresenceLease: presenceStore.readPresenceLease,
     writePresenceLease: presenceStore.writePresenceLease,
+    clearPresenceLease: presenceStore.clearPresenceLease,
     loadCharacterByCid: characterStore.loadCharacterByCid,
     createConnectionId: () => crypto.randomUUID(),
   });

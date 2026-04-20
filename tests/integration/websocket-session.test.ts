@@ -93,7 +93,7 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
   }
 }
 
-function createHarness(options: { deferLoad?: boolean } = {}) {
+function createHarness(options: { deferLoad?: boolean; failLoad?: boolean } = {}) {
   const events: string[] = [];
   const leases = new Map<string, LeaseRecord>();
   const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
@@ -122,6 +122,16 @@ function createHarness(options: { deferLoad?: boolean } = {}) {
       leases.set(characterId, lease);
       return lease;
     },
+    clearPresenceLease: async (characterId, connectionId) => {
+      events.push(`clear:${characterId}:${connectionId}`);
+      const current = leases.get(characterId);
+      if (!current || current.connection_id !== connectionId) {
+        return false;
+      }
+
+      leases.delete(characterId);
+      return true;
+    },
     loadCharacterByCid: async (cid) => {
       events.push(`load:${cid}`);
       const request = createDeferred<void>();
@@ -131,6 +141,9 @@ function createHarness(options: { deferLoad?: boolean } = {}) {
       }
 
       await request.promise;
+      if (options.failLoad) {
+        throw new Error('load failed');
+      }
       const current = records.get(cid);
 
       if (!current) {
@@ -166,6 +179,12 @@ function createHarness(options: { deferLoad?: boolean } = {}) {
   return {
     events,
     sockets,
+    readLease(characterId: string) {
+      return leases.get(characterId) ?? null;
+    },
+    clearEvents(characterId: string, connectionId: string) {
+      return events.filter((event) => event === `clear:${characterId}:${connectionId}`).length;
+    },
     releaseLoadAt(index: number) {
       const request = loadRequests[index];
       if (!request) {
@@ -353,5 +372,42 @@ describe('websocket session host', () => {
 
     socket1.close();
     socket2.close();
+  });
+
+  it('clears a pending lease when attach fails after the lease write', async () => {
+    harness = createHarness({ deferLoad: true, failLoad: true });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await waitForEventCount(harness.events, 'load:cid-1', 1);
+    harness.releaseLoadAt(0);
+
+    await waitForSocketMessage(socket, 'error');
+    await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+
+    expect(harness.readLease('cid-1')).toBeNull();
+
+    socket.close();
+  });
+
+  it('clears a pending lease when the socket closes before attach finishes', async () => {
+    harness = createHarness({ deferLoad: true });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await waitForEventCount(harness.events, 'load:cid-1', 1);
+
+    socket.close();
+    await waitForClose(socket);
+    harness.releaseLoadAt(0);
+    await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+
+    expect(harness.readLease('cid-1')).toBeNull();
   });
 });

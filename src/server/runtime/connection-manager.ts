@@ -20,6 +20,7 @@ export interface SessionHostDependencies {
   verifyAttachToken(token: string): Promise<AttachTokenPayload>;
   readPresenceLease(characterId: string): Promise<PresenceLease | null>;
   writePresenceLease(characterId: string, lease: PresenceLease): Promise<unknown>;
+  clearPresenceLease(characterId: string, connectionId: string): Promise<boolean>;
   loadCharacterByCid(cid: string): Promise<CharacterCheckpoint>;
   createConnectionId?: () => string;
   now?: () => number;
@@ -32,6 +33,11 @@ interface ActiveSession {
   heartbeatTimer: NodeJS.Timeout | null;
   ended: boolean;
   state: unknown;
+}
+
+interface PendingAttach {
+  characterId: string;
+  connectionId: string;
 }
 
 function cloneState<T>(value: T): T {
@@ -101,6 +107,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         }
       }, 100);
     });
+  }
+
+  async function clearPendingLease(pending: PendingAttach) {
+    await dependencies.clearPresenceLease(pending.characterId, pending.connectionId);
   }
 
   function endSession(session: ActiveSession, message: OutboundMessage) {
@@ -190,7 +200,11 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     return true;
   }
 
-  async function onMessage(sessionRef: { current: ActiveSession | null }, socket: WebSocket, raw: WebSocket.RawData) {
+  async function onMessage(
+    sessionRef: { current: ActiveSession | null; pending: PendingAttach | null },
+    socket: WebSocket,
+    raw: WebSocket.RawData
+  ) {
     const message = parseInboundMessage(raw);
 
     if (!message) {
@@ -209,6 +223,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       try {
         const attachPayload = await dependencies.verifyAttachToken(message.attachToken);
         const connectionId = createConnectionId();
+        const pendingAttach: PendingAttach = {
+          characterId: attachPayload.characterId,
+          connectionId,
+        };
         const lease: PresenceLease = {
           current_character_cid: attachPayload.characterId,
           shard_world_instance_id: dependencies.shardWorldInstanceId,
@@ -222,6 +240,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         };
 
         await dependencies.writePresenceLease(attachPayload.characterId, lease);
+        sessionRef.pending = pendingAttach;
 
         const ownership = await getOwnershipStatus({
           characterId: attachPayload.characterId,
@@ -233,6 +252,8 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         });
 
         if (ownership.status !== 'current') {
+          await clearPendingLease(pendingAttach);
+          sessionRef.pending = null;
           send(socket, createError('lease_conflict'));
           socket.close();
           return;
@@ -249,17 +270,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         });
 
         if (postLoadOwnership.status !== 'current') {
-          endSession(
-            {
-              characterId: attachPayload.characterId,
-              connectionId,
-              socket,
-              heartbeatTimer: null,
-              ended: false,
-              state: null,
-            },
-            postLoadOwnership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' }
-          );
+          await clearPendingLease(pendingAttach);
+          sessionRef.pending = null;
+          send(socket, postLoadOwnership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
+          socket.close();
           return;
         }
 
@@ -279,6 +293,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
         activeSessions.set(session.characterId, session);
         sessionRef.current = session;
+        sessionRef.pending = null;
         armExpiryTimer(session);
 
         const attachedMessage: AttachedOutboundMessage = {
@@ -290,6 +305,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         send(socket, attachedMessage);
         return;
       } catch {
+        if (sessionRef.pending) {
+          await clearPendingLease(sessionRef.pending);
+          sessionRef.pending = null;
+        }
         send(socket, createError('attach_failed'));
         socket.close();
         return;
@@ -323,13 +342,20 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
   function bindWebSocketServer(wss: WebSocketServer) {
     wss.on('connection', (socket) => {
-      const sessionRef = { current: null as ActiveSession | null };
+      const sessionRef = { current: null as ActiveSession | null, pending: null as PendingAttach | null };
 
       socket.on('message', (raw) => {
         void onMessage(sessionRef, socket, raw).catch(() => {
           send(socket, createError('session_error'));
           socket.close();
         });
+      });
+
+      socket.on('close', () => {
+        if (sessionRef.pending && !sessionRef.current) {
+          void clearPendingLease(sessionRef.pending);
+          sessionRef.pending = null;
+        }
       });
     });
   }
