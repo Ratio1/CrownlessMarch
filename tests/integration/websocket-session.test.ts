@@ -389,7 +389,7 @@ describe('websocket session host', () => {
     await waitForEventCount(harness.events, 'load:cid-1', 1);
     harness.releaseLoadAt(0);
 
-    await waitForSocketMessage(socket, 'error');
+    expect(await waitForSocketMessage(socket, 'error')).toEqual({ type: 'error', code: 'attach_failed' });
     await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
 
     expect(harness.readLease('cid-1')).toBeNull();

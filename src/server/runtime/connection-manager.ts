@@ -256,7 +256,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         });
 
         if (ownership.status !== 'current') {
-          await clearPendingLease(pendingAttach);
+          clearPendingLeaseSafely(pendingAttach);
           sessionRef.pending = null;
           send(socket, createError('lease_conflict'));
           socket.close();
@@ -274,7 +274,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         });
 
         if (postLoadOwnership.status !== 'current') {
-          await clearPendingLease(pendingAttach);
+          clearPendingLeaseSafely(pendingAttach);
           sessionRef.pending = null;
           send(socket, postLoadOwnership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
           socket.close();
@@ -310,7 +310,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         return;
       } catch {
         if (sessionRef.pending) {
-          await clearPendingLease(sessionRef.pending);
+          clearPendingLeaseSafely(sessionRef.pending);
           sessionRef.pending = null;
         }
         send(socket, createError('attach_failed'));
