@@ -8,7 +8,6 @@ export interface PresenceLease {
   shard_world_instance_id: string;
   session_host_node_id: string;
   connection_id: string;
-  connection_started_at: number;
   position: PresencePosition | null;
   buffs_debuffs: string[];
   lease_expires_at: string;

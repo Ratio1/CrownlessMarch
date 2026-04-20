@@ -109,7 +109,6 @@ function createHarness(options: {
   const writeRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
   let writeCount = 0;
-  let nowValue = 1_700_000_000_000;
   const baseRuntime = new ShardRuntime();
   const shardRuntime = {
     addPlayer(character: Parameters<ShardRuntime['addPlayer']>[0]) {
@@ -134,10 +133,7 @@ function createHarness(options: {
     shardWorldInstanceId: 'shard-a',
     heartbeatGraceMs: 1_000,
     shardRuntime,
-    now: () => {
-      nowValue += 1;
-      return nowValue;
-    },
+    now: () => Date.now(),
     createConnectionId: () => {
       nextConnectionNumber += 1;
       const connectionId = `conn-${nextConnectionNumber}`;
@@ -356,7 +352,7 @@ describe('websocket session host', () => {
     socket.close();
   });
 
-  it('treats the newest connection as authoritative', async () => {
+  it('rejects a second attach while the current session is active', async () => {
     harness = createHarness();
     const url = await harness.listen();
     const socket1 = await openSocket(url);
@@ -369,41 +365,43 @@ describe('websocket session host', () => {
     socket1.send(encode({ type: 'attach', attachToken: firstToken }));
     await waitForSocketMessage(socket1, 'attached');
 
-    const takenOver = waitForSocketMessage(socket1, 'taken_over');
-    const attached = waitForSocketMessage(socket2, 'attached');
+    const rejection = waitForSocketMessage(socket2, 'error');
     socket2.send(encode({ type: 'attach', attachToken: secondToken }));
 
-    expect(await takenOver).toEqual({ type: 'taken_over' });
+    expect(await rejection).toEqual({ type: 'error', code: 'already_connected' });
+    await waitForClose(socket2);
+    expect(socket1.readyState).toBe(WebSocket.OPEN);
+    expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(1);
+    expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(0);
+
+    socket1.close();
+  });
+
+  it('allows a reconnect after explicit logout clears the active lease', async () => {
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket1 = await openSocket(url);
+    const socket2 = await openSocket(url);
+    harness.trackSocket(socket1);
+    harness.trackSocket(socket2);
+    const firstToken = await issueToken('cid-1');
+    const secondToken = await issueToken('cid-1');
+
+    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
+    await waitForSocketMessage(socket1, 'attached');
+
+    socket1.send(encode({ type: 'logout' }));
+    await waitForClose(socket1);
+
+    const attached = waitForSocketMessage(socket2, 'attached');
+    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
     expect(await attached).toMatchObject({
       type: 'attached',
       shardWorldInstanceId: 'shard-a',
     });
+
     expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(2);
     expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
-
-    socket1.close();
-    socket2.close();
-  });
-
-  it('closes the old socket after connection_id takeover', async () => {
-    harness = createHarness();
-    const url = await harness.listen();
-    const socket1 = await openSocket(url);
-    const socket2 = await openSocket(url);
-    harness.trackSocket(socket1);
-    harness.trackSocket(socket2);
-    const firstToken = await issueToken('cid-1');
-    const secondToken = await issueToken('cid-1');
-
-    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
-    await waitForSocketMessage(socket1, 'attached');
-
-    const takenOver = waitForSocketMessage(socket1, 'taken_over');
-    const attached = waitForSocketMessage(socket2, 'attached');
-    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
-    await attached;
-    await takenOver;
-    await waitForClose(socket1);
 
     socket2.close();
   });
@@ -430,7 +428,7 @@ describe('websocket session host', () => {
     expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
   });
 
-  it('does not let an older attach steal authority after a takeover during load', async () => {
+  it('rejects a reconnect attempt while the first attach is still loading', async () => {
     harness = createHarness({ deferLoad: true });
     const url = await harness.listen();
     const socket1 = await openSocket(url);
@@ -443,62 +441,19 @@ describe('websocket session host', () => {
     socket1.send(encode({ type: 'attach', attachToken: firstToken }));
     await waitForEventCount(harness.events, 'load:cid-1', 1);
 
+    const secondRejected = waitForSocketMessage(socket2, 'error');
     socket2.send(encode({ type: 'attach', attachToken: secondToken }));
-    await waitForEventCount(harness.events, 'load:cid-1', 2);
+    harness.releaseLoadAt(0);
 
-    const secondAttached = waitForSocketMessage(socket2, 'attached');
-    harness.releaseLoadAt(1);
-
-    expect(await secondAttached).toMatchObject({
+    expect(await waitForSocketMessage(socket1, 'attached')).toMatchObject({
       type: 'attached',
       shardWorldInstanceId: 'shard-a',
     });
-
-    const firstTakenOver = waitForSocketMessage(socket1, 'taken_over');
-    harness.releaseLoadAt(0);
-
-    expect(await firstTakenOver).toEqual({ type: 'taken_over' });
+    expect(await secondRejected).toEqual({ type: 'error', code: 'already_connected' });
+    await waitForClose(socket2);
+    expect(harness.events.filter((event) => event === 'load:cid-1')).toHaveLength(1);
 
     socket1.close();
-    socket2.close();
-  });
-
-  it('repairs a stale heartbeat lease after a newer attach succeeds', async () => {
-    harness = createHarness({ deferHeartbeatWrite: true });
-    const url = await harness.listen();
-    const socket1 = await openSocket(url);
-    const socket2 = await openSocket(url);
-    harness.trackSocket(socket1);
-    harness.trackSocket(socket2);
-    const firstToken = await issueToken('cid-1');
-    const secondToken = await issueToken('cid-1');
-
-    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
-    await waitForSocketMessage(socket1, 'attached');
-
-    socket1.send(encode({ type: 'heartbeat' }));
-    await waitForEventCount(harness.events, 'write_started:cid-1:conn-1', 1);
-
-    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
-    await waitForSocketMessage(socket2, 'attached');
-
-    harness.releaseHeartbeatWrite(0);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    socket2.send(encode({ type: 'heartbeat' }));
-    await waitForEventCount(harness.events, 'write:cid-1:conn-2', 2);
-
-    const lease = harness.readLease('cid-1');
-    expect(lease).not.toBeNull();
-    expect(lease).toMatchObject({
-      connection_id: 'conn-2',
-      connection_started_at: expect.any(Number),
-    });
-    expect(socket2.readyState).toBe(WebSocket.OPEN);
-    expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
-
-    socket1.close();
-    socket2.close();
   });
 
   it('removes the PC from the shard runtime on explicit logout', async () => {

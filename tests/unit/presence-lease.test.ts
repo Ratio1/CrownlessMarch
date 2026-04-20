@@ -37,7 +37,6 @@ function createLease(overrides: Partial<PresenceLease> = {}): PresenceLease {
     shard_world_instance_id: 'shard-a',
     session_host_node_id: 'node-a',
     connection_id: 'conn-a',
-    connection_started_at: 1_000,
     position: { x: 10, y: 20 },
     buffs_debuffs: ['blessed'],
     lease_expires_at: '2026-04-20T12:00:15.000Z',
@@ -83,7 +82,6 @@ describe('presence lease store', () => {
       shard_world_instance_id: 'shard-b',
       session_host_node_id: 'node-b',
       connection_id: 'conn-reconnect',
-      connection_started_at: 2_000,
       persist_revision: 2,
     });
 
