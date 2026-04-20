@@ -98,6 +98,14 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     void clearPendingLease(pending).catch(() => undefined);
   }
 
+  async function clearSessionLease(session: ActiveSession) {
+    await dependencies.clearPresenceLease(session.characterId, session.connectionId);
+  }
+
+  function clearSessionLeaseSafely(session: ActiveSession) {
+    void clearSessionLease(session).catch(() => undefined);
+  }
+
   function endSession(session: ActiveSession, message?: OutboundMessage) {
     if (session.ended) {
       return;
@@ -112,6 +120,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
     activeSessions.delete(session.characterId);
     shardRuntime.removePlayer(session.characterId);
+    clearSessionLeaseSafely(session);
 
     if (message) {
       sendAndClose(session.socket, message);
@@ -194,12 +203,14 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     await dependencies.writePresenceLease(session.characterId, nextLease);
 
     if (session.ended) {
+      await clearSessionLease(session);
       return false;
     }
 
     const confirm = await getOwnershipStatus(session);
 
     if (session.ended) {
+      await clearSessionLease(session);
       return false;
     }
 

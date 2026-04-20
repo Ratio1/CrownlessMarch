@@ -478,7 +478,7 @@ describe('websocket session host', () => {
     expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
   });
 
-  it('stops a heartbeat refresh after logout before confirming lease ownership', async () => {
+  it('clears the ended session lease even if a heartbeat write resolves after logout', async () => {
     harness = createHarness({ deferHeartbeatWrite: true });
     const url = await harness.listen();
     const socket = await openSocket(url);
@@ -498,7 +498,7 @@ describe('websocket session host', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
-    expect(harness.events.filter((event) => event === 'read:cid-1')).toHaveLength(5);
+    expect(harness.readLease('cid-1')).toBeNull();
   });
 
   it('clears a pending lease when attach fails after the lease write', async () => {
