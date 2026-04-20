@@ -17,6 +17,18 @@ export interface Ratio1HSyncRequest {
   hkey: string;
 }
 
+export interface Ratio1AddJsonRequest {
+  data: unknown;
+  fn?: string;
+  nonce?: number;
+  secret?: string;
+}
+
+export interface Ratio1GetYamlRequest {
+  cid: string;
+  secret?: string;
+}
+
 export interface Ratio1CStoreClient {
   hset(request: Ratio1HSetRequest): Promise<unknown>;
   hget(request: Ratio1HGetRequest): Promise<string | null>;
@@ -24,8 +36,14 @@ export interface Ratio1CStoreClient {
   hsync(request: Ratio1HSyncRequest): Promise<unknown>;
 }
 
+export interface Ratio1R1fsClient {
+  addJson(request: Ratio1AddJsonRequest): Promise<{ cid: string }>;
+  getYaml(request: Ratio1GetYamlRequest): Promise<{ file_data: unknown }>;
+}
+
 export interface Ratio1ServerClient {
   cstore: Ratio1CStoreClient;
+  r1fs: Ratio1R1fsClient;
 }
 
 export interface Ratio1BootstrapOptions {
@@ -33,6 +51,7 @@ export interface Ratio1BootstrapOptions {
   fetchImpl?: typeof fetch;
   chainstorePeers?: string[];
   env?: NodeJS.ProcessEnv;
+  r1fsUrl?: string;
   verbose?: boolean;
 }
 
@@ -46,6 +65,11 @@ function ensureProtocol(url: string) {
 
 function resolveCstoreUrl(env: NodeJS.ProcessEnv) {
   const configuredUrl = env.EE_CHAINSTORE_API_URL ?? env.CSTORE_API_URL ?? 'localhost:31234';
+  return ensureProtocol(configuredUrl).replace(/\/+$/, '');
+}
+
+function resolveR1fsUrl(env: NodeJS.ProcessEnv) {
+  const configuredUrl = env.EE_R1FS_API_URL ?? env.R1FS_API_URL ?? 'localhost:31235';
   return ensureProtocol(configuredUrl).replace(/\/+$/, '');
 }
 
@@ -88,17 +112,21 @@ export function createRatio1ServerClient(options: Ratio1BootstrapOptions = {}): 
     throw new Error('A fetch implementation is required to create the Ratio1 server client');
   }
 
-  const baseUrl = (options.cstoreUrl ? ensureProtocol(options.cstoreUrl) : resolveCstoreUrl(env)).replace(
+  const cstoreBaseUrl = (options.cstoreUrl ? ensureProtocol(options.cstoreUrl) : resolveCstoreUrl(env)).replace(
+    /\/+$/,
+    ''
+  );
+  const r1fsBaseUrl = (options.r1fsUrl ? ensureProtocol(options.r1fsUrl) : resolveR1fsUrl(env)).replace(
     /\/+$/,
     ''
   );
   const chainstorePeers = resolveChainstorePeers({ ...options, env });
 
-  async function request<T>(path: string, init: RequestInit) {
+  async function request<T>(baseUrl: string, path: string, init: RequestInit, label: string) {
     const url = `${baseUrl}${path}`;
 
     if (options.verbose) {
-      console.debug('[thornwrithe:ratio1] request', { url, method: init.method });
+      console.debug(`[thornwrithe:ratio1:${label}] request`, { url, method: init.method });
     }
 
     return await parseResult<T>(await fetchImpl(url, init));
@@ -107,7 +135,7 @@ export function createRatio1ServerClient(options: Ratio1BootstrapOptions = {}): 
   return {
     cstore: {
       async hset(requestBody) {
-        return await request('/hset', {
+        return await request(cstoreBaseUrl, '/hset', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -116,7 +144,7 @@ export function createRatio1ServerClient(options: Ratio1BootstrapOptions = {}): 
             value: requestBody.value,
             chainstore_peers: chainstorePeers,
           }),
-        });
+        }, 'cstore');
       },
 
       async hget(requestBody) {
@@ -125,9 +153,9 @@ export function createRatio1ServerClient(options: Ratio1BootstrapOptions = {}): 
           key: requestBody.key,
         });
 
-        return await request<string | null>(`/hget?${params.toString()}`, {
+        return await request<string | null>(cstoreBaseUrl, `/hget?${params.toString()}`, {
           method: 'GET',
-        });
+        }, 'cstore');
       },
 
       async hgetall(requestBody) {
@@ -135,20 +163,48 @@ export function createRatio1ServerClient(options: Ratio1BootstrapOptions = {}): 
           hkey: requestBody.hkey,
         });
 
-        return await request<Record<string, string | null>>(`/hgetall?${params.toString()}`, {
+        return await request<Record<string, string | null>>(cstoreBaseUrl, `/hgetall?${params.toString()}`, {
           method: 'GET',
-        });
+        }, 'cstore');
       },
 
       async hsync(requestBody) {
-        return await request('/hsync', {
+        return await request(cstoreBaseUrl, '/hsync', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             hkey: requestBody.hkey,
             chainstore_peers: chainstorePeers,
           }),
+        }, 'cstore');
+      },
+    },
+    r1fs: {
+      async addJson(requestBody) {
+        return await request<{ cid: string }>(
+          r1fsBaseUrl,
+          '/add_json',
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          },
+          'r1fs'
+        );
+      },
+
+      async getYaml(requestBody) {
+        const params = new URLSearchParams({
+          cid: requestBody.cid,
+          ...(requestBody.secret ? { secret: requestBody.secret } : {}),
         });
+
+        return await request<{ file_data: Record<string, unknown> }>(
+          r1fsBaseUrl,
+          `/get_yaml?${params.toString()}`,
+          { method: 'GET' },
+          'r1fs'
+        );
       },
     },
   };
@@ -164,4 +220,4 @@ export function getRatio1ServerClient(options: Ratio1BootstrapOptions = {}) {
   return globalWithRatio1.__thornwritheRatio1Client;
 }
 
-export { ensureProtocol, resolveChainstorePeers, resolveCstoreUrl };
+export { ensureProtocol, resolveChainstorePeers, resolveCstoreUrl, resolveR1fsUrl };
