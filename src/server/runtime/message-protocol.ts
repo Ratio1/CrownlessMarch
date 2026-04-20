@@ -14,7 +14,11 @@ export interface MoveInboundMessage {
   direction: 'north' | 'south' | 'west' | 'east';
 }
 
-export type InboundMessage = AttachInboundMessage | HeartbeatInboundMessage | MoveInboundMessage;
+export interface LogoutInboundMessage {
+  type: 'logout';
+}
+
+export type InboundMessage = AttachInboundMessage | HeartbeatInboundMessage | MoveInboundMessage | LogoutInboundMessage;
 
 export interface AttachedOutboundMessage {
   type: 'attached';
@@ -100,6 +104,8 @@ export function parseInboundMessage(raw: RawData): InboundMessage | null {
             direction: parsed.direction,
           }
         : null;
+    case 'logout':
+      return { type: 'logout' };
     default:
       return null;
   }

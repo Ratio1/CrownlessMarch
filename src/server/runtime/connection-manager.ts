@@ -2,13 +2,12 @@ import WebSocket, { type WebSocketServer } from 'ws';
 import type { AttachTokenPayload } from '../auth/attach-token';
 import type { CharacterCheckpoint } from '../platform/r1fs-characters';
 import type { PresenceLease } from '../../shared/domain/types';
+import { ShardRuntime, type ShardRuntimeLike } from './shard-runtime';
 import {
   parseInboundMessage,
   serializeOutboundMessage,
   type AttachedOutboundMessage,
   type ErrorOutboundMessage,
-  type InboundMessage,
-  type MoveInboundMessage,
   type OutboundMessage,
   type StateOutboundMessage,
 } from './message-protocol';
@@ -17,6 +16,7 @@ export interface SessionHostDependencies {
   nodeId: string;
   shardWorldInstanceId: string;
   heartbeatGraceMs: number;
+  shardRuntime?: ShardRuntimeLike;
   verifyAttachToken(token: string): Promise<AttachTokenPayload>;
   readPresenceLease(characterId: string): Promise<PresenceLease | null>;
   writePresenceLease(characterId: string, lease: PresenceLease): Promise<unknown>;
@@ -32,7 +32,6 @@ interface ActiveSession {
   socket: WebSocket;
   heartbeatTimer: NodeJS.Timeout | null;
   ended: boolean;
-  state: unknown;
 }
 
 interface PendingAttach {
@@ -52,39 +51,21 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isPosition(value: unknown): value is { x: number; y: number } {
+  return (
+    isObject(value) &&
+    typeof value.x === 'number' &&
+    typeof value.y === 'number'
+  );
+}
+
 function createError(code: string): ErrorOutboundMessage {
   return { type: 'error', code };
 }
 
-function adjustPosition(state: unknown, direction: MoveInboundMessage['direction']) {
-  if (!isObject(state) || !isObject(state.position)) {
-    return state;
-  }
-
-  const position = state.position as Record<string, unknown>;
-  const currentX = typeof position.x === 'number' ? position.x : 0;
-  const currentY = typeof position.y === 'number' ? position.y : 0;
-
-  switch (direction) {
-    case 'north':
-      position.y = currentY - 1;
-      break;
-    case 'south':
-      position.y = currentY + 1;
-      break;
-    case 'west':
-      position.x = currentX - 1;
-      break;
-    case 'east':
-      position.x = currentX + 1;
-      break;
-  }
-
-  return state;
-}
-
 export function createSessionHost(dependencies: SessionHostDependencies) {
   const activeSessions = new Map<string, ActiveSession>();
+  const shardRuntime = dependencies.shardRuntime ?? new ShardRuntime();
   const now = dependencies.now ?? Date.now;
   const createConnectionId = dependencies.createConnectionId ?? (() => crypto.randomUUID());
 
@@ -117,7 +98,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     void clearPendingLease(pending).catch(() => undefined);
   }
 
-  function endSession(session: ActiveSession, message: OutboundMessage) {
+  function endSession(session: ActiveSession, message?: OutboundMessage) {
     if (session.ended) {
       return;
     }
@@ -130,7 +111,14 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     }
 
     activeSessions.delete(session.characterId);
-    sendAndClose(session.socket, message);
+    shardRuntime.removePlayer(session.characterId);
+
+    if (message) {
+      sendAndClose(session.socket, message);
+      return;
+    }
+
+    session.socket.close();
   }
 
   async function getOwnershipStatus(session: ActiveSession) {
@@ -252,7 +240,6 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           socket,
           heartbeatTimer: null,
           ended: false,
-          state: null,
         });
 
         if (ownership.status !== 'current') {
@@ -270,7 +257,6 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           socket,
           heartbeatTimer: null,
           ended: false,
-          state: null,
         });
 
         if (postLoadOwnership.status !== 'current') {
@@ -282,13 +268,20 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         }
 
         const existingSession = activeSessions.get(attachPayload.characterId);
+        const snapshot = cloneState(checkpoint.snapshot);
+        const characterPosition = isPosition(snapshot.position) ? snapshot.position : { x: 0, y: 0 };
+        const character = {
+          ...snapshot,
+          cid: attachPayload.characterId,
+          position: characterPosition,
+        };
+
         const session: ActiveSession = {
           characterId: attachPayload.characterId,
           connectionId,
           socket,
           heartbeatTimer: null,
           ended: false,
-          state: cloneState(checkpoint.snapshot),
         };
 
         if (existingSession && existingSession !== session) {
@@ -296,6 +289,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         }
 
         activeSessions.set(session.characterId, session);
+        shardRuntime.addPlayer(character);
         sessionRef.current = session;
         sessionRef.pending = null;
         armExpiryTimer(session);
@@ -307,6 +301,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         };
 
         send(socket, attachedMessage);
+        send(socket, { type: 'state', state: shardRuntime.snapshotFor(session.characterId) });
         return;
       } catch {
         if (sessionRef.pending) {
@@ -338,9 +333,18 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     }
 
     if (message.type === 'move') {
-      session.state = adjustPosition(cloneState(session.state), message.direction);
-      const stateMessage: StateOutboundMessage = { type: 'state', state: session.state };
+      shardRuntime.movePlayer(session.characterId, message.direction);
+      const stateMessage: StateOutboundMessage = {
+        type: 'state',
+        state: shardRuntime.snapshotFor(session.characterId),
+      };
       send(socket, stateMessage);
+      return;
+    }
+
+    if (message.type === 'logout') {
+      endSession(session);
+      return;
     }
   }
 

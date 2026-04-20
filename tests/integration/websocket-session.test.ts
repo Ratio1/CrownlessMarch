@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import WebSocket, { WebSocketServer } from 'ws';
 import { issueAttachToken, verifyAttachToken } from '../../src/server/auth/attach-token';
 import { createSessionHost } from '../../src/server/runtime/connection-manager';
+import { ShardRuntime, type ShardRuntimeLike } from '../../src/server/runtime/shard-runtime';
 import type { PresenceLease } from '../../src/shared/domain/types';
 
 jest.setTimeout(10_000);
@@ -95,16 +96,36 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
 
 function createHarness(options: { deferLoad?: boolean; failLoad?: boolean; rejectClear?: boolean } = {}) {
   const events: string[] = [];
+  const runtimeEvents: string[] = [];
   const leases = new Map<string, LeaseRecord>();
   const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
   const sockets = new Set<WebSocket>();
   const loadRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
+  const baseRuntime = new ShardRuntime();
+  const shardRuntime = {
+    addPlayer(character: Parameters<ShardRuntime['addPlayer']>[0]) {
+      runtimeEvents.push(`add:${character.cid}`);
+      baseRuntime.addPlayer(character);
+    },
+    removePlayer(characterId: string) {
+      runtimeEvents.push(`remove:${characterId}`);
+      baseRuntime.removePlayer(characterId);
+    },
+    movePlayer(characterId: string, direction: Parameters<ShardRuntime['movePlayer']>[1]) {
+      runtimeEvents.push(`move:${characterId}:${direction}`);
+      baseRuntime.movePlayer(characterId, direction);
+    },
+    snapshotFor(characterId: string) {
+      return baseRuntime.snapshotFor(characterId);
+    },
+  } satisfies ShardRuntimeLike;
 
   const sessionHost = createSessionHost({
     nodeId: 'node-a',
     shardWorldInstanceId: 'shard-a',
     heartbeatGraceMs: 1_000,
+    shardRuntime,
     now: () => Date.now(),
     createConnectionId: () => {
       nextConnectionNumber += 1;
@@ -182,9 +203,13 @@ function createHarness(options: { deferLoad?: boolean; failLoad?: boolean; rejec
 
   return {
     events,
+    runtimeEvents,
     sockets,
     readLease(characterId: string) {
       return leases.get(characterId) ?? null;
+    },
+    runtimeSnapshot(characterId: string) {
+      return baseRuntime.snapshotFor(characterId);
     },
     clearEvents(characterId: string, connectionId: string) {
       return events.filter((event) => event === `clear:${characterId}:${connectionId}`).length;
@@ -259,15 +284,43 @@ describe('websocket session host', () => {
     harness.trackSocket(socket);
     const token = await issueToken('cid-1');
 
+    const attached = waitForSocketMessage(socket, 'attached');
+    const state = waitForSocketMessage(socket, 'state');
     socket.send(encode({ type: 'attach', attachToken: token }));
 
-    const attached = await waitForSocketMessage(socket, 'attached');
-
-    expect(attached).toMatchObject({
+    expect(await attached).toMatchObject({
       type: 'attached',
       shardWorldInstanceId: 'shard-a',
       character: {
         name: 'Warden',
+      },
+    });
+    expect(await state).toMatchObject({
+      type: 'state',
+      state: {
+        characters: {
+          'cid-1': {
+            cid: 'cid-1',
+            name: 'Warden',
+            position: {
+              x: 3,
+              y: 7,
+            },
+          },
+        },
+      },
+    });
+    expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(1);
+    expect(harness.runtimeSnapshot('cid-1')).toMatchObject({
+      characters: {
+        'cid-1': {
+          cid: 'cid-1',
+          name: 'Warden',
+          position: {
+            x: 3,
+            y: 7,
+          },
+        },
       },
     });
     expect(harness.events.indexOf('connection_id:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
@@ -298,6 +351,8 @@ describe('websocket session host', () => {
       type: 'attached',
       shardWorldInstanceId: 'shard-a',
     });
+    expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(2);
+    expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
 
     socket1.close();
     socket2.close();
@@ -343,6 +398,9 @@ describe('websocket session host', () => {
 
     expect(await expired).toEqual({ type: 'session_expired' });
     await waitForClose(socket);
+    expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(1);
+    expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
+    expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
   });
 
   it('does not let an older attach steal authority after a takeover during load', async () => {
@@ -376,6 +434,25 @@ describe('websocket session host', () => {
 
     socket1.close();
     socket2.close();
+  });
+
+  it('removes the PC from the shard runtime on explicit logout', async () => {
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    const attached = waitForSocketMessage(socket, 'attached');
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await attached;
+
+    socket.send(encode({ type: 'logout' }));
+    await waitForClose(socket);
+
+    expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(1);
+    expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
+    expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
   });
 
   it('clears a pending lease when attach fails after the lease write', async () => {
