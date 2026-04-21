@@ -479,6 +479,34 @@ describe('websocket session host', () => {
     expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
   });
 
+  it('refreshes the active lease under the account id on heartbeat', async () => {
+    harness = createHarness();
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await waitForSocketMessage(socket, 'attached');
+
+    const beforeHeartbeat = harness.readLease('account-1');
+    expect(beforeHeartbeat).not.toBeNull();
+
+    socket.send(encode({ type: 'heartbeat' }));
+
+    await waitForEventCount(harness.events, 'write:account-1:conn-1', 2);
+
+    const afterHeartbeat = harness.readLease('account-1');
+    expect(afterHeartbeat).toMatchObject({
+      connection_id: 'conn-1',
+      current_character_cid: 'cid-1',
+    });
+    expect(afterHeartbeat?.lease_expires_at).not.toEqual(beforeHeartbeat?.lease_expires_at);
+    expect(harness.readLease('cid-1')).toBeNull();
+
+    socket.close();
+  });
+
   it('rejects a reconnect attempt while the first attach is still loading', async () => {
     harness = createHarness({ deferLoad: true });
     const url = await harness.listen();
@@ -542,7 +570,7 @@ describe('websocket session host', () => {
     await waitForSocketMessage(socket, 'attached');
 
     socket.send(encode({ type: 'heartbeat' }));
-    await waitForEventCount(harness.events, 'write_started:cid-1:conn-1', 1);
+    await waitForEventCount(harness.events, 'write_started:account-1:conn-1', 1);
 
     socket.send(encode({ type: 'logout' }));
     await waitForClose(socket);

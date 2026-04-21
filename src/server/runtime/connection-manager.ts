@@ -239,7 +239,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       lease_expires_at: new Date(now() + dependencies.heartbeatGraceMs).toISOString(),
     };
 
-    await dependencies.writePresenceLease(session.characterId, nextLease);
+    await dependencies.writePresenceLease(session.accountId, nextLease);
 
     if (session.ended) {
       clearSessionLeaseSafely(session);
