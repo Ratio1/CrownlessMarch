@@ -1,69 +1,116 @@
 # Thornwrithe v1
 
-Thornwrithe v1 is a single-port Next.js app shell with a custom Node HTTP/WebSocket server. The browser uses Next for the UI surface, while gameplay traffic upgrades to a WebSocket on the same origin after attach.
+Thornwrithe v1 is a server-authoritative browser game shell for disposable shard-worlds. Each Ratio1 node runs one Thornwrithe container, and each container hosts one live shard-world. Players keep durable character progression in `R1FS` and attach to whatever shard answers their gameplay WebSocket.
 
-## Runtime Model
+## Current Runtime Model
 
-`pnpm dev` runs `server.ts` directly through `tsx` for local development.
+The shipped v1 runtime has these boundaries:
 
-`pnpm build` does two things:
-- builds the Next.js app into `.next/` and emits the traced standalone bundle at `.next/standalone/`
-- compiles `server.ts` to `dist/server.js`
+- one public HTTP origin per Thornwrithe node
+- one custom Node server in `server.ts`
+- one Next.js App Router shell for auth and play surfaces
+- one gameplay WebSocket path on the same origin
+- one live shard runtime per container
+- one `CStore` lease row per active character
+- one `R1FS` checkpoint chain per character
 
-`pnpm start` launches `dist/server.js` in production mode. That entrypoint boots Next, attaches the HTTP handler, and exposes the WebSocket server on the same port.
+The current browser flow is:
 
-The current bootstrap slice is intentionally minimal:
-- one HTTP port
-- one custom Node server
-- one Next App Router shell
-- one WebSocket transport surface
+1. the player opens `/`
+2. the client registers or logs in through the auth routes
+3. the play page requests a short-lived attach token from `/api/auth/attach`
+4. the client opens the gameplay socket on `THORNWRITHE_WEBSOCKET_PATH`
+5. the socket sends `attach`
+6. the server loads the character from `R1FS` and inserts it into the local shard
+
+After attach, gameplay is WebSocket-only.
+
+## Storage Split
+
+`R1FS` is the durable character store. Thornwrithe checkpoints progression such as XP, inventory, equipment, skills, quest progress, and currency there.
+
+`CStore` is the live session registry. Thornwrithe uses one field per character in `thornwrithe-<game_id>` to track:
+
+- current checkpoint CID
+- shard-world instance id
+- session-host node id
+- connection id
+- lease expiry
+- last persisted revision and timestamp
+
+Shard-local position and shard-local encounter state are disposable in v1. Reconnect loads the last durable checkpoint, not the last live location.
+
+## Session Rules
+
+Thornwrithe v1 uses `disconnect before reconnect`.
+
+- If a character already has a live lease, a new attach is rejected.
+- Graceful logout clears the lease before the socket closes.
+- Dirty disconnect waits for lease expiry.
+- Reconnect may land on a different node and therefore a different shard.
+
+The client UI already treats reconnect as a fresh session host. It does not promise return to the same shard.
 
 ## Environment Contract
 
-Copy `.env.example` to `.env` and set the Ratio1 values before running against a live environment.
+Copy `.env.example` to `.env` before local or deployed runs.
 
 Required settings:
-- `EE_CHAINSTORE_API_URL`: CStore API endpoint
-- `EE_R1FS_API_URL`: R1FS API endpoint
+
+- `EE_CHAINSTORE_API_URL`: CStore endpoint
+- `EE_R1FS_API_URL`: R1FS endpoint
 - `R1EN_CSTORE_AUTH_HKEY`: auth namespace key
-- `R1EN_CSTORE_AUTH_SECRET`: long-lived auth secret
-- `R1EN_CSTORE_AUTH_BOOTSTRAP_ADMIN_PWD`: bootstrap admin password for initial setup
-- `SESSION_SECRET`: session cookie signing secret
-- `ATTACH_TOKEN_SECRET`: short-lived WebSocket attach token secret
-- `THORNWRITHE_GAME_ID`: game identifier used by the node
-- `THORNWRITHE_NODE_ID`: node identifier for presence and lease ownership
-- `THORNWRITHE_HEARTBEAT_INTERVAL_MS`: heartbeat cadence for socket/session keepalive
-- `THORNWRITHE_LEASE_GRACE_MS`: grace period before a stale lease can be reclaimed
+- `R1EN_CSTORE_AUTH_SECRET`: auth secret for the Ratio1 auth layer
+- `R1EN_CSTORE_AUTH_BOOTSTRAP_ADMIN_PWD`: bootstrap admin password
+- `SESSION_SECRET`: session-cookie signing secret
+- `ATTACH_TOKEN_SECRET`: short-lived attach-token signing secret
+- `THORNWRITHE_GAME_ID`: shared game id for the deployment
+- `THORNWRITHE_NODE_ID`: node identifier written into presence leases
+- `THORNWRITHE_LEASE_GRACE_MS`: lease timeout for stale sockets
 
-## Transport Model
+Optional settings:
 
-Thornwrithe uses a two-step attach flow:
+- `THORNWRITHE_WEBSOCKET_PATH`: gameplay socket path, defaults to `/ws`
+- `THORNWRITHE_SHARD_WORLD_INSTANCE_ID`: explicit shard id for the container, defaults to `THORNWRITHE_NODE_ID`
 
-1. The browser reaches the Next UI shell over HTTP.
-2. The client obtains an attach token and upgrades to WebSocket on the same origin.
-3. The server keeps the gameplay session on the socket until disconnect or takeover.
+## Local Commands
 
-This v1 bootstrap does not add auth, persistence, or gameplay state. It only establishes the shell and the production server path.
+`pnpm dev` runs `server.ts` through `tsx`.
+
+`pnpm build` builds Next into `.next/` and compiles `server.ts` into `dist/server.js`.
+
+`pnpm start` launches `dist/server.js` in production mode.
+
+`pnpm test`, `pnpm lint`, and `pnpm typecheck` are the local verification commands used in this repo.
 
 ## Verification
 
 Run these checks from the Thornwrithe worktree:
 
 ```bash
-pnpm test
 pnpm lint
-pnpm build
-pnpm start
+pnpm typecheck
+pnpm test
 ```
 
-For a complete bootstrap smoke check, run:
+For the current first-session smoke path, run:
 
 ```bash
-pnpm test -- tests/unit/server-bootstrap.test.ts
-pnpm lint
-pnpm build
-pnpm build
-timeout 5s pnpm start
+pnpm test -- tests/integration/first-session-smoke.test.ts
 ```
 
-The repeated `pnpm build` proves the standalone trace output is reproducible in this worktree layout. `pnpm start` should then start `dist/server.js` successfully after a build. Use `timeout` when smoke-testing locally so the process exits after confirming the server boots.
+For the attach/runtime slices, run:
+
+```bash
+pnpm test -- tests/integration/auth-attach.test.ts tests/integration/websocket-session.test.ts
+```
+
+For the persistence slice, run:
+
+```bash
+pnpm test -- tests/unit/persistence-service.test.ts tests/integration/r1fs-checkpoint.test.ts
+```
+
+## Operational Notes
+
+The repo includes a `syncPresenceHset()` helper in `src/server/platform/cstore-presence.ts`, but `server.ts` does not wire it into startup yet. Treat fresh-start presence state as best-effort until you add startup `hsync` or enforce it outside the app.
