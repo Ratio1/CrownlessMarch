@@ -87,4 +87,33 @@ describe('r1fs character checkpoints', () => {
       snapshot: { xp: 50 },
     });
   });
+
+  it('creates an initial checkpoint with normalized durable progression', async () => {
+    const r1fs = createFakeR1fs();
+    const store = createCharacterCheckpointStore({ r1fs });
+
+    await expect(
+      store.createInitialCharacterCheckpoint({
+        characterName: 'First Warden',
+        snapshot: {
+          currency: 5,
+          position: { x: 8, y: 3 },
+        },
+      }),
+    ).resolves.toEqual({
+      cid: 'cid-next-1',
+      persist_revision: 0,
+      snapshot: {
+        name: 'First Warden',
+        xp: 0,
+        level: 0,
+        inventory: [],
+        equipment: {},
+        currency: 5,
+        quest_progress: {},
+        skills: [],
+        unlocks: [],
+      },
+    });
+  });
 });

@@ -28,9 +28,16 @@ export async function POST(request: Request) {
       );
     }
 
+    if (error instanceof Error && error.message === 'Invalid registration payload') {
+      return Response.json(
+        { error: 'Invalid registration payload' },
+        { status: 400 }
+      );
+    }
+
     return Response.json(
-      { error: error instanceof Error ? error.message : 'Registration failed' },
-      { status: 400 },
+      { error: 'Registration failed' },
+      { status: 500 },
     );
   }
 }

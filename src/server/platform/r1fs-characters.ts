@@ -1,4 +1,5 @@
 import { getRatio1ServerClient, type Ratio1R1fsClient } from './ratio1';
+import { normalizeDurableProgression } from '../../shared/domain/progression';
 
 export interface CharacterCheckpointRecord<TSnapshot extends Record<string, unknown> = Record<string, unknown>> {
   persist_revision: number;
@@ -12,6 +13,11 @@ export interface CharacterCheckpoint<TSnapshot extends Record<string, unknown> =
 
 export interface CharacterCheckpointStoreOptions {
   r1fs: Ratio1R1fsClient;
+}
+
+export interface CreateInitialCharacterCheckpointInput {
+  characterName: string;
+  snapshot?: Record<string, unknown>;
 }
 
 function isCharacterCheckpointRecord(value: unknown): value is CharacterCheckpointRecord<Record<string, unknown>> {
@@ -31,6 +37,26 @@ function isCharacterCheckpointRecord(value: unknown): value is CharacterCheckpoi
 
 export function createCharacterCheckpointStore(options: CharacterCheckpointStoreOptions) {
   return {
+    async createInitialCharacterCheckpoint(input: CreateInitialCharacterCheckpointInput): Promise<CharacterCheckpoint> {
+      const snapshot = normalizeDurableProgression({
+        name: input.characterName,
+        ...(input.snapshot ?? {}),
+      });
+      const record: CharacterCheckpointRecord = {
+        persist_revision: 0,
+        snapshot,
+      };
+      const result = await options.r1fs.addJson({
+        data: record,
+      });
+
+      return {
+        cid: result.cid,
+        persist_revision: record.persist_revision,
+        snapshot: record.snapshot,
+      };
+    },
+
     async loadCharacterByCid(cid: string): Promise<CharacterCheckpoint> {
       const payload = await options.r1fs.getYaml({ cid });
 
@@ -81,6 +107,10 @@ function getDefaultCharacterCheckpointStore() {
 
 export async function loadCharacterByCid(cid: string) {
   return await getDefaultCharacterCheckpointStore().loadCharacterByCid(cid);
+}
+
+export async function createInitialCharacterCheckpoint(input: CreateInitialCharacterCheckpointInput) {
+  return await getDefaultCharacterCheckpointStore().createInitialCharacterCheckpoint(input);
 }
 
 export async function saveCharacterCheckpoint(input: {

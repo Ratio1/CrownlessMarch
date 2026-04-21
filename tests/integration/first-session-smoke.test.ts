@@ -173,6 +173,11 @@ describe('first session smoke', () => {
 
   beforeEach(() => {
     jest.resetModules();
+    delete process.env.R1EN_CSTORE_AUTH_HKEY;
+    delete process.env.R1EN_CSTORE_AUTH_SECRET;
+    delete process.env.R1EN_CSTORE_AUTH_BOOTSTRAP_ADMIN_PWD;
+    delete process.env.EE_CSTORE_AUTH_HKEY;
+    delete process.env.EE_CSTORE_AUTH_SECRET;
     process.env.SESSION_SECRET = 'test-session-secret-0123456789012345';
     process.env.ATTACH_TOKEN_SECRET = 'test-attach-secret-0123456789012345';
   });

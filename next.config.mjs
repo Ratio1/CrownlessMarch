@@ -8,6 +8,7 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     outputFileTracingRoot: projectDir,
+    serverComponentsExternalPackages: ['@node-rs/argon2', '@ratio1/cstore-auth-ts'],
   },
   reactStrictMode: true,
 };

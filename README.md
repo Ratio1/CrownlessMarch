@@ -25,6 +25,12 @@ The current browser flow is:
 
 After attach, gameplay is WebSocket-only.
 
+Registration note:
+
+- when `R1EN_CSTORE_AUTH_*` is configured, `/api/auth/register` creates the shared auth user in `CStore`
+- the same registration call also writes the initial character checkpoint into `R1FS`, and the returned `characterId` is that checkpoint CID
+- this keeps login and attach working even when register, login, and socket attach land on different thorn nodes
+
 ## Storage Split
 
 `R1FS` is the durable character store. Thornwrithe checkpoints progression such as XP, inventory, equipment, skills, quest progress, and currency there.
