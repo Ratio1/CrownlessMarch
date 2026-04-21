@@ -97,6 +97,7 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
 function createHarness(options: {
   deferLoad?: boolean;
   deferHeartbeatWrite?: boolean;
+  deferClear?: boolean;
   failLoad?: boolean;
   rejectClear?: boolean;
 } = {}) {
@@ -107,6 +108,7 @@ function createHarness(options: {
   const sockets = new Set<WebSocket>();
   const loadRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   const writeRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
+  const clearRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
   let writeCount = 0;
   const baseRuntime = new ShardRuntime();
@@ -162,6 +164,12 @@ function createHarness(options: {
       events.push(`clear:${characterId}:${connectionId}`);
       if (options.rejectClear) {
         throw new Error('clear failed');
+      }
+
+      if (options.deferClear) {
+        const request = createDeferred<void>();
+        clearRequests.push(request);
+        await request.promise;
       }
 
       const current = leases.get(characterId);
@@ -241,6 +249,14 @@ function createHarness(options: {
       const request = writeRequests[index];
       if (!request) {
         throw new Error(`Missing deferred heartbeat write at index ${index}`);
+      }
+
+      request.resolve();
+    },
+    releaseClear(index: number = 0) {
+      const request = clearRequests[index];
+      if (!request) {
+        throw new Error(`Missing deferred clear at index ${index}`);
       }
 
       request.resolve();
@@ -402,6 +418,38 @@ describe('websocket session host', () => {
 
     expect(harness.runtimeEvents.filter((event) => event === 'add:cid-1')).toHaveLength(2);
     expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
+
+    socket2.close();
+  });
+
+  it('does not complete logout until the active lease clear finishes', async () => {
+    harness = createHarness({ deferClear: true });
+    const url = await harness.listen();
+    const socket1 = await openSocket(url);
+    const socket2 = await openSocket(url);
+    harness.trackSocket(socket1);
+    harness.trackSocket(socket2);
+    const firstToken = await issueToken('cid-1');
+    const secondToken = await issueToken('cid-1');
+
+    socket1.send(encode({ type: 'attach', attachToken: firstToken }));
+    await waitForSocketMessage(socket1, 'attached');
+
+    socket1.send(encode({ type: 'logout' }));
+    await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(socket1.readyState).toBe(WebSocket.OPEN);
+
+    harness.releaseClear(0);
+    await waitForClose(socket1);
+
+    const attached = waitForSocketMessage(socket2, 'attached');
+    socket2.send(encode({ type: 'attach', attachToken: secondToken }));
+    expect(await attached).toMatchObject({
+      type: 'attached',
+      shardWorldInstanceId: 'shard-a',
+    });
 
     socket2.close();
   });

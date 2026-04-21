@@ -120,9 +120,9 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     };
   }
 
-  function endSession(session: ActiveSession, message?: OutboundMessage) {
+  function beginSessionEnd(session: ActiveSession) {
     if (session.ended) {
-      return;
+      return false;
     }
 
     session.ended = true;
@@ -134,11 +134,34 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
     activeSessions.delete(session.characterId);
     shardRuntime.removePlayer(session.characterId);
+
+    return true;
+  }
+
+  function endSession(session: ActiveSession, message?: OutboundMessage) {
+    if (!beginSessionEnd(session)) {
+      return;
+    }
+
     clearSessionLeaseSafely(session);
 
     if (message) {
       sendAndClose(session.socket, message);
       return;
+    }
+
+    session.socket.close();
+  }
+
+  async function logoutSession(session: ActiveSession) {
+    if (!beginSessionEnd(session)) {
+      return;
+    }
+
+    try {
+      await clearSessionLease(session);
+    } catch {
+      // Graceful logout waits for the clear attempt to finish, but cleanup remains best-effort.
     }
 
     session.socket.close();
@@ -395,7 +418,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     }
 
     if (message.type === 'logout') {
-      endSession(session);
+      await logoutSession(session);
       return;
     }
   }
