@@ -113,13 +113,22 @@ export async function loadAdminDashboardData(options: LoadAdminDashboardDataOpti
         continue;
       }
 
+      let persistRevision = 0;
+
+      try {
+        const checkpoint = await checkpointStore.loadCharacterByCid(user.metadata.characterId);
+        persistRevision = checkpoint.persist_revision;
+      } catch {
+        persistRevision = 0;
+      }
+
       const fallbackEntry: ThornwritheRosterEntry = {
         version: 1,
         accountId,
         email: accountId,
         characterName: user.metadata.characterName,
         latestCharacterCid: user.metadata.characterId,
-        persistRevision: 0,
+        persistRevision,
         registeredAt: user.createdAt,
         lastPersistedAt: null,
       };
