@@ -9,6 +9,9 @@ import { createSessionHost } from './src/server/runtime/connection-manager';
 import { createPresenceLeaseStore } from './src/server/platform/cstore-presence';
 import { createCharacterCheckpointStore } from './src/server/platform/r1fs-characters';
 import { getRatio1ServerClient } from './src/server/platform/ratio1';
+import { resolveThornwritheNodeId } from './src/server/platform/runtime-env';
+
+const REQUIRED_RUNTIME_ENV = ['THORNWRITHE_GAME_ID', 'SESSION_SECRET', 'ATTACH_TOKEN_SECRET'] as const;
 
 function preloadStandaloneConfig() {
   if (process.env.NODE_ENV !== 'production' || process.env.__NEXT_PRIVATE_STANDALONE_CONFIG) {
@@ -39,10 +42,45 @@ function getHeartbeatGraceMs() {
 }
 
 function getShardWorldInstanceId() {
-  return process.env.THORNWRITHE_SHARD_WORLD_INSTANCE_ID ?? process.env.THORNWRITHE_NODE_ID ?? 'thornwrithe-shard';
+  return process.env.THORNWRITHE_SHARD_WORLD_INSTANCE_ID ?? resolveThornwritheNodeId() ?? 'thornwrithe-shard';
+}
+
+function hasGameId(env: NodeJS.ProcessEnv) {
+  return Boolean(env.THORNWRITHE_GAME_ID?.trim() || env.R1EN_CSTORE_AUTH_HKEY?.trim());
+}
+
+function hasSessionSecret(env: NodeJS.ProcessEnv) {
+  return Boolean(env.SESSION_SECRET?.trim() || env.R1EN_CSTORE_AUTH_SECRET?.trim());
+}
+
+function hasAttachTokenSecret(env: NodeJS.ProcessEnv) {
+  return Boolean(env.ATTACH_TOKEN_SECRET?.trim() || env.R1EN_CSTORE_AUTH_SECRET?.trim() || env.SESSION_SECRET?.trim());
+}
+
+export function assertRequiredRuntimeEnv(env: NodeJS.ProcessEnv = process.env) {
+  const missing = REQUIRED_RUNTIME_ENV.filter((key) => {
+    if (key === 'THORNWRITHE_GAME_ID') {
+      return !hasGameId(env);
+    }
+
+    if (key === 'SESSION_SECRET') {
+      return !hasSessionSecret(env);
+    }
+
+    if (key === 'ATTACH_TOKEN_SECRET') {
+      return !hasAttachTokenSecret(env);
+    }
+
+    return !env[key];
+  });
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required Thornwrithe runtime env: ${missing.join(', ')}`);
+  }
 }
 
 export async function createServer() {
+  assertRequiredRuntimeEnv();
   preloadStandaloneConfig();
 
   const nextApp = next({
@@ -60,7 +98,7 @@ export async function createServer() {
   const presenceStore = createPresenceLeaseStore({ cstore: ratio1.cstore });
   const characterStore = createCharacterCheckpointStore({ r1fs: ratio1.r1fs });
   const sessionHost = createSessionHost({
-    nodeId: process.env.THORNWRITHE_NODE_ID ?? 'node-a',
+    nodeId: resolveThornwritheNodeId(),
     shardWorldInstanceId: getShardWorldInstanceId(),
     heartbeatGraceMs: getHeartbeatGraceMs(),
     verifyAttachToken,

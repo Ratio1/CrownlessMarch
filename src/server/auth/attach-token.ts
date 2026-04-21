@@ -1,3 +1,5 @@
+import { resolveAttachTokenSecret } from '../platform/runtime-env';
+
 const ATTACH_TOKEN_TTL = '60s';
 
 export interface AttachTokenPayload {
@@ -7,13 +9,7 @@ export interface AttachTokenPayload {
 }
 
 function getAttachSecret() {
-  const secret = process.env.ATTACH_TOKEN_SECRET;
-
-  if (!secret) {
-    throw new Error('ATTACH_TOKEN_SECRET is required');
-  }
-
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(resolveAttachTokenSecret());
 }
 
 async function getJose() {

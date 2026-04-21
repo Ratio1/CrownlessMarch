@@ -1,3 +1,5 @@
+import { resolveSessionSecret } from '../platform/runtime-env';
+
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export const SESSION_COOKIE_NAME = 'thornwrithe_session';
@@ -8,13 +10,7 @@ export interface SessionPayload {
 }
 
 function getSessionSecret() {
-  const secret = process.env.SESSION_SECRET;
-
-  if (!secret) {
-    throw new Error('SESSION_SECRET is required');
-  }
-
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(resolveSessionSecret());
 }
 
 async function getJose() {

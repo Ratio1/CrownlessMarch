@@ -1,5 +1,6 @@
 import type { PresenceLease } from '../../shared/domain/types';
 import { getRatio1ServerClient, type Ratio1CStoreClient } from './ratio1';
+import { resolveThornwritheGameId } from './runtime-env';
 
 export interface PresenceLeaseStoreOptions {
   cstore: Ratio1CStoreClient;
@@ -8,13 +9,7 @@ export interface PresenceLeaseStoreOptions {
 }
 
 function resolvePresenceGameId(gameId: string | undefined, env: NodeJS.ProcessEnv) {
-  const resolvedGameId = gameId ?? env.THORNWRITHE_GAME_ID;
-
-  if (!resolvedGameId) {
-    throw new Error('THORNWRITHE_GAME_ID is required to use presence leases');
-  }
-
-  return resolvedGameId;
+  return gameId ?? resolveThornwritheGameId(env);
 }
 
 function parsePresenceLease(payload: string | null): PresenceLease | null {

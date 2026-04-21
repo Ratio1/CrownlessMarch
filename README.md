@@ -68,6 +68,15 @@ Required settings:
 - `THORNWRITHE_NODE_ID`: node identifier written into presence leases
 - `THORNWRITHE_LEASE_GRACE_MS`: lease timeout for stale sockets
 
+Deeploy note:
+
+- the current worker runner injects the Ratio1 endpoint vars and `R1EN_CSTORE_AUTH_*`
+- Thornwrithe now falls back to the `R1EN_CSTORE_AUTH_HKEY` namespace, with the Deeploy worker-runner suffix stripped, for `THORNWRITHE_GAME_ID`
+- Thornwrithe now falls back to `R1EN_CSTORE_AUTH_SECRET` for `SESSION_SECRET` and `ATTACH_TOKEN_SECRET`
+- Thornwrithe now falls back to `R1EN_HOST_ID` or `EE_HOST_ID` when `THORNWRITHE_NODE_ID` is absent
+- on the thorn devnet, use `THORNWRITHE_NODE_ID=dr1-thorn-01-4c` on `dr1-thorn-01` and `THORNWRITHE_NODE_ID=dr1-thorn-02-4c` on `dr1-thorn-02`
+- keep explicit Thornwrithe env values when you need stable node ids, secrets that differ from the CStore auth secret, or a game id that does not derive from the auth namespace
+
 Optional settings:
 
 - `THORNWRITHE_WEBSOCKET_PATH`: gameplay socket path, defaults to `/ws`
