@@ -21,6 +21,13 @@ export async function POST(request: Request) {
 
     return Response.json(account, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Account already exists') {
+      return Response.json(
+        { error: 'Account already exists', code: 'account_exists' },
+        { status: 409 }
+      );
+    }
+
     return Response.json(
       { error: error instanceof Error ? error.message : 'Registration failed' },
       { status: 400 },

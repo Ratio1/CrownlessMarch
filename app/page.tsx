@@ -1,5 +1,9 @@
-import { BootstrapScreen } from '@/components/bootstrap-screen';
+import { LoginCard } from '@/components/auth/LoginCard';
 
 export default function Page() {
-  return <BootstrapScreen />;
+  return (
+    <main className="page page--login">
+      <LoginCard />
+    </main>
+  );
 }

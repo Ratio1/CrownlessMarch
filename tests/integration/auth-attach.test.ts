@@ -82,6 +82,32 @@ describe('auth attach flow', () => {
     });
   });
 
+  it('returns a conflict when the account already exists', async () => {
+    const registerRoute = await import('../../app/api/auth/register/route');
+
+    await registerRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/register`, {
+        email: 'duplicate@test.invalid',
+        password: 'hunter2',
+        characterName: 'First Warden',
+      }),
+    );
+
+    const response = await registerRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/register`, {
+        email: 'duplicate@test.invalid',
+        password: 'hunter2',
+        characterName: 'Second Warden',
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Account already exists',
+      code: 'account_exists',
+    });
+  });
+
   it('returns a client error for malformed login payloads', async () => {
     const loginRoute = await import('../../app/api/auth/login/route');
 
