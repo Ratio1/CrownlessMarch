@@ -3,11 +3,11 @@ import {
   createPresenceLeaseStore,
   getPresenceHkey,
   parsePresenceLease,
-  type PresenceLeaseStoreOptions,
 } from '../platform/cstore-presence';
 import { createRosterStore, getRosterHkey, parseRosterEntry, type ThornwritheRosterEntry } from '../platform/cstore-roster';
 import { getRatio1ServerClient, type Ratio1CStoreClient, type Ratio1R1fsClient } from '../platform/ratio1';
 import { resolveThornwritheGameId } from '../platform/runtime-env';
+import { ensureAuthInitialized, getAuthClient, isSharedAuthConfigured } from '../auth/cstore';
 import type { PresenceLease } from '../../shared/domain/types';
 
 export interface AdminDashboardHsetRow {
@@ -48,6 +48,12 @@ export interface LoadAdminDashboardDataOptions {
   r1fs?: Ratio1R1fsClient;
 }
 
+interface SharedAuthMetadata {
+  email: string;
+  characterId: string;
+  characterName: string;
+}
+
 function getDefaultClients() {
   return getRatio1ServerClient();
 }
@@ -56,6 +62,20 @@ function sortCharacters(left: ThornwritheRosterEntry, right: ThornwritheRosterEn
   return (
     left.characterName.localeCompare(right.characterName, undefined, { sensitivity: 'base' }) ||
     left.email.localeCompare(right.email, undefined, { sensitivity: 'base' })
+  );
+}
+
+function isSharedAuthMetadata(value: unknown): value is SharedAuthMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.email === 'string' &&
+    typeof record.characterId === 'string' &&
+    typeof record.characterName === 'string'
   );
 }
 
@@ -71,10 +91,52 @@ export async function loadAdminDashboardData(options: LoadAdminDashboardDataOpti
 
   await Promise.all([rosterStore.syncRosterHset(), presenceStore.syncPresenceHset()]);
 
-  const [rosterRawRows, presenceRawRows] = await Promise.all([
+  const [initialRosterRawRows, presenceRawRows] = await Promise.all([
     rosterStore.readAllRosterRows(),
     presenceStore.readAllPresenceRows(),
   ]);
+  const rosterRawRows = { ...initialRosterRawRows };
+
+  if (isSharedAuthConfigured(env)) {
+    const authClient = getAuthClient();
+    await ensureAuthInitialized(authClient);
+    const users = await authClient.simple.getAllUsers<unknown>();
+
+    for (const user of users) {
+      if (!isSharedAuthMetadata(user.metadata)) {
+        continue;
+      }
+
+      const accountId = user.metadata.email.trim().toLowerCase();
+
+      if (rosterRawRows[accountId]) {
+        continue;
+      }
+
+      const fallbackEntry: ThornwritheRosterEntry = {
+        version: 1,
+        accountId,
+        email: accountId,
+        characterName: user.metadata.characterName,
+        latestCharacterCid: user.metadata.characterId,
+        persistRevision: 0,
+        registeredAt: user.createdAt,
+        lastPersistedAt: null,
+      };
+
+      await rosterStore.writeRosterEntry(accountId, fallbackEntry);
+      rosterRawRows[accountId] = JSON.stringify({
+        version: 1,
+        account_id: fallbackEntry.accountId,
+        email: fallbackEntry.email,
+        character_name: fallbackEntry.characterName,
+        latest_character_cid: fallbackEntry.latestCharacterCid,
+        persist_revision: fallbackEntry.persistRevision,
+        registered_at: fallbackEntry.registeredAt,
+        last_persisted_at: fallbackEntry.lastPersistedAt,
+      });
+    }
+  }
 
   const rosterRows = Object.entries(rosterRawRows).map<AdminDashboardHsetRow>(([key, raw]) => {
     try {
