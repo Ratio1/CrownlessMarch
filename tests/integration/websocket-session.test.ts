@@ -363,7 +363,10 @@ describe('websocket session host', () => {
       },
     });
     expect(harness.events.indexOf('connection_id:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
-    expect(harness.events.indexOf('write:cid-1:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
+    expect(harness.events.indexOf('write:account-1:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
+    expect(harness.readLease('account-1')).toMatchObject({
+      current_character_cid: 'cid-1',
+    });
 
     socket.close();
   });
@@ -436,7 +439,7 @@ describe('websocket session host', () => {
     await waitForSocketMessage(socket1, 'attached');
 
     socket1.send(encode({ type: 'logout' }));
-    await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+    await waitForEventCount(harness.events, 'clear:account-1:conn-1', 1);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(socket1.readyState).toBe(WebSocket.OPEN);
@@ -548,7 +551,7 @@ describe('websocket session host', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.runtimeEvents.filter((event) => event === 'remove:cid-1')).toHaveLength(1);
-    expect(harness.clearEvents('cid-1', 'conn-1')).toBeGreaterThanOrEqual(1);
+    expect(harness.clearEvents('account-1', 'conn-1')).toBeGreaterThanOrEqual(1);
     expect(messages.some((message) => message.type === 'error')).toBe(false);
   });
 
@@ -564,7 +567,7 @@ describe('websocket session host', () => {
     harness.releaseLoadAt(0);
 
     expect(await waitForSocketMessage(socket, 'error')).toEqual({ type: 'error', code: 'attach_failed' });
-    await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+    await waitForEventCount(harness.events, 'clear:account-1:conn-1', 1);
 
     expect(harness.readLease('cid-1')).toBeNull();
 
@@ -584,7 +587,7 @@ describe('websocket session host', () => {
     socket.close();
     await waitForClose(socket);
     harness.releaseLoadAt(0);
-    await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+    await waitForEventCount(harness.events, 'clear:account-1:conn-1', 1);
 
     expect(harness.readLease('cid-1')).toBeNull();
   });
@@ -609,7 +612,7 @@ describe('websocket session host', () => {
       socket.close();
       await waitForClose(socket);
       harness.releaseLoadAt(0);
-      await waitForEventCount(harness.events, 'clear:cid-1:conn-1', 1);
+      await waitForEventCount(harness.events, 'clear:account-1:conn-1', 1);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(unhandledRejections).toEqual([]);

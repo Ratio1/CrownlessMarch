@@ -1,3 +1,5 @@
+export {};
+
 function jsonRequest(url: string, body: unknown, headers?: Record<string, string>) {
   return new Request(url, {
     method: 'POST',
@@ -24,6 +26,8 @@ describe('auth attach flow', () => {
 
   beforeEach(() => {
     jest.resetModules();
+    jest.dontMock('../../src/server/auth/session');
+    jest.dontMock('../../src/server/auth/account-service');
     delete process.env.R1EN_CSTORE_AUTH_HKEY;
     delete process.env.R1EN_CSTORE_AUTH_SECRET;
     delete process.env.R1EN_CSTORE_AUTH_BOOTSTRAP_ADMIN_PWD;
@@ -222,6 +226,41 @@ describe('auth attach flow', () => {
       characterId: sessionPayload.characterId,
       issuedAt: expect.any(String),
     });
+  });
+
+  it('mints the attach token from the latest roster-backed account state instead of the stale session cid', async () => {
+    jest.doMock('../../src/server/auth/session', () => ({
+      readSessionFromRequest: jest.fn().mockResolvedValue({
+        accountId: 'stale@test.invalid',
+        characterId: 'cid-stale',
+      }),
+    }));
+    jest.doMock('../../src/server/auth/account-service', () => ({
+      getAccountById: jest.fn().mockResolvedValue({
+        accountId: 'stale@test.invalid',
+        characterId: 'cid-latest',
+      }),
+    }));
+
+    const attachRoute = await import('../../app/api/auth/attach/route');
+    const attachToken = await import('../../src/server/auth/attach-token');
+
+    const response = await attachRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/attach`, {}),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { attachToken: string };
+    const payload = await attachToken.verifyAttachToken(body.attachToken);
+
+    expect(payload).toMatchObject({
+      accountId: 'stale@test.invalid',
+      characterId: 'cid-latest',
+    });
+
+    jest.dontMock('../../src/server/auth/session');
+    jest.dontMock('../../src/server/auth/account-service');
   });
 
   it('returns a controlled server error when attach session verification is misconfigured', async () => {

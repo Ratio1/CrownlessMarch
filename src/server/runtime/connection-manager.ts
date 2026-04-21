@@ -18,15 +18,16 @@ export interface SessionHostDependencies {
   heartbeatGraceMs: number;
   shardRuntime?: ShardRuntimeLike;
   verifyAttachToken(token: string): Promise<AttachTokenPayload>;
-  readPresenceLease(characterId: string): Promise<PresenceLease | null>;
-  writePresenceLease(characterId: string, lease: PresenceLease): Promise<unknown>;
-  clearPresenceLease(characterId: string, connectionId: string): Promise<boolean>;
+  readPresenceLease(accountId: string): Promise<PresenceLease | null>;
+  writePresenceLease(accountId: string, lease: PresenceLease): Promise<unknown>;
+  clearPresenceLease(accountId: string, connectionId: string): Promise<boolean>;
   loadCharacterByCid(cid: string): Promise<CharacterCheckpoint>;
   createConnectionId?: () => string;
   now?: () => number;
 }
 
 interface ActiveSession {
+  accountId: string;
   characterId: string;
   connectionId: string;
   socket: WebSocket;
@@ -35,6 +36,7 @@ interface ActiveSession {
 }
 
 interface PendingAttach {
+  accountId: string;
   characterId: string;
   connectionId: string;
 }
@@ -91,7 +93,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   }
 
   async function clearPendingLease(pending: PendingAttach) {
-    await dependencies.clearPresenceLease(pending.characterId, pending.connectionId);
+    await dependencies.clearPresenceLease(pending.accountId, pending.connectionId);
   }
 
   function clearPendingLeaseSafely(pending: PendingAttach) {
@@ -99,7 +101,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   }
 
   async function clearSessionLease(session: ActiveSession) {
-    await dependencies.clearPresenceLease(session.characterId, session.connectionId);
+    await dependencies.clearPresenceLease(session.accountId, session.connectionId);
   }
 
   function clearSessionLeaseSafely(session: ActiveSession) {
@@ -132,7 +134,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       session.heartbeatTimer = null;
     }
 
-    activeSessions.delete(session.characterId);
+    activeSessions.delete(session.accountId);
     shardRuntime.removePlayer(session.characterId);
 
     return true;
@@ -168,7 +170,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   }
 
   async function getOwnershipStatus(session: ActiveSession) {
-    const lease = await dependencies.readPresenceLease(session.characterId);
+    const lease = await dependencies.readPresenceLease(session.accountId);
 
     if (!lease) {
       return { status: 'expired' as const };
@@ -282,7 +284,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
       try {
         const attachPayload = await dependencies.verifyAttachToken(message.attachToken);
-        const existingLease = await dependencies.readPresenceLease(attachPayload.characterId);
+        const existingLease = await dependencies.readPresenceLease(attachPayload.accountId);
 
         if (existingLease && Date.parse(existingLease.lease_expires_at) > now()) {
           send(socket, createError('already_connected'));
@@ -292,6 +294,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
         const connectionId = createConnectionId();
         const pendingAttach: PendingAttach = {
+          accountId: attachPayload.accountId,
           characterId: attachPayload.characterId,
           connectionId,
         };
@@ -307,10 +310,11 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           persist_revision: 0,
         };
 
-        await dependencies.writePresenceLease(attachPayload.characterId, lease);
+        await dependencies.writePresenceLease(attachPayload.accountId, lease);
         sessionRef.pending = pendingAttach;
 
         const ownership = await getOwnershipStatus({
+          accountId: attachPayload.accountId,
           characterId: attachPayload.characterId,
           connectionId,
           socket,
@@ -328,6 +332,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
         const checkpoint = await dependencies.loadCharacterByCid(attachPayload.characterId);
         const postLoadOwnership = await getOwnershipStatus({
+          accountId: attachPayload.accountId,
           characterId: attachPayload.characterId,
           connectionId,
           socket,
@@ -352,6 +357,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         };
 
         const session: ActiveSession = {
+          accountId: attachPayload.accountId,
           characterId: attachPayload.characterId,
           connectionId,
           socket,
@@ -359,7 +365,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           ended: false,
         };
 
-        activeSessions.set(session.characterId, session);
+        activeSessions.set(session.accountId, session);
         shardRuntime.addPlayer(character);
         sessionRef.current = session;
         sessionRef.pending = null;

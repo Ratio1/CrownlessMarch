@@ -9,9 +9,11 @@ The shipped v1 runtime has these boundaries:
 - one public HTTP origin per Thornwrithe node
 - one custom Node server in `server.ts`
 - one Next.js App Router shell for auth and play surfaces
+- one dedicated `/admin` diagnostics surface
 - one gameplay WebSocket path on the same origin
 - one live shard runtime per container
-- one `CStore` lease row per active character
+- one `CStore` durable roster row per player-character
+- one `CStore` live lease row per active player-character
 - one `R1FS` checkpoint chain per character
 
 The current browser flow is:
@@ -35,16 +37,25 @@ Registration note:
 
 `R1FS` is the durable character store. Thornwrithe checkpoints progression such as XP, inventory, equipment, skills, quest progress, and currency there.
 
-`CStore` is the live session registry. Thornwrithe uses one field per character in `thornwrithe-<game_id>` to track:
+`CStore` now has two Thornwrithe-owned hsets:
 
-- current checkpoint CID
-- shard-world instance id
-- session-host node id
-- connection id
-- lease expiry
-- last persisted revision and timestamp
+- `thornwrithe-<game_id>:pcs`
+  The durable roster keyed by `accountId` or email. Each row stores:
+  - character name
+  - email
+  - latest durable checkpoint CID
+  - persist revision
+  - registration and last-persisted timestamps
+- `thornwrithe-<game_id>:presence`
+  The live session registry keyed by `accountId` or email. Each row stores:
+  - current checkpoint CID
+  - shard-world instance id
+  - session-host node id
+  - connection id
+  - lease expiry
+  - last persisted revision and timestamp
 
-Shard-local position and shard-local encounter state are disposable in v1. Reconnect loads the last durable checkpoint, not the last live location.
+Shard-local position and shard-local encounter state are disposable in v1. Reconnect loads the latest durable checkpoint from the roster hset, not the last live location.
 
 ## Session Rules
 
@@ -73,6 +84,8 @@ Required settings:
 - `THORNWRITHE_GAME_ID`: shared game id for the deployment
 - `THORNWRITHE_NODE_ID`: node identifier written into presence leases
 - `THORNWRITHE_LEASE_GRACE_MS`: lease timeout for stale sockets
+- `ADMIN_USER`: primary admin username for `/admin`
+- `ADMIN_PASS`: primary admin password for `/admin`
 
 Deeploy note:
 
@@ -87,6 +100,8 @@ Optional settings:
 
 - `THORNWRITHE_WEBSOCKET_PATH`: gameplay socket path, defaults to `/ws`
 - `THORNWRITHE_SHARD_WORLD_INSTANCE_ID`: explicit shard id for the container, defaults to `THORNWRITHE_NODE_ID`
+- `THORNWRITHE_ADMIN_USER`: fallback admin username if `ADMIN_USER` is unset
+- `THORNWRITHE_ADMIN_PASS`: fallback admin password if `ADMIN_PASS` is unset
 
 ## Local Commands
 
@@ -129,3 +144,17 @@ pnpm test -- tests/unit/persistence-service.test.ts tests/integration/r1fs-check
 ## Operational Notes
 
 The repo includes a `syncPresenceHset()` helper in `src/server/platform/cstore-presence.ts`, but `server.ts` does not wire it into startup yet. Treat fresh-start presence state as best-effort until you add startup `hsync` or enforce it outside the app.
+
+## Admin Surface
+
+`/admin` is a separate read-only diagnostics page.
+
+- it uses a dedicated admin cookie, not the player session cookie
+- it authenticates against `ADMIN_USER` and `ADMIN_PASS`
+- it falls back to `THORNWRITHE_ADMIN_USER` and `THORNWRITHE_ADMIN_PASS` if the primary pair is not set
+- it renders:
+  - the durable Thornwrithe roster hset
+  - the live Thornwrithe presence hset
+  - the latest `R1FS` checkpoint snapshot for each known PC
+
+The admin dashboard does not mutate gameplay state.

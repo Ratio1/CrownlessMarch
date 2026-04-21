@@ -1,4 +1,5 @@
 import { issueAttachToken } from '../../../../src/server/auth/attach-token';
+import { getAccountById } from '../../../../src/server/auth/account-service';
 import { readSessionFromRequest } from '../../../../src/server/auth/session';
 
 export async function POST(request: Request) {
@@ -9,7 +10,13 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { token } = await issueAttachToken(session);
+    const account = await getAccountById(session.accountId);
+
+    if (!account) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { token } = await issueAttachToken(account);
 
     return Response.json({ attachToken: token });
   } catch (error) {

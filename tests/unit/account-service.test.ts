@@ -8,6 +8,11 @@ jest.mock('../../src/server/platform/r1fs-characters', () => ({
   createInitialCharacterCheckpoint: jest.fn(),
 }));
 
+jest.mock('../../src/server/platform/cstore-roster', () => ({
+  readRosterEntry: jest.fn(),
+  writeRosterEntry: jest.fn(),
+}));
+
 describe('account service', () => {
   beforeEach(() => {
     jest.resetModules();
@@ -17,6 +22,7 @@ describe('account service', () => {
   it('registers through shared auth and seeds an initial character checkpoint', async () => {
     const cstore = await import('../../src/server/auth/cstore');
     const r1fsCharacters = await import('../../src/server/platform/r1fs-characters');
+    const roster = await import('../../src/server/platform/cstore-roster');
     const accountService = await import('../../src/server/auth/account-service');
 
     const getUser = jest.fn().mockResolvedValue(null);
@@ -68,10 +74,21 @@ describe('account service', () => {
     expect(r1fsCharacters.createInitialCharacterCheckpoint).toHaveBeenCalledWith({
       characterName: 'First Warden',
     });
+    expect(roster.writeRosterEntry).toHaveBeenCalledWith(
+      'first@test.invalid',
+      expect.objectContaining({
+        accountId: 'first@test.invalid',
+        email: 'first@test.invalid',
+        characterName: 'First Warden',
+        latestCharacterCid: 'cid-initial',
+        persistRevision: 0,
+      }),
+    );
   });
 
-  it('authenticates through shared auth metadata', async () => {
+  it('authenticates through the durable roster instead of stale shared auth metadata', async () => {
     const cstore = await import('../../src/server/auth/cstore');
+    const roster = await import('../../src/server/platform/cstore-roster');
     const accountService = await import('../../src/server/auth/account-service');
 
     (cstore.isSharedAuthConfigured as jest.Mock).mockReturnValue(true);
@@ -91,6 +108,16 @@ describe('account service', () => {
         }),
       },
     });
+    (roster.readRosterEntry as jest.Mock).mockResolvedValue({
+      version: 1,
+      accountId: 'shared@test.invalid',
+      email: 'shared@test.invalid',
+      characterName: 'Shared Warden',
+      latestCharacterCid: 'cid-latest',
+      persistRevision: 4,
+      registeredAt: '2026-04-21T18:00:00.000Z',
+      lastPersistedAt: '2026-04-21T18:04:00.000Z',
+    });
 
     await expect(
       accountService.authenticateAccount({
@@ -99,7 +126,7 @@ describe('account service', () => {
       }),
     ).resolves.toEqual({
       accountId: 'shared@test.invalid',
-      characterId: 'cid-shared',
+      characterId: 'cid-latest',
     });
   });
 });

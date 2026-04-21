@@ -47,6 +47,10 @@ function createLease(overrides: Partial<PresenceLease> = {}): PresenceLease {
 }
 
 describe('presence lease store', () => {
+  it('uses an explicit presence hset suffix', () => {
+    expect(getPresenceHkey('thornwrithe-v1')).toBe('thornwrithe-thornwrithe-v1:presence');
+  });
+
   it('writes one CStore field per character', async () => {
     const cstore = new InMemoryCStore();
     const store = createPresenceLeaseStore({ cstore, gameId: 'thornwrithe-v1' });
