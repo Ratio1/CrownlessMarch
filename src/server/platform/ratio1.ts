@@ -24,6 +24,13 @@ export interface Ratio1AddJsonRequest {
   secret?: string;
 }
 
+export interface Ratio1AddYamlRequest {
+  data: unknown;
+  fn?: string;
+  nonce?: number;
+  secret?: string;
+}
+
 export interface Ratio1GetYamlRequest {
   cid: string;
   secret?: string;
@@ -38,6 +45,7 @@ export interface Ratio1CStoreClient {
 
 export interface Ratio1R1fsClient {
   addJson(request: Ratio1AddJsonRequest): Promise<{ cid: string }>;
+  addYaml(request: Ratio1AddYamlRequest): Promise<{ cid: string }>;
   getYaml(request: Ratio1GetYamlRequest): Promise<{ file_data: unknown }>;
 }
 
@@ -184,6 +192,19 @@ export function createRatio1ServerClient(options: Ratio1BootstrapOptions = {}): 
         return await request<{ cid: string }>(
           r1fsBaseUrl,
           '/add_json',
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          },
+          'r1fs'
+        );
+      },
+
+      async addYaml(requestBody) {
+        return await request<{ cid: string }>(
+          r1fsBaseUrl,
+          '/add_yaml',
           {
             method: 'POST',
             headers: { 'content-type': 'application/json' },

@@ -46,7 +46,7 @@ export function createCharacterCheckpointStore(options: CharacterCheckpointStore
         persist_revision: 0,
         snapshot,
       };
-      const result = await options.r1fs.addJson({
+      const result = await options.r1fs.addYaml({
         data: record,
       });
 
@@ -86,7 +86,7 @@ export function createCharacterCheckpointStore(options: CharacterCheckpointStore
         persist_revision: input.persistRevision + 1,
         snapshot: input.snapshot,
       };
-      const result = await options.r1fs.addJson({
+      const result = await options.r1fs.addYaml({
         data: nextRecord,
       });
 

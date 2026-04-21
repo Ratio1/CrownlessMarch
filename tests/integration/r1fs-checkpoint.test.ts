@@ -11,6 +11,13 @@ function createFakeR1fs() {
       records.set(cid, record);
     },
 
+    async addYaml({ data }: { data: Record<string, unknown> }) {
+      writes += 1;
+      const cid = `cid-next-${writes}`;
+      records.set(cid, data as unknown as CharacterCheckpointRecord<Record<string, unknown>>);
+      return { cid };
+    },
+
     async addJson({ data }: { data: Record<string, unknown> }) {
       writes += 1;
       const cid = `cid-next-${writes}`;
