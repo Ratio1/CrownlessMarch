@@ -503,6 +503,11 @@ select {
   gap: 18px;
 }
 
+.world-field__surface {
+  display: grid;
+  gap: 12px;
+}
+
 .world-field__scene {
   display: grid;
   gap: 12px;
@@ -573,6 +578,90 @@ select {
   border: 1px dashed rgba(255, 255, 255, 0.12);
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.03);
+}
+
+.world-canvas {
+  position: relative;
+  min-height: 520px;
+  border-radius: 24px;
+  border: 1px solid rgba(247, 201, 120, 0.12);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(247, 201, 120, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(7, 16, 14, 0.82), rgba(5, 8, 8, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.world-canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(168, 203, 139, 0.08), transparent 18%),
+    radial-gradient(circle at 82% 18%, rgba(247, 201, 120, 0.1), transparent 20%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 22%);
+}
+
+.world-canvas__host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.world-canvas__host canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.world-canvas__chrome {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.world-canvas__placeholder {
+  position: absolute;
+  inset: auto 18px 18px 18px;
+  z-index: 2;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 14, 13, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.world-sighting-strip {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.world-sighting-card {
+  display: grid;
+  gap: 6px;
+  min-height: 106px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
+    rgba(8, 14, 13, 0.56);
+}
+
+.world-sighting-card strong {
+  font-family: var(--font-display);
+  font-size: 1.52rem;
+  line-height: 0.96;
 }
 
 .world-grid {
@@ -1388,6 +1477,7 @@ select {
   }
 
   .world-field__scene,
+  .world-sighting-strip,
   .play-controls {
     grid-template-columns: 1fr;
   }
@@ -1412,5 +1502,15 @@ select {
     left: 12px;
     bottom: 12px;
     justify-content: space-between;
+  }
+
+  .world-canvas {
+    min-height: 420px;
+  }
+
+  .world-canvas__chrome {
+    left: 12px;
+    right: 12px;
+    top: 12px;
   }
 }

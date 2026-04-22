@@ -9,6 +9,7 @@ The shipped v1 runtime has these boundaries:
 - one public HTTP origin per Thornwrithe node
 - one custom Node server in `server.ts`
 - one Next.js App Router shell for auth and play surfaces
+- one Phaser-backed world canvas embedded inside the `/play` shell
 - one dedicated `/admin` diagnostics surface
 - one fast `/e` endpoint for version verification
 - one gameplay WebSocket path on the same origin
@@ -81,9 +82,10 @@ Starter content ships from repo-owned packs:
 - `content/quests.json`
 - `content/regions/briar-march.json`
 
-The current `/play` surface renders a text-forward field HUD:
+The current `/play` surface renders a Phaser-backed world surface with a text-forward field HUD:
 
-- the center playfield is a tile map for the visible fog window
+- the center playfield is a Phaser canvas for the visible fog window
+- the canvas draws terrain silhouettes, live PC tokens, and monster tokens from the shard snapshot
 - the side HUD shows the character card, quest ledger, movement pad, and override controls
 - the combat panel is a dice-text log driven by server-authoritative encounter rounds
 - the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
