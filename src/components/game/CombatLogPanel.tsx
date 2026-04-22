@@ -7,8 +7,34 @@ interface CombatLogPanelProps {
   activityLog: GameplayActivityEntry[];
 }
 
+function describeEncounterBanner(encounter: EncounterSnapshot) {
+  switch (encounter.status) {
+    case 'won':
+      return {
+        title: 'Victory secured',
+        detail: `Rewards ${encounter.rewards.xp} XP | ${encounter.rewards.gold} gold`,
+      };
+    case 'lost':
+      return {
+        title: 'Recovered at town hearth',
+        detail: 'The durable PC state now reflects the recovery route back to town.',
+      };
+    case 'escaped':
+      return {
+        title: 'Contact broken',
+        detail: 'No reward granted. Re-enter the field when the line is ready.',
+      };
+    case 'active':
+      return {
+        title: 'Encounter active',
+        detail: `Rewards ${encounter.rewards.xp} XP | ${encounter.rewards.gold} gold`,
+      };
+  }
+}
+
 export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPanelProps) {
   const logs = encounter?.logs ?? [];
+  const encounterBanner = encounter ? describeEncounterBanner(encounter) : null;
 
   return (
     <section className="panel play-panel play-panel--terminal">
@@ -49,10 +75,8 @@ export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPane
       ) : (
         <div className="play-card-stack">
           <div className="status-banner">
-            <strong>{encounter.status.toUpperCase()}</strong>
-            <span className="monospace">
-              Rewards {encounter.rewards.xp} XP • {encounter.rewards.gold} gold
-            </span>
+            <strong>{encounterBanner?.title ?? encounter.status.toUpperCase()}</strong>
+            <span className="monospace">{encounterBanner?.detail}</span>
           </div>
 
           <ol className="combat-log combat-log--terminal">

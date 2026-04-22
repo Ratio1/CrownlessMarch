@@ -27,11 +27,11 @@ describe('app version', () => {
 
     expect(version).toMatchObject({
       game: 'thornwrithe',
-      label: '1.1.0',
+      label: '1.2.0',
       release: 1,
-      feature: 1,
+      feature: 2,
       build: 0,
-      packageVersion: '1.1.0',
+      packageVersion: '1.2.0',
       commitSha: 'abc123def456',
       source: 'package',
     });
@@ -53,7 +53,7 @@ describe('app version', () => {
       release: 2,
       feature: 7,
       build: 19,
-      packageVersion: '1.1.0',
+      packageVersion: '1.2.0',
       commitSha: 'feedbead9876',
       source: 'env',
     });

@@ -12,5 +12,12 @@
     "type": "purge",
     "objective": "Defeat two Briar Goblins on the watchpost lanes, then return to town for the debrief.",
     "rewardXp": 180
+  },
+  {
+    "id": "secure-the-shrine-road",
+    "label": "Secure the Shrine Road",
+    "type": "hunt",
+    "objective": "Revisit the Ember Shrine, bring down the Sap Wolf stalking the grove, then return to town.",
+    "rewardXp": 220
   }
 ]

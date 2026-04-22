@@ -77,6 +77,7 @@ export interface GameplayCharacterCard {
   actions: CharacterAction[];
   inventory: GameplayInventoryItem[];
   equipment: GameplayEquipmentItem[];
+  unlocks: string[];
   quests: GameplayQuestEntry[];
 }
 

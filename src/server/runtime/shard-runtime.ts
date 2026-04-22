@@ -80,8 +80,10 @@ const HOSTILE_TILE_MONSTERS: Record<string, string> = {
 const ACTIVITY_LOG_LIMIT = 8;
 const SURVEY_QUEST_ID = 'survey-the-briar-edge';
 const BURN_QUEST_ID = 'burn-the-first-nest';
+const SECURE_SHRINE_ROAD_QUEST_ID = 'secure-the-shrine-road';
 const SHRINE_UNLOCK_ID = 'location:ember-shrine';
 const RUIN_CACHE_UNLOCK_ID = 'location:watchpost-cache';
+const DEFEAT_SUPPLY_LOSS_GOLD = 3;
 
 const FALLBACK_CONTENT: ContentBundle = {
   classes: [
@@ -175,6 +177,11 @@ function getQuestProgressRecord(snapshot: Record<string, unknown>, questId: stri
 function getQuestStatus(snapshot: Record<string, unknown>, questId: string) {
   const status = getQuestProgressRecord(snapshot, questId).status;
   return status === 'ready_to_turn_in' || status === 'turned_in' ? status : 'active';
+}
+
+function getQuestCounter(snapshot: Record<string, unknown>, questId: string, key: string, fallback: number) {
+  const value = Number(getQuestProgressRecord(snapshot, questId)[key] ?? fallback);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function getActiveQuestIds(snapshot: Record<string, unknown>) {
@@ -298,10 +305,24 @@ function toQuestEntries(snapshot: Record<string, unknown>, content: ContentBundl
             ? getQuestStatus(snapshot, quest.id) === 'ready_to_turn_in'
               ? 'Return to town for the debrief.'
               : `${Math.min(
-                  Number(getQuestProgressRecord(snapshot, quest.id).goblinsDefeated ?? 0),
-                  Number(getQuestProgressRecord(snapshot, quest.id).target ?? 2),
-                )}/${Number(getQuestProgressRecord(snapshot, quest.id).target ?? 2)} Briar Goblins defeated.`
-            : 'In progress.',
+                  getQuestCounter(snapshot, quest.id, 'goblinsDefeated', 0),
+                  getQuestCounter(snapshot, quest.id, 'target', 2),
+                )}/${getQuestCounter(snapshot, quest.id, 'target', 2)} Briar Goblins defeated.`
+            : quest.id === SECURE_SHRINE_ROAD_QUEST_ID
+              ? getQuestStatus(snapshot, quest.id) === 'ready_to_turn_in'
+                ? 'Return to town with word that the shrine road is safe.'
+                : getQuestProgressRecord(snapshot, quest.id).shrineVisited === true &&
+                    getQuestProgressRecord(snapshot, quest.id).wolfDefeated === true
+                  ? 'Return to town with word that the shrine road is safe.'
+                  : getQuestProgressRecord(snapshot, quest.id).shrineVisited === true
+                    ? `${Math.min(
+                        getQuestCounter(snapshot, quest.id, 'wolvesDefeated', 0),
+                        getQuestCounter(snapshot, quest.id, 'target', 1),
+                      )}/${getQuestCounter(snapshot, quest.id, 'target', 1)} Sap Wolves defeated on the shrine road.`
+                    : getQuestProgressRecord(snapshot, quest.id).wolfDefeated === true
+                      ? 'Return to the Ember Shrine to bless the cleared grove.'
+                      : 'Revisit the Ember Shrine, then cull the Sap Wolf in the grove.'
+              : 'In progress.',
     }));
 }
 
@@ -373,6 +394,7 @@ function toCharacterCard(
     actions,
     inventory: toInventory(player.snapshot, content),
     equipment: toEquipment(player.snapshot, content),
+    unlocks: getUnlocks(player.snapshot),
     quests: toQuestEntries(player.snapshot, content),
   };
 }
@@ -585,6 +607,7 @@ export class ShardRuntime implements ShardRuntimeLike {
           actions: [],
           inventory: [],
           equipment: [],
+          unlocks: [],
           quests: [],
         };
 
@@ -843,6 +866,68 @@ export class ShardRuntime implements ShardRuntimeLike {
           nowIso,
         );
         nextSnapshot = addInventoryItem(nextSnapshot, 'health-potion');
+        if (getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) !== 'turned_in') {
+          nextSnapshot = withActiveQuest(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID);
+          nextSnapshot = withQuestState(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID, {
+            status: 'active',
+            shrineVisited: false,
+            wolfDefeated: false,
+            wolvesDefeated: 0,
+            target: 1,
+            acceptedAt: nowIso,
+          });
+          nextSnapshot = appendActivityLog(
+            nextSnapshot,
+            'Captain Mire orders the shrine road reopened. Revisit the Ember Shrine, then break the Sap Wolf stalking the grove.',
+            'quest',
+            nowIso,
+          );
+        }
+        changed = true;
+      }
+
+      if (
+        getActiveQuestIds(nextSnapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID) &&
+        getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) === 'ready_to_turn_in'
+      ) {
+        nextSnapshot = this.turnInQuest(
+          nextSnapshot,
+          SECURE_SHRINE_ROAD_QUEST_ID,
+          10,
+          'The shrine road holds for another night under ember watchfires.',
+          nowIso,
+        );
+        nextSnapshot = addInventoryItem(nextSnapshot, 'field-rations');
+        changed = true;
+      }
+    }
+
+    if (
+      tile.kind === 'shrine' &&
+      getActiveQuestIds(nextSnapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID) &&
+      getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) !== 'ready_to_turn_in'
+    ) {
+      const progress = getQuestProgressRecord(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID);
+      const alreadyVisited = progress.shrineVisited === true;
+      const wolfDefeated = progress.wolfDefeated === true;
+
+      if (!alreadyVisited) {
+        nextSnapshot = withQuestState(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID, {
+          status: wolfDefeated ? 'ready_to_turn_in' : 'active',
+          shrineVisited: true,
+          wolfDefeated,
+          wolvesDefeated: wolfDefeated ? 1 : 0,
+          target: Number(progress.target ?? 1) || 1,
+          updatedAt: nowIso,
+        });
+        nextSnapshot = appendActivityLog(
+          nextSnapshot,
+          wolfDefeated
+            ? 'The Ember Shrine flares bright. Secure the Shrine Road is ready to turn in.'
+            : 'The Ember Shrine answers the rite. One Sap Wolf still prowls the grove.',
+          'quest',
+          nowIso,
+        );
         changed = true;
       }
     }
@@ -883,11 +968,47 @@ export class ShardRuntime implements ShardRuntimeLike {
       changed = true;
     }
 
-    if (encounter.status === 'lost') {
-      player.position = clone(this.content.region.spawn);
+    if (
+      encounter.status === 'won' &&
+      encounter.monsterId === 'sap-wolf' &&
+      getActiveQuestIds(nextSnapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID) &&
+      getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) !== 'ready_to_turn_in'
+    ) {
+      const progress = getQuestProgressRecord(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID);
+      const shrineVisited = progress.shrineVisited === true;
+
+      nextSnapshot = withQuestState(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID, {
+        status: shrineVisited ? 'ready_to_turn_in' : 'active',
+        shrineVisited,
+        wolfDefeated: true,
+        wolvesDefeated: 1,
+        target: Number(progress.target ?? 1) || 1,
+        updatedAt: nowIso,
+      });
       nextSnapshot = appendActivityLog(
         nextSnapshot,
-        'The shard drags you back toward town before the briar can close over the trail.',
+        shrineVisited
+          ? 'Secure the Shrine Road is ready to turn in. Return to town with the road report.'
+          : 'The Sap Wolf is down. Revisit the Ember Shrine to bless the cleared grove.',
+        'quest',
+        nowIso,
+      );
+      changed = true;
+    }
+
+    if (encounter.status === 'lost') {
+      player.position = clone(this.content.region.spawn);
+      const supplyLoss = Math.min(
+        DEFEAT_SUPPLY_LOSS_GOLD,
+        typeof nextSnapshot.gold === 'number' && Number.isFinite(nextSnapshot.gold) ? nextSnapshot.gold : 0
+      );
+      nextSnapshot = changeCurrency(nextSnapshot, -supplyLoss);
+      nextSnapshot = healToFull(nextSnapshot);
+      nextSnapshot = appendActivityLog(
+        nextSnapshot,
+        supplyLoss > 0
+          ? `The shard drags you back to town. The hearth restores your strength, but ${supplyLoss} gold goes to spent salves and lantern oil.`
+          : 'The shard drags you back to town and the hearth restores your strength for the next march.',
         'system',
         nowIso,
       );

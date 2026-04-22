@@ -511,7 +511,7 @@ select {
 .world-field__scene {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .world-field__objective {
@@ -526,6 +526,20 @@ select {
 
 .world-field__objective--terrain {
   background: linear-gradient(135deg, rgba(40, 80, 59, 0.18), rgba(255, 255, 255, 0.03));
+}
+
+.world-field__objective--trail {
+  background: linear-gradient(135deg, rgba(84, 48, 18, 0.2), rgba(255, 255, 255, 0.03));
+}
+
+.world-field__note-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .world-field__legend {

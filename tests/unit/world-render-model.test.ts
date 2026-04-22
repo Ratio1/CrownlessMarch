@@ -66,6 +66,7 @@ function createSnapshot(): GameplayShardSnapshot {
       actions: [],
       inventory: [],
       equipment: [],
+      unlocks: [],
       quests: [
         {
           id: 'survey-the-briar-edge',
