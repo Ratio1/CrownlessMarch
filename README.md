@@ -10,6 +10,7 @@ The shipped v1 runtime has these boundaries:
 - one custom Node server in `server.ts`
 - one Next.js App Router shell for auth and play surfaces
 - one dedicated `/admin` diagnostics surface
+- one fast `/e` endpoint for version verification
 - one gameplay WebSocket path on the same origin
 - one live shard runtime per container
 - one repo-owned starter content bundle under `content/`
@@ -86,6 +87,7 @@ The current `/play` surface renders a text-forward field HUD:
 - the side HUD shows the character card, quest ledger, movement pad, and override controls
 - the combat panel is a dice-text log driven by server-authoritative encounter rounds
 - the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
+- the fixed release badge links to `/e` so operators can confirm the exact live build from the UI
 
 Combat rules are intentionally simplified:
 
@@ -143,6 +145,8 @@ Optional settings:
 
 - `THORNWRITHE_WEBSOCKET_PATH`: gameplay socket path, defaults to `/ws`
 - `THORNWRITHE_SHARD_WORLD_INSTANCE_ID`: explicit shard id for the container, defaults to `THORNWRITHE_NODE_ID`
+- `THORNWRITHE_VERSION`: explicit `RELEASE.FEATURE.BUILD` label exposed in the UI and `/e`
+- `THORNWRITHE_RELEASE`, `THORNWRITHE_FEATURE`, `THORNWRITHE_BUILD`: split version env alternative to `THORNWRITHE_VERSION`
 - `THORNWRITHE_ADMIN_USER`: fallback admin username if `ADMIN_USER` is unset
 - `THORNWRITHE_ADMIN_PASS`: fallback admin password if `ADMIN_PASS` is unset
 - `THORNWRITHE_EMAIL_FROM`: sender address for verification mail, defaults to `RESEND_FROM` and then `onboarding@resend.dev`
@@ -162,6 +166,16 @@ Proxy note:
 `pnpm start` launches `dist/server.js` in production mode.
 
 `pnpm test`, `pnpm lint`, and `pnpm typecheck` are the local verification commands used in this repo.
+
+`GET /e` returns the current Thornwrithe version contract as JSON and mirrors it in headers:
+
+- `x-thornwrithe-version`
+- `x-thornwrithe-release`
+- `x-thornwrithe-feature`
+- `x-thornwrithe-build`
+- `x-thornwrithe-commit`
+
+If no explicit version env is set, Thornwrithe falls back to the app `package.json` version.
 
 ## Verification
 
@@ -195,6 +209,13 @@ For the persistence slice, run:
 
 ```bash
 pnpm test -- tests/unit/persistence-service.test.ts tests/integration/r1fs-checkpoint.test.ts
+```
+
+For the live version contract, run:
+
+```bash
+curl -sS https://devnet-thorn.ratio1.link/e
+curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 ```
 
 ## Operational Notes

@@ -22,10 +22,17 @@ function describeStatus(status: ReturnType<typeof useGameplaySocket>['status']) 
   }
 }
 
-export function GameShell({ gameplayPath }: { gameplayPath: string }) {
+export function GameShell({
+  gameplayPath,
+  versionLabel,
+}: {
+  gameplayPath: string;
+  versionLabel: string;
+}) {
   const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendOverride } = useGameplaySocket(gameplayPath);
   const encounter = snapshot?.encounter ?? null;
   const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
+  const primaryQuest = snapshot?.character.quests?.[0] ?? null;
 
   return (
     <section className="play-shell">
@@ -34,7 +41,7 @@ export function GameShell({ gameplayPath }: { gameplayPath: string }) {
           <p className="eyebrow">Thornwrithe field interface</p>
           <h1>Forest-bound shard, text-forward fight.</h1>
           <p className="play-header__copy">
-            Push through the Briar March, read the round-by-round dice feed, and keep the center of the field clear enough to understand danger at a glance.
+            Push through the Briar March, read the round-by-round dice feed, and keep the field readable enough to judge terrain, threat, and pursuit in one glance.
           </p>
         </div>
 
@@ -47,6 +54,22 @@ export function GameShell({ gameplayPath }: { gameplayPath: string }) {
           </div>
           <p className="muted">{statusDetail}</p>
         </div>
+
+        <div className="play-header__chips">
+          <span className="status-pill">Release {versionLabel}</span>
+          <span className="status-pill">Region {snapshot?.regionId ?? 'binding'}</span>
+          <span className="status-pill">
+            Directive {primaryQuest ? primaryQuest.label : 'Hold until the shard settles'}
+          </span>
+        </div>
+
+        {primaryQuest ? (
+          <div className="play-header__directive">
+            <div className="panel-title">Current directive</div>
+            <strong>{primaryQuest.progress}</strong>
+            <p className="muted">{primaryQuest.objective}</p>
+          </div>
+        ) : null}
 
         {status === 'disconnected' ? (
           <div className="status-banner">
@@ -65,8 +88,10 @@ export function GameShell({ gameplayPath }: { gameplayPath: string }) {
           <CharacterPanel snapshot={snapshot} />
           <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
           <QuestPanel snapshot={snapshot} />
-          <MovementPad disabled={!canMove} onMove={sendMove} />
-          <OverrideBar encounter={encounter} onQueue={sendOverride} />
+          <div className="play-controls">
+            <MovementPad disabled={!canMove} onMove={sendMove} />
+            <OverrideBar encounter={encounter} onQueue={sendOverride} />
+          </div>
         </aside>
       </section>
     </section>

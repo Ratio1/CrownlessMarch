@@ -10,6 +10,8 @@
 
 - After each completed Thornwrithe recovery phase, push `main` to `origin/main`.
 - After each such push, validate the live devnet version at `https://devnet-thorn.ratio1.link`.
+- Thornwrithe must always expose a visible `RELEASE.FEATURE.BUILD` version in the UI and mirror it at `GET /e`.
+- Post-push verification must include `https://devnet-thorn.ratio1.link/e` plus the `x-thornwrithe-version` headers so the live WAR build can be confirmed in one request.
 - Also inspect the node-local state on `dr1-thorn-01` and `dr1-thorn-02` using the checked-in login helpers and `~/show.sh`.
 
 ## Current Recovery Sequence

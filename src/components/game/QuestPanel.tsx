@@ -12,18 +12,23 @@ export function QuestPanel({ snapshot }: QuestPanelProps) {
       <div className="panel-title">Quest Ledger</div>
       {quests.length === 0 ? <p className="muted">No active shard quests. Follow the safest road you can find.</p> : null}
       {quests.length > 0 ? (
-        <ul className="plain-list">
+        <div className="quest-stack">
           {quests.map((quest) => (
-            <li key={quest.id}>
-              <strong>{quest.label}</strong>{' '}
-              <span className="status-pill">
-                {quest.status === 'ready_to_turn_in' ? 'Ready To Turn In' : 'Active'}
-              </span>
-              <div>{quest.progress}</div>
-              <div className="muted">{quest.objective}</div>
-            </li>
+            <article className="quest-card" key={quest.id}>
+              <div className="quest-card__header">
+                <strong>{quest.label}</strong>
+                <span className="status-pill">
+                  {quest.status === 'ready_to_turn_in' ? 'Ready To Turn In' : 'Active'}
+                </span>
+              </div>
+              <p>{quest.progress}</p>
+              <div className="play-chip-row">
+                <span className="status-pill">Reward {quest.rewardXp} XP</span>
+              </div>
+              <p className="muted">{quest.objective}</p>
+            </article>
           ))}
-        </ul>
+        </div>
       ) : null}
     </section>
   );

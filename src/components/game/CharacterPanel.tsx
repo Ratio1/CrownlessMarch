@@ -13,11 +13,14 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
       {!card ? <p className="muted">No shard-bound hero yet.</p> : null}
       {card ? (
         <div className="play-card-stack">
-          <div>
-            <h2 className="play-panel__heading">{card.name}</h2>
-            <p className="muted">
-              {card.classLabel} • level {card.level} • XP {card.xp}
-            </p>
+          <div className="character-hero">
+            <div>
+              <h2 className="play-panel__heading">{card.name}</h2>
+              <p className="muted">
+                {card.classLabel} • level {card.level} • XP {card.xp}
+              </p>
+            </div>
+            <div className="character-crest">{card.classId.slice(0, 3).toUpperCase()}</div>
           </div>
 
           <div className="status-banner">
@@ -29,43 +32,46 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
             </span>
           </div>
 
-          <div className="play-chip-row">
+          <div className="play-metric-grid">
             <span className="status-pill">Gold {card.gold}</span>
             <span className="status-pill">Ground {snapshot?.currentTile.kind ?? 'unknown'}</span>
             <span className="status-pill">Passive: {card.passive}</span>
+            <span className="status-pill">Encounter: {card.encounterAbility}</span>
           </div>
 
           <div className="play-info-block">
             <h3>Actions</h3>
-            <ul className="plain-list">
+            <div className="token-strip">
               {card.actions.map((action) => (
-                <li key={action.id}>
-                  <strong>{action.name}</strong> • {action.kind}
-                </li>
+                <span className="status-pill" key={action.id}>
+                  {action.name} • {action.kind}
+                </span>
               ))}
-            </ul>
+            </div>
           </div>
 
           <div className="play-info-block">
             <h3>Kit</h3>
-            <ul className="plain-list">
-              {card.equipment.length === 0 ? <li>No field kit equipped.</li> : null}
+            <div className="token-strip">
+              {card.equipment.length === 0 ? <span className="status-pill">No field kit equipped.</span> : null}
               {card.equipment.map((entry) => (
-                <li key={`${entry.slot}:${entry.id}`}>
-                  <strong>{entry.slot}</strong> • {entry.label}
-                </li>
+                <span className="status-pill" key={`${entry.slot}:${entry.id}`}>
+                  {entry.slot} • {entry.label}
+                </span>
               ))}
-            </ul>
+            </div>
           </div>
 
           <div className="play-info-block">
             <h3>Inventory</h3>
-            <ul className="plain-list">
-              {card.inventory.length === 0 ? <li>Pack is empty.</li> : null}
+            <div className="token-strip">
+              {card.inventory.length === 0 ? <span className="status-pill">Pack is empty.</span> : null}
               {card.inventory.map((entry) => (
-                <li key={entry.id}>{entry.label}</li>
+                <span className="status-pill" key={entry.id}>
+                  {entry.label}
+                </span>
               ))}
-            </ul>
+            </div>
           </div>
         </div>
       ) : null}

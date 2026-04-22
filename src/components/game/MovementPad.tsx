@@ -7,9 +7,9 @@ interface MovementPadProps {
 
 export function MovementPad({ disabled, onMove }: MovementPadProps) {
   return (
-    <section className="panel play-panel">
+    <section className="panel play-panel play-panel--compact">
       <div className="panel-title">Movement</div>
-      <p className="muted">Movement is shard-local. Durable progression only advances when the field resolves a checkpoint-worthy outcome.</p>
+      <p className="muted">Movement is shard-local. Wins and quest turn-ins drive durable saves.</p>
       <div className="dpad" aria-label="Movement controls">
         <button disabled={disabled} onClick={() => onMove('north')} type="button">
           North

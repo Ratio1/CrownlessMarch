@@ -11,7 +11,7 @@ export function OverrideBar({ encounter, onQueue }: OverrideBarProps) {
   const queued = encounter?.queuedOverrides.length ?? 0;
 
   return (
-    <section className="panel play-panel">
+    <section className="panel play-panel play-panel--compact">
       <div className="panel-title">Field Override</div>
       {!active ? <p className="muted">Override actions unlock once the roots force you into combat.</p> : null}
       {active ? (
