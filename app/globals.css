@@ -640,6 +640,80 @@ select {
   backdrop-filter: blur(8px);
 }
 
+.world-canvas__hero,
+.world-canvas__objective,
+.world-canvas__alert {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 14, 13, 0.74);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+}
+
+.world-canvas__hero {
+  left: 18px;
+  bottom: 18px;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.world-canvas__hero-crest {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(247, 201, 120, 0.22), rgba(216, 135, 50, 0.22));
+  border: 1px solid rgba(247, 201, 120, 0.18);
+  color: var(--text-ember);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.world-canvas__hero-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.world-canvas__hero-copy strong,
+.world-canvas__objective strong,
+.world-canvas__alert strong {
+  font-size: 1rem;
+}
+
+.world-canvas__hero-copy span,
+.world-canvas__objective p,
+.world-canvas__alert span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.world-canvas__objective {
+  right: 18px;
+  bottom: 18px;
+  max-width: min(280px, calc(100% - 36px));
+}
+
+.world-canvas__alert {
+  right: 18px;
+  top: 58px;
+  min-width: 220px;
+  border-color: rgba(231, 120, 87, 0.18);
+  background: rgba(38, 15, 11, 0.76);
+}
+
 .world-sighting-strip {
   display: grid;
   gap: 12px;
@@ -1512,5 +1586,16 @@ select {
     left: 12px;
     right: 12px;
     top: 12px;
+  }
+
+  .world-canvas__hero,
+  .world-canvas__objective,
+  .world-canvas__alert {
+    position: static;
+    margin: 12px;
+  }
+
+  .world-canvas__hero {
+    min-width: 0;
   }
 }

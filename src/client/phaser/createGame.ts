@@ -12,6 +12,12 @@ const MIN_WIDTH = 480;
 const MIN_HEIGHT = 420;
 const BOARD_PADDING = 28;
 const TILE_GAP = 8;
+const CLASS_RENDER_COLORS: Record<string, { fill: number; edge: number }> = {
+  fighter: { fill: 0xf7d889, edge: 0x31210f },
+  ranger: { fill: 0xa8d7a1, edge: 0x143122 },
+  wizard: { fill: 0x9fc0ff, edge: 0x16263f },
+  cleric: { fill: 0xd8c0ff, edge: 0x2a1d3f },
+};
 
 export async function createGame(container: HTMLElement): Promise<ThornwritheGameBridge> {
   if (typeof window === 'undefined' || process.env.NODE_ENV === 'test') {
@@ -96,6 +102,15 @@ function createNoopBridge(): ThornwritheGameBridge {
   };
 }
 
+function blendHexColor(colorA: number, colorB: number, weight: number) {
+  const ratio = Math.max(0, Math.min(1, weight));
+  const red = Math.round(((colorA >> 16) & 0xff) * (1 - ratio) + ((colorB >> 16) & 0xff) * ratio);
+  const green = Math.round(((colorA >> 8) & 0xff) * (1 - ratio) + ((colorB >> 8) & 0xff) * ratio);
+  const blue = Math.round((colorA & 0xff) * (1 - ratio) + (colorB & 0xff) * ratio);
+
+  return (red << 16) + (green << 8) + blue;
+}
+
 function clearLabels(labels: PhaserType.GameObjects.Text[]) {
   for (const label of labels) {
     label.destroy();
@@ -139,7 +154,7 @@ function drawSnapshot(
     const x = originX + (cell.x - model.bounds.minX) * (tileSize + gap);
     const y = originY + (cell.y - model.bounds.minY) * (tileSize + gap);
 
-    drawTile(graphics, cell, x, y, tileSize);
+    drawTile(graphics, snapshot, cell, x, y, tileSize);
 
     if (cell.character || cell.monster) {
       drawOccupants(scene, graphics, labels, snapshot, cell, x, y, tileSize);
@@ -158,6 +173,7 @@ function drawSnapshot(
 
 function drawTile(
   graphics: PhaserType.GameObjects.Graphics,
+  snapshot: GameplayShardSnapshot,
   cell: ReturnType<typeof buildWorldRenderModel>['cells'][number],
   x: number,
   y: number,
@@ -189,6 +205,17 @@ function drawTile(
   if (cell.monster && palette.glow) {
     graphics.lineStyle(2, palette.glow, 0.3);
     graphics.strokeRoundedRect(x + 5, y + 5, tileSize - 10, tileSize - 10, 14);
+  }
+
+  if (cell.isCurrent && snapshot.encounter) {
+    const encounterEdge =
+      snapshot.encounter.status === 'active'
+        ? 0xe77757
+        : snapshot.encounter.status === 'won'
+          ? 0x7fcf8d
+          : 0xd9b45f;
+    graphics.lineStyle(3, encounterEdge, 0.54);
+    graphics.strokeRoundedRect(x - 4, y - 4, tileSize + 8, tileSize + 8, 20);
   }
 }
 
@@ -290,8 +317,9 @@ function drawOccupants(
     const hero = cell.character.cid === snapshot.character.cid;
     const centerX = x + tileSize * positions[offsetIndex];
     const centerY = y + tileSize - 18;
-    const fill = hero ? 0xf7d889 : 0x96d48e;
-    const edge = hero ? 0x31210f : 0x143122;
+    const classColors = CLASS_RENDER_COLORS[cell.character.classId ?? snapshot.character.classId] ?? CLASS_RENDER_COLORS.fighter;
+    const fill = hero ? classColors.fill : blendHexColor(classColors.fill, 0x294432, 0.38);
+    const edge = hero ? classColors.edge : 0x143122;
 
     graphics.fillStyle(fill, 1);
     graphics.fillCircle(centerX, centerY, hero ? 12 : 10);
