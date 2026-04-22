@@ -6,7 +6,7 @@ export const SESSION_COOKIE_NAME = 'thornwrithe_session';
 
 export interface SessionPayload {
   accountId: string;
-  characterId: string;
+  characterId: string | null;
 }
 
 function getSessionSecret() {
@@ -34,13 +34,16 @@ export async function verifySessionToken(token: string): Promise<SessionPayload>
   const { jwtVerify } = await getJose();
   const { payload } = await jwtVerify(token, getSessionSecret());
 
-  if (typeof payload.accountId !== 'string' || typeof payload.characterId !== 'string') {
+  if (
+    typeof payload.accountId !== 'string' ||
+    !(typeof payload.characterId === 'string' || payload.characterId === null || payload.characterId === undefined)
+  ) {
     throw new Error('Invalid session token');
   }
 
   return {
     accountId: payload.accountId,
-    characterId: payload.characterId,
+    characterId: typeof payload.characterId === 'string' ? payload.characterId : null,
   };
 }
 

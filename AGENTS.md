@@ -1,0 +1,22 @@
+# Thornwrithe Agent Notes
+
+## Deployment Memory
+
+- Thornwrithe is deployed to the thorn devnet nodes through WAR.
+- `dr1-thorn-01` and `dr1-thorn-02` automatically pick up the app by pushing `apps/Thornwrithe` `main` to `origin/main`.
+- Treat `git push origin main` in the Thornwrithe submodule as a deployment step, not just source control.
+
+## Live Validation Rule
+
+- After each completed Thornwrithe recovery phase, push `main` to `origin/main`.
+- After each such push, validate the live devnet version at `https://devnet-thorn.ratio1.link`.
+- Also inspect the node-local state on `dr1-thorn-01` and `dr1-thorn-02` using the checked-in login helpers and `~/show.sh`.
+
+## Current Recovery Sequence
+
+1. Phase 1: verified email registration
+2. Phase 2: typed D20-inspired character creation and durable sheet foundation
+3. Phase 3: content packs, world state, and monsters
+4. Phase 4: combat engine and MUD-style dice log
+
+- Do not batch multiple phases into a single unvalidated live rollout when phase boundaries are clear.

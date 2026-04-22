@@ -1,4 +1,4 @@
-import { authenticateAccount } from '../../../../src/server/auth/account-service';
+import { AccountServiceError, authenticateAccount } from '../../../../src/server/auth/account-service';
 import { createSessionCookieValue } from '../../../../src/server/auth/session';
 
 export async function POST(request: Request) {
@@ -32,12 +32,25 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const response = Response.json(account);
+    const response = Response.json({
+      account,
+      needsCharacterCreation: !account.characterId,
+    });
 
-    response.headers.set('set-cookie', await createSessionCookieValue(account));
+    response.headers.set(
+      'set-cookie',
+      await createSessionCookieValue({
+        accountId: account.accountId,
+        characterId: account.characterId,
+      })
+    );
 
     return response;
   } catch (error) {
+    if (error instanceof AccountServiceError && error.code === 'EMAIL_NOT_VERIFIED') {
+      return Response.json({ error: error.message }, { status: 403 });
+    }
+
     if (error instanceof Error && error.message === 'SESSION_SECRET is required') {
       return Response.json({ error: 'Session configuration invalid' }, { status: 500 });
     }

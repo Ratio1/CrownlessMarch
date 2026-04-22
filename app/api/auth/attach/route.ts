@@ -16,7 +16,14 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { token } = await issueAttachToken(account);
+    if (!account.characterId) {
+      return Response.json({ error: 'Character creation required' }, { status: 409 });
+    }
+
+    const { token } = await issueAttachToken({
+      accountId: account.accountId,
+      characterId: account.characterId,
+    });
 
     return Response.json({ attachToken: token });
   } catch (error) {

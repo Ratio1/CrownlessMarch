@@ -18,6 +18,10 @@ export interface RosterStoreOptions {
   gameId?: string;
 }
 
+type GlobalWithRosterRows = typeof globalThis & {
+  __thornwritheRosterRows?: Map<string, string | null>;
+};
+
 function resolveRosterGameId(gameId: string | undefined, env: NodeJS.ProcessEnv) {
   return gameId ?? resolveThornwritheGameId(env);
 }
@@ -129,7 +133,46 @@ export function createRosterStore(options: RosterStoreOptions) {
   };
 }
 
+function shouldUseInMemoryRosterStore(env: NodeJS.ProcessEnv = process.env) {
+  return env.NODE_ENV === 'test' || env.THORNWRITHE_USE_IN_MEMORY_CSTORE === '1';
+}
+
+function getInMemoryRosterRows() {
+  const globalWithRosterRows = globalThis as GlobalWithRosterRows;
+
+  if (!globalWithRosterRows.__thornwritheRosterRows) {
+    globalWithRosterRows.__thornwritheRosterRows = new Map<string, string | null>();
+  }
+
+  return globalWithRosterRows.__thornwritheRosterRows;
+}
+
+function createInMemoryRosterStore() {
+  return {
+    async syncRosterHset() {
+      return { merged_fields: 0 };
+    },
+
+    async readRosterEntry(accountId: string) {
+      return parseRosterEntry(getInMemoryRosterRows().get(accountId) ?? null);
+    },
+
+    async writeRosterEntry(accountId: string, entry: ThornwritheRosterEntry) {
+      getInMemoryRosterRows().set(accountId, serializeRosterEntry(entry));
+      return entry;
+    },
+
+    async readAllRosterRows() {
+      return Object.fromEntries(getInMemoryRosterRows().entries());
+    },
+  };
+}
+
 function getDefaultRosterStore() {
+  if (shouldUseInMemoryRosterStore()) {
+    return createInMemoryRosterStore();
+  }
+
   return createRosterStore({
     cstore: getRatio1ServerClient().cstore,
   });
@@ -149,4 +192,8 @@ export async function writeRosterEntry(accountId: string, entry: ThornwritheRost
 
 export async function readAllRosterRows() {
   return await getDefaultRosterStore().readAllRosterRows();
+}
+
+export function __resetRosterStoreForTests() {
+  getInMemoryRosterRows().clear();
 }

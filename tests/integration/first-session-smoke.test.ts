@@ -182,6 +182,13 @@ describe('first session smoke', () => {
     process.env.ATTACH_TOKEN_SECRET = 'test-attach-secret-0123456789012345';
   });
 
+  beforeEach(async () => {
+    (await import('../../src/server/auth/account-service')).__resetAccountsForTests();
+    (await import('../../src/server/auth/email-verification')).__resetEmailVerificationForTests();
+    (await import('../../src/server/platform/r1fs-characters')).__resetCharacterCheckpointStoreForTests();
+    (await import('../../src/server/platform/cstore-roster')).__resetRosterStoreForTests();
+  });
+
   afterEach(async () => {
     await harness?.close();
     harness = null;
@@ -190,51 +197,95 @@ describe('first session smoke', () => {
   it('registers, logs in, mints an attach token, opens /ws, and receives the first shard snapshot', async () => {
     const registerRoute = await import('../../app/api/auth/register/route');
     const loginRoute = await import('../../app/api/auth/login/route');
+    const verifyRoute = await import('../../app/api/auth/verify/route');
+    const createCharacterRoute = await import('../../app/api/characters/route');
     const attachRoute = await import('../../app/api/auth/attach/route');
     const session = await import('../../src/server/auth/session');
 
     const registerResponse = await registerRoute.POST(
       jsonRequest(`${baseUrl}/api/auth/register`, {
         email: 'first-session@test.invalid',
-        password: 'hunter2',
-        characterName: 'First Warden',
+        password: 'hunter234',
       })
     );
 
     expect(registerResponse.status).toBe(201);
 
     const registeredAccount = (await registerResponse.json()) as {
-      accountId: string;
-      characterId: string;
+      verificationToken?: string;
     };
 
+    const loginResponse = await loginRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/login`, {
+        email: 'first-session@test.invalid',
+        password: 'hunter234',
+      })
+    );
+
+    expect(loginResponse.status).toBe(403);
+
+    const verifyResponse = await verifyRoute.GET(
+      new Request(`${baseUrl}/api/auth/verify?token=${encodeURIComponent(registeredAccount.verificationToken ?? '')}`, {
+        method: 'GET',
+      })
+    );
+
+    expect(verifyResponse.status).toBe(302);
+
+    const verifiedLoginResponse = await loginRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/login`, {
+        email: 'first-session@test.invalid',
+        password: 'hunter234',
+      })
+    );
+
+    expect(verifiedLoginResponse.status).toBe(200);
+
+    const setCookie = verifiedLoginResponse.headers.get('set-cookie');
+    expect(setCookie).toContain(`${session.SESSION_COOKIE_NAME}=`);
+
+    const sessionToken = extractCookieValue(setCookie ?? '', session.SESSION_COOKIE_NAME);
+    const createCharacterResponse = await createCharacterRoute.POST(
+      jsonRequest(
+        `${baseUrl}/api/characters`,
+        {
+          name: 'First Warden',
+          classId: 'fighter',
+          attributes: {
+            strength: 15,
+            dexterity: 14,
+            constitution: 11,
+            intelligence: 10,
+            wisdom: 9,
+            charisma: 8,
+          },
+        },
+        { cookie: `${session.SESSION_COOKIE_NAME}=${sessionToken}` }
+      )
+    );
+
+    expect(createCharacterResponse.status).toBe(201);
+
+    const characterBody = (await createCharacterResponse.json()) as {
+      character?: { cid?: string; name?: string };
+    };
+    const upgradedCookie = createCharacterResponse.headers.get('set-cookie');
+    const upgradedSessionToken = extractCookieValue(upgradedCookie ?? '', session.SESSION_COOKIE_NAME);
+
     harness = createSmokeHarness();
-    harness.seedCharacter(registeredAccount.characterId, {
+    harness.seedCharacter(characterBody.character?.cid ?? '', {
       name: 'First Warden',
+      classId: 'fighter',
       position: { x: 3, y: 7 },
     });
 
     const wsBaseUrl = await harness.listen();
 
-    const loginResponse = await loginRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/login`, {
-        email: 'first-session@test.invalid',
-        password: 'hunter2',
-      })
-    );
-
-    expect(loginResponse.status).toBe(200);
-
-    const setCookie = loginResponse.headers.get('set-cookie');
-    expect(setCookie).toContain(`${session.SESSION_COOKIE_NAME}=`);
-
-    const sessionToken = extractCookieValue(setCookie ?? '', session.SESSION_COOKIE_NAME);
-
     const attachResponse = await attachRoute.POST(
       jsonRequest(
         `${baseUrl}/api/auth/attach`,
         {},
-        { cookie: `${session.SESSION_COOKIE_NAME}=${sessionToken}` }
+        { cookie: `${session.SESSION_COOKIE_NAME}=${upgradedSessionToken}` }
       )
     );
 
@@ -244,8 +295,8 @@ describe('first session smoke', () => {
     const attachPayload = await verifyAttachToken(attachBody.attachToken);
 
     expect(attachPayload).toMatchObject({
-      accountId: registeredAccount.accountId,
-      characterId: registeredAccount.characterId,
+      accountId: 'first-session@test.invalid',
+      characterId: characterBody.character?.cid,
     });
 
     const socket = await openSocket(`${wsBaseUrl}/ws`);

@@ -1,43 +1,59 @@
-import { registerAccount } from '../../../../src/server/auth/account-service';
+import { AccountServiceError, registerAccount } from '../../../../src/server/auth/account-service';
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+  let body: {
+    email?: string;
+    password?: string;
+  };
 
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+  try {
+    const payload = await request.json();
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       return Response.json({ error: 'Invalid registration payload' }, { status: 400 });
     }
 
-    const payload = body as {
-      characterName?: string;
+    body = payload as {
       email?: string;
       password?: string;
     };
-    const account = await registerAccount({
-      email: payload.email ?? '',
-      password: payload.password ?? '',
-      characterName: payload.characterName ?? '',
+  } catch {
+    return Response.json({ error: 'Invalid registration payload' }, { status: 400 });
+  }
+
+  try {
+    const origin = new URL(request.url).origin;
+    const result = await registerAccount({
+      email: body.email ?? '',
+      password: body.password ?? '',
+      appOrigin: origin,
     });
 
-    return Response.json(account, { status: 201 });
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Account already exists') {
-      return Response.json(
-        { error: 'Account already exists', code: 'account_exists' },
-        { status: 409 }
-      );
-    }
-
-    if (error instanceof Error && error.message === 'Invalid registration payload') {
-      return Response.json(
-        { error: 'Invalid registration payload' },
-        { status: 400 }
-      );
-    }
-
     return Response.json(
-      { error: 'Registration failed' },
-      { status: 500 },
+      {
+        account: result.account,
+        verificationToken:
+          process.env.NODE_ENV === 'test' || process.env.THORNWRITHE_EXPOSE_VERIFICATION_TOKEN === '1'
+            ? result.verificationToken
+            : undefined,
+      },
+      { status: 201 }
     );
+  } catch (error) {
+    if (error instanceof AccountServiceError) {
+      if (error.code === 'ACCOUNT_EXISTS') {
+        return Response.json({ error: error.message, code: 'account_exists' }, { status: 409 });
+      }
+
+      if (error.code === 'INVALID_INPUT') {
+        return Response.json({ error: error.message }, { status: 400 });
+      }
+
+      if (error.code === 'VERIFICATION_UNAVAILABLE') {
+        return Response.json({ error: error.message }, { status: 503 });
+      }
+    }
+
+    return Response.json({ error: 'Registration failed' }, { status: 500 });
   }
 }

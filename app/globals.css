@@ -62,7 +62,8 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -82,9 +83,44 @@ input {
   gap: 20px;
 }
 
+.page--create-character {
+  display: grid;
+  place-items: center;
+}
+
 .page--play {
   display: flex;
   align-items: stretch;
+}
+
+.auth-shell {
+  width: min(100%, 1120px);
+  display: grid;
+  gap: 18px;
+}
+
+.auth-hero {
+  padding: 28px;
+  display: grid;
+  gap: 12px;
+}
+
+.auth-hero h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  font-weight: 600;
+  line-height: 0.94;
+}
+
+.auth-hero__message {
+  margin: 0;
+}
+
+.auth-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .panel {
@@ -115,6 +151,22 @@ input {
 
 .login-card {
   width: min(100%, 540px);
+  padding: 28px;
+  display: grid;
+  gap: 18px;
+}
+
+.login-card h2,
+.character-card h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  font-weight: 600;
+  line-height: 0.94;
+}
+
+.character-card {
+  width: min(100%, 760px);
   padding: 28px;
   display: grid;
   gap: 18px;
@@ -160,7 +212,20 @@ input {
   padding: 14px 16px;
 }
 
+.field-select {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(8, 14, 13, 0.7);
+  color: var(--text-main);
+  padding: 14px 16px;
+}
+
 .field input:focus {
+  outline: 2px solid rgba(216, 135, 50, 0.45);
+  outline-offset: 2px;
+}
+
+.field-select:focus {
   outline: 2px solid rgba(216, 135, 50, 0.45);
   outline-offset: 2px;
 }
@@ -339,6 +404,22 @@ input {
 
 .dpad button:nth-child(4) {
   grid-area: south;
+}
+
+.point-buy-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.attribute-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .status-banner {
@@ -617,8 +698,12 @@ input {
 }
 
 @media (max-width: 900px) {
+  .auth-grid,
   .shell {
     grid-template-columns: 1fr;
+  }
+
+  .shell {
     grid-template-areas:
       "status"
       "world"
@@ -630,7 +715,9 @@ input {
   }
 
   .login-card,
+  .character-card,
   .admin-card,
+  .auth-hero,
   .shell__status,
   .world-panel,
   .controls-panel {
@@ -645,6 +732,12 @@ input {
 
   .admin-meta-grid,
   .admin-hsets {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .attribute-grid {
     grid-template-columns: 1fr;
   }
 }

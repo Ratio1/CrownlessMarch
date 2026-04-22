@@ -4,6 +4,14 @@ jest.mock('../../src/server/auth/cstore', () => ({
   isSharedAuthConfigured: jest.fn(),
 }));
 
+jest.mock('../../src/server/auth/email-verification', () => ({
+  issueEmailVerificationToken: jest.fn(),
+  consumeEmailVerificationToken: jest.fn(),
+  sendVerificationEmail: jest.fn(),
+  getVerificationEmailFrom: jest.fn(() => 'onboarding@resend.dev'),
+  VerificationDeliveryError: class VerificationDeliveryError extends Error {},
+}));
+
 jest.mock('../../src/server/platform/r1fs-characters', () => ({
   createInitialCharacterCheckpoint: jest.fn(),
 }));
@@ -19,10 +27,9 @@ describe('account service', () => {
     jest.clearAllMocks();
   });
 
-  it('registers through shared auth and seeds an initial character checkpoint', async () => {
+  it('registers through shared auth and issues a verification token', async () => {
     const cstore = await import('../../src/server/auth/cstore');
-    const r1fsCharacters = await import('../../src/server/platform/r1fs-characters');
-    const roster = await import('../../src/server/platform/cstore-roster');
+    const verification = await import('../../src/server/auth/email-verification');
     const accountService = await import('../../src/server/auth/account-service');
 
     const getUser = jest.fn().mockResolvedValue(null);
@@ -42,48 +49,51 @@ describe('account service', () => {
         createUser,
       },
     });
-    (r1fsCharacters.createInitialCharacterCheckpoint as jest.Mock).mockResolvedValue({
-      cid: 'cid-initial',
-      persist_revision: 0,
-      snapshot: { name: 'First Warden' },
+    (verification.issueEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'first@test.invalid',
+      email: 'first@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
     });
+    (verification.sendVerificationEmail as jest.Mock).mockResolvedValue(undefined);
 
     await expect(
       accountService.registerAccount({
         email: 'First@Test.Invalid',
-        password: 'hunter2',
-        characterName: 'First Warden',
+        password: 'hunter234',
+        appOrigin: 'https://devnet-thorn.ratio1.link',
       }),
-    ).resolves.toEqual({
-      accountId: 'first@test.invalid',
-      characterId: 'cid-initial',
+    ).resolves.toMatchObject({
+      account: {
+        accountId: 'first@test.invalid',
+        email: 'first@test.invalid',
+        emailVerified: false,
+        characterId: null,
+      },
+      verificationToken: 'verify-token',
     });
 
-    expect(getUser).toHaveBeenCalledTimes(1);
     expect(createUser).toHaveBeenCalledWith(
       expect.any(String),
-      'hunter2',
+      'hunter234',
       expect.objectContaining({
         metadata: {
+          accountId: 'first@test.invalid',
           email: 'first@test.invalid',
-          characterId: 'cid-initial',
-          characterName: 'First Warden',
+          emailVerified: false,
         },
       }),
     );
-    expect(r1fsCharacters.createInitialCharacterCheckpoint).toHaveBeenCalledWith({
-      characterName: 'First Warden',
+    expect(verification.issueEmailVerificationToken).toHaveBeenCalledWith({
+      accountId: 'first@test.invalid',
+      email: 'first@test.invalid',
     });
-    expect(roster.writeRosterEntry).toHaveBeenCalledWith(
-      'first@test.invalid',
-      expect.objectContaining({
-        accountId: 'first@test.invalid',
-        email: 'first@test.invalid',
-        characterName: 'First Warden',
-        latestCharacterCid: 'cid-initial',
-        persistRevision: 0,
-      }),
-    );
+    expect(verification.sendVerificationEmail).toHaveBeenCalledWith({
+      email: 'first@test.invalid',
+      token: 'verify-token',
+      appOrigin: 'https://devnet-thorn.ratio1.link',
+    });
   });
 
   it('authenticates through the durable roster instead of stale shared auth metadata', async () => {
@@ -98,8 +108,10 @@ describe('account service', () => {
           username: 'ignored',
           role: 'user',
           metadata: {
+            accountId: 'shared@test.invalid',
             email: 'shared@test.invalid',
-            characterId: 'cid-shared',
+            emailVerified: true,
+            latestCharacterCid: 'cid-shared',
             characterName: 'Shared Warden',
           },
           createdAt: new Date().toISOString(),
@@ -122,11 +134,81 @@ describe('account service', () => {
     await expect(
       accountService.authenticateAccount({
         email: 'Shared@Test.Invalid',
-        password: 'hunter2',
+        password: 'hunter234',
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       accountId: 'shared@test.invalid',
       characterId: 'cid-latest',
+      characterName: 'Shared Warden',
+      emailVerified: true,
     });
+  });
+
+  it('creates the first character checkpoint and seeds the roster', async () => {
+    const cstore = await import('../../src/server/auth/cstore');
+    const verification = await import('../../src/server/auth/email-verification');
+    const r1fsCharacters = await import('../../src/server/platform/r1fs-characters');
+    const roster = await import('../../src/server/platform/cstore-roster');
+    const accountService = await import('../../src/server/auth/account-service');
+
+    (cstore.isSharedAuthConfigured as jest.Mock).mockReturnValue(false);
+    (roster.readRosterEntry as jest.Mock).mockResolvedValue(null);
+    (verification.issueEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'first@test.invalid',
+      email: 'first@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    });
+    (verification.sendVerificationEmail as jest.Mock).mockResolvedValue(undefined);
+    (verification.consumeEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'first@test.invalid',
+      email: 'first@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    });
+    (r1fsCharacters.createInitialCharacterCheckpoint as jest.Mock).mockResolvedValue({
+      cid: 'cid-initial',
+      persist_revision: 0,
+      snapshot: { name: 'First Warden', classId: 'fighter' },
+    });
+
+    await accountService.registerAccount({
+      email: 'first@test.invalid',
+      password: 'hunter234',
+      appOrigin: 'http://localhost:3000',
+    });
+    await accountService.verifyAccountEmail('verify-token');
+
+    await expect(
+      accountService.createCharacterForAccount({
+        accountId: 'first@test.invalid',
+        characterName: 'First Warden',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 14,
+          constitution: 11,
+          intelligence: 10,
+          wisdom: 9,
+          charisma: 8,
+        },
+      })
+    ).resolves.toMatchObject({
+      accountId: 'first@test.invalid',
+      characterId: 'cid-initial',
+      characterName: 'First Warden',
+    });
+
+    expect(r1fsCharacters.createInitialCharacterCheckpoint).toHaveBeenCalled();
+    expect(roster.writeRosterEntry).toHaveBeenCalledWith(
+      'first@test.invalid',
+      expect.objectContaining({
+        accountId: 'first@test.invalid',
+        latestCharacterCid: 'cid-initial',
+        characterName: 'First Warden',
+      })
+    );
   });
 });

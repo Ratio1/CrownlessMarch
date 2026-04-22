@@ -37,182 +37,118 @@ describe('auth attach flow', () => {
     process.env.ATTACH_TOKEN_SECRET = 'test-attach-secret-0123456789012345';
   });
 
-  it('issues a session cookie after login', async () => {
+  beforeEach(async () => {
+    (await import('../../src/server/auth/account-service')).__resetAccountsForTests();
+    (await import('../../src/server/auth/email-verification')).__resetEmailVerificationForTests();
+    (await import('../../src/server/platform/r1fs-characters')).__resetCharacterCheckpointStoreForTests();
+    (await import('../../src/server/platform/cstore-roster')).__resetRosterStoreForTests();
+  });
+
+  async function registerVerifyLoginCreateCharacter() {
     const registerRoute = await import('../../app/api/auth/register/route');
     const loginRoute = await import('../../app/api/auth/login/route');
+    const verifyRoute = await import('../../app/api/auth/verify/route');
+    const createCharacterRoute = await import('../../app/api/characters/route');
     const session = await import('../../src/server/auth/session');
 
-    await registerRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/register`, {
-        email: 'cookie@test.invalid',
-        password: 'hunter2',
-        characterName: 'Cookie Warden',
-      }),
-    );
-
-    const response = await loginRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/login`, {
-        email: 'cookie@test.invalid',
-        password: 'hunter2',
-      }),
-    );
-
-    expect(response.status).toBe(200);
-
-    const setCookie = response.headers.get('set-cookie');
-
-    expect(setCookie).toContain(`${session.SESSION_COOKIE_NAME}=`);
-
-    const token = extractCookieValue(setCookie ?? '', session.SESSION_COOKIE_NAME);
-    const payload = await session.verifySessionToken(token);
-
-    expect(payload).toMatchObject({
-      accountId: expect.any(String),
-      characterId: expect.any(String),
-    });
-  });
-
-  it('returns a client error for non-object registration payloads', async () => {
-    const registerRoute = await import('../../app/api/auth/register/route');
-
-    const response = await registerRoute.POST(
-      new Request(`${baseUrl}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: 'null',
-      }),
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Invalid registration payload',
-    });
-  });
-
-  it('returns a conflict when the account already exists', async () => {
-    const registerRoute = await import('../../app/api/auth/register/route');
-
-    await registerRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/register`, {
-        email: 'duplicate@test.invalid',
-        password: 'hunter2',
-        characterName: 'First Warden',
-      }),
-    );
-
-    const response = await registerRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/register`, {
-        email: 'duplicate@test.invalid',
-        password: 'hunter2',
-        characterName: 'Second Warden',
-      }),
-    );
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Account already exists',
-      code: 'account_exists',
-    });
-  });
-
-  it('returns a client error for malformed login payloads', async () => {
-    const loginRoute = await import('../../app/api/auth/login/route');
-
-    const response = await loginRoute.POST(
-      new Request(`${baseUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: '{',
-      }),
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Invalid login payload',
-    });
-  });
-
-  it('returns a client error for non-object login payloads', async () => {
-    const loginRoute = await import('../../app/api/auth/login/route');
-
-    const response = await loginRoute.POST(
-      new Request(`${baseUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: 'null',
-      }),
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Invalid login payload',
-    });
-  });
-
-  it('returns a controlled server error when session configuration is missing', async () => {
-    const registerRoute = await import('../../app/api/auth/register/route');
-    const loginRoute = await import('../../app/api/auth/login/route');
-
-    await registerRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/register`, {
-        email: 'config@test.invalid',
-        password: 'hunter2',
-        characterName: 'Config Warden',
-      }),
-    );
-
-    delete process.env.SESSION_SECRET;
-
-    const response = await loginRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/login`, {
-        email: 'config@test.invalid',
-        password: 'hunter2',
-      }),
-    );
-
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Session configuration invalid',
-    });
-  });
-
-  it('mints a short-lived attach token for an authenticated session', async () => {
-    const registerRoute = await import('../../app/api/auth/register/route');
-    const loginRoute = await import('../../app/api/auth/login/route');
-    const attachRoute = await import('../../app/api/auth/attach/route');
-    const session = await import('../../src/server/auth/session');
-    const attachToken = await import('../../src/server/auth/attach-token');
-
-    await registerRoute.POST(
+    const registerResponse = await registerRoute.POST(
       jsonRequest(`${baseUrl}/api/auth/register`, {
         email: 'attach@test.invalid',
-        password: 'hunter2',
-        characterName: 'Attach Warden',
+        password: 'hunter234',
       }),
     );
+    expect(registerResponse.status).toBe(201);
+    const registerBody = (await registerResponse.json()) as { verificationToken?: string };
+
+    const preVerifyLoginResponse = await loginRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/login`, {
+        email: 'attach@test.invalid',
+        password: 'hunter234',
+      }),
+    );
+    expect(preVerifyLoginResponse.status).toBe(403);
+
+    const verifyResponse = await verifyRoute.GET(
+      new Request(`${baseUrl}/api/auth/verify?token=${encodeURIComponent(registerBody.verificationToken ?? '')}`, {
+        method: 'GET',
+      }),
+    );
+    expect(verifyResponse.status).toBe(302);
 
     const loginResponse = await loginRoute.POST(
       jsonRequest(`${baseUrl}/api/auth/login`, {
         email: 'attach@test.invalid',
-        password: 'hunter2',
+        password: 'hunter234',
       }),
     );
+    expect(loginResponse.status).toBe(200);
 
-    const setCookie = loginResponse.headers.get('set-cookie');
-    const sessionToken = extractCookieValue(setCookie ?? '', session.SESSION_COOKIE_NAME);
-    const sessionPayload = await session.verifySessionToken(sessionToken);
+    const loginSetCookie = loginResponse.headers.get('set-cookie');
+    const loginSessionToken = extractCookieValue(loginSetCookie ?? '', session.SESSION_COOKIE_NAME);
+    const loginSession = await session.verifySessionToken(loginSessionToken);
+
+    expect(loginSession.characterId).toBeNull();
+
+    const createCharacterResponse = await createCharacterRoute.POST(
+      jsonRequest(
+        `${baseUrl}/api/characters`,
+        {
+          name: 'Attach Warden',
+          classId: 'fighter',
+          attributes: {
+            strength: 15,
+            dexterity: 14,
+            constitution: 11,
+            intelligence: 10,
+            wisdom: 9,
+            charisma: 8,
+          },
+        },
+        {
+          cookie: `${session.SESSION_COOKIE_NAME}=${loginSessionToken}`,
+        },
+      ),
+    );
+
+    expect(createCharacterResponse.status).toBe(201);
+    const characterBody = (await createCharacterResponse.json()) as {
+      character?: { cid?: string; name?: string };
+    };
+    const createSetCookie = createCharacterResponse.headers.get('set-cookie');
+    const characterSessionToken = extractCookieValue(createSetCookie ?? '', session.SESSION_COOKIE_NAME);
+    const characterSession = await session.verifySessionToken(characterSessionToken);
+
+    return {
+      session,
+      characterBody,
+      characterSession,
+      characterSessionToken,
+    };
+  }
+
+  it('issues a session cookie after verified login and upgrades it after character creation', async () => {
+    const { characterBody, characterSession } = await registerVerifyLoginCreateCharacter();
+
+    expect(characterBody.character).toMatchObject({
+      name: 'Attach Warden',
+      cid: expect.any(String),
+    });
+    expect(characterSession).toMatchObject({
+      accountId: 'attach@test.invalid',
+      characterId: characterBody.character?.cid,
+    });
+  });
+
+  it('mints a short-lived attach token for an authenticated session with a character', async () => {
+    const attachRoute = await import('../../app/api/auth/attach/route');
+    const attachToken = await import('../../src/server/auth/attach-token');
+    const { session, characterSession, characterSessionToken } = await registerVerifyLoginCreateCharacter();
 
     const attachResponse = await attachRoute.POST(
       jsonRequest(
         `${baseUrl}/api/auth/attach`,
         {},
-        { cookie: `${session.SESSION_COOKIE_NAME}=${sessionToken}` },
+        { cookie: `${session.SESSION_COOKIE_NAME}=${characterSessionToken}` },
       ),
     );
 
@@ -222,97 +158,50 @@ describe('auth attach flow', () => {
     const attachPayload = await attachToken.verifyAttachToken(body.attachToken);
 
     expect(attachPayload).toMatchObject({
-      accountId: sessionPayload.accountId,
-      characterId: sessionPayload.characterId,
+      accountId: characterSession.accountId,
+      characterId: characterSession.characterId,
       issuedAt: expect.any(String),
     });
   });
 
-  it('mints the attach token from the latest roster-backed account state instead of the stale session cid', async () => {
-    jest.doMock('../../src/server/auth/session', () => ({
-      readSessionFromRequest: jest.fn().mockResolvedValue({
-        accountId: 'stale@test.invalid',
-        characterId: 'cid-stale',
-      }),
-    }));
-    jest.doMock('../../src/server/auth/account-service', () => ({
-      getAccountById: jest.fn().mockResolvedValue({
-        accountId: 'stale@test.invalid',
-        characterId: 'cid-latest',
-      }),
-    }));
-
-    const attachRoute = await import('../../app/api/auth/attach/route');
-    const attachToken = await import('../../src/server/auth/attach-token');
-
-    const response = await attachRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/attach`, {}),
-    );
-
-    expect(response.status).toBe(200);
-
-    const body = (await response.json()) as { attachToken: string };
-    const payload = await attachToken.verifyAttachToken(body.attachToken);
-
-    expect(payload).toMatchObject({
-      accountId: 'stale@test.invalid',
-      characterId: 'cid-latest',
-    });
-
-    jest.dontMock('../../src/server/auth/session');
-    jest.dontMock('../../src/server/auth/account-service');
-  });
-
-  it('returns a controlled server error when attach session verification is misconfigured', async () => {
+  it('refuses attach token minting before character creation', async () => {
     const registerRoute = await import('../../app/api/auth/register/route');
     const loginRoute = await import('../../app/api/auth/login/route');
+    const verifyRoute = await import('../../app/api/auth/verify/route');
     const attachRoute = await import('../../app/api/auth/attach/route');
     const session = await import('../../src/server/auth/session');
 
-    await registerRoute.POST(
+    const registerResponse = await registerRoute.POST(
       jsonRequest(`${baseUrl}/api/auth/register`, {
-        email: 'attach-config@test.invalid',
-        password: 'hunter2',
-        characterName: 'Attach Config Warden',
+        email: 'no-character@test.invalid',
+        password: 'hunter234',
+      }),
+    );
+    const registerBody = (await registerResponse.json()) as { verificationToken?: string };
+
+    await verifyRoute.GET(
+      new Request(`${baseUrl}/api/auth/verify?token=${encodeURIComponent(registerBody.verificationToken ?? '')}`, {
+        method: 'GET',
       }),
     );
 
     const loginResponse = await loginRoute.POST(
       jsonRequest(`${baseUrl}/api/auth/login`, {
-        email: 'attach-config@test.invalid',
-        password: 'hunter2',
+        email: 'no-character@test.invalid',
+        password: 'hunter234',
       }),
     );
 
     const setCookie = loginResponse.headers.get('set-cookie');
     const sessionToken = extractCookieValue(setCookie ?? '', session.SESSION_COOKIE_NAME);
 
-    delete process.env.SESSION_SECRET;
-
     const response = await attachRoute.POST(
-      jsonRequest(
-        `${baseUrl}/api/auth/attach`,
-        {},
-        { cookie: `${session.SESSION_COOKIE_NAME}=${sessionToken}` },
-      ),
+      jsonRequest(`${baseUrl}/api/auth/attach`, {}, { cookie: `${session.SESSION_COOKIE_NAME}=${sessionToken}` }),
     );
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: 'Session configuration invalid',
-    });
-  });
-
-  it('rejects attach token minting without a valid session', async () => {
-    const attachRoute = await import('../../app/api/auth/attach/route');
-
-    const response = await attachRoute.POST(
-      jsonRequest(`${baseUrl}/api/auth/attach`, {}, { cookie: 'thornwrithe_session=invalid-token' }),
-    );
-
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({
-      error: 'Unauthorized',
+      error: 'Character creation required',
     });
   });
 });

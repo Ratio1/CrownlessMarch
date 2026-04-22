@@ -19,19 +19,23 @@ The shipped v1 runtime has these boundaries:
 The current browser flow is:
 
 1. the player opens `/`
-2. the client registers or logs in through the auth routes
-3. the play page requests a short-lived attach token from `/api/auth/attach`
-4. the client opens the gameplay socket on `THORNWRITHE_WEBSOCKET_PATH`
-5. the socket sends `attach`
-6. the server loads the character from `R1FS` and inserts it into the local shard
+2. the player registers with email and password through `/api/auth/register`
+3. the player verifies the emailed link from `/api/auth/verify`
+4. the player logs in through `/api/auth/login`
+5. first-time accounts create one character through `/api/characters`
+6. the play page requests a short-lived attach token from `/api/auth/attach`
+7. the client opens the gameplay socket on `THORNWRITHE_WEBSOCKET_PATH`
+8. the socket sends `attach`
+9. the server loads the character from `R1FS` and inserts it into the local shard
 
 After attach, gameplay is WebSocket-only.
 
 Registration note:
 
 - when `R1EN_CSTORE_AUTH_*` is configured, `/api/auth/register` creates the shared auth user in `CStore`
-- the same registration call also writes the initial character checkpoint into `R1FS`, and the returned `characterId` is that checkpoint CID
-- this keeps login and attach working even when register, login, and socket attach land on different thorn nodes
+- the register call does not create the hero checkpoint anymore; it only creates a verified-email account
+- `/api/characters` writes the first durable character checkpoint into `R1FS` and seeds the Thornwrithe roster hset
+- this keeps login, character creation, and later attach working even when requests land on different thorn nodes
 
 ## Storage Split
 
@@ -86,6 +90,7 @@ Required settings:
 - `THORNWRITHE_LEASE_GRACE_MS`: lease timeout for stale sockets
 - `ADMIN_USER`: primary admin username for `/admin`
 - `ADMIN_PASS`: primary admin password for `/admin`
+- `RESEND_TOKEN`: API token used to send verification links
 
 Deeploy note:
 
@@ -102,6 +107,9 @@ Optional settings:
 - `THORNWRITHE_SHARD_WORLD_INSTANCE_ID`: explicit shard id for the container, defaults to `THORNWRITHE_NODE_ID`
 - `THORNWRITHE_ADMIN_USER`: fallback admin username if `ADMIN_USER` is unset
 - `THORNWRITHE_ADMIN_PASS`: fallback admin password if `ADMIN_PASS` is unset
+- `THORNWRITHE_EMAIL_FROM`: sender address for verification mail, defaults to `RESEND_FROM` and then `onboarding@resend.dev`
+- `RESEND_FROM`: sender address fallback for verification mail
+- `THORNWRITHE_EXPOSE_VERIFICATION_TOKEN=1`: expose verification tokens in HTTP responses for test-only flows
 
 ## Local Commands
 

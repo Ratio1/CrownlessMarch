@@ -3,9 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface AuthErrorBody {
+interface LoginCardProps {
+  message?: string | null;
+}
+
+interface LoginResponseBody {
   error?: string;
-  code?: string;
+  needsCharacterCreation?: boolean;
 }
 
 async function postJson(url: string, body: Record<string, string>) {
@@ -21,18 +25,17 @@ async function postJson(url: string, body: Record<string, string>) {
 
 async function readErrorMessage(response: Response) {
   try {
-    const body = (await response.json()) as AuthErrorBody;
+    const body = (await response.json()) as LoginResponseBody;
     return body.error ?? 'Request failed';
   } catch {
     return 'Request failed';
   }
 }
 
-export function LoginCard() {
+export function LoginCard({ message = null }: LoginCardProps) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [characterName, setCharacterName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -42,32 +45,24 @@ export function LoginCard() {
     setError(null);
 
     try {
-      const registrationResponse = await postJson('/api/auth/register', {
-        email,
-        password,
-        characterName,
-      });
-
-      if (!registrationResponse.ok && registrationResponse.status !== 409) {
-        throw new Error(await readErrorMessage(registrationResponse));
-      }
-
       const loginResponse = await postJson('/api/auth/login', {
         email,
         password,
       });
 
+      const body = (await loginResponse.json()) as LoginResponseBody;
+
       if (!loginResponse.ok) {
-        throw new Error(await readErrorMessage(loginResponse));
+        throw new Error(body.error ?? 'Unable to enter Thornwrithe.');
       }
 
-      router.replace('/play');
+      router.replace(body.needsCharacterCreation ? '/create-character' : '/play');
       router.refresh();
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : 'Unable to enter the shard.'
+          : 'Unable to enter Thornwrithe.'
       );
     } finally {
       setIsSubmitting(false);
@@ -76,11 +71,11 @@ export function LoginCard() {
 
   return (
     <section className="panel login-card">
-      <div className="eyebrow">Thornwrithe</div>
-      <h1>Enter the shard</h1>
+      <div className="eyebrow">Returning wanderer</div>
+      <h2>Login</h2>
       <p className="lede">
-        Sign in, mint a fresh attach token, and bind your character to whichever
-        live shard host answers first.
+        Verified accounts can reopen their last hero, mint a fresh attach token,
+        and bind to the next live shard.
       </p>
 
       <form className="stack" onSubmit={handleSubmit}>
@@ -109,29 +104,11 @@ export function LoginCard() {
           />
         </label>
 
-        <label className="field">
-          <span>Character name</span>
-          <input
-            autoComplete="nickname"
-            name="characterName"
-            onChange={(event) => setCharacterName(event.currentTarget.value)}
-            required
-            type="text"
-            value={characterName}
-          />
-        </label>
-
-        {error ? (
-          <p className="error">{error}</p>
-        ) : (
-          <p className="hint">
-            First use creates the account. Later sessions reuse the same
-            character and just reopen the shard connection.
-          </p>
-        )}
+        {error ? <p className="error">{error}</p> : null}
+        {!error && message ? <p className="hint">{message}</p> : null}
 
         <button className="primary-button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Opening gate...' : 'Enter the shard'}
+          {isSubmitting ? 'Opening gate...' : 'Enter Thornwrithe'}
         </button>
       </form>
     </section>

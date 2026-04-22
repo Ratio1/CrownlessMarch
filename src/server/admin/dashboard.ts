@@ -50,8 +50,8 @@ export interface LoadAdminDashboardDataOptions {
 
 interface SharedAuthMetadata {
   email: string;
-  characterId: string;
-  characterName: string;
+  characterId?: string;
+  characterName?: string;
 }
 
 function getDefaultClients() {
@@ -72,11 +72,14 @@ function isSharedAuthMetadata(value: unknown): value is SharedAuthMetadata {
 
   const record = value as Record<string, unknown>;
 
-  return (
-    typeof record.email === 'string' &&
-    typeof record.characterId === 'string' &&
-    typeof record.characterName === 'string'
-  );
+  return typeof record.email === 'string';
+}
+
+function hasBackfillableCharacterMetadata(value: SharedAuthMetadata): value is SharedAuthMetadata & {
+  characterId: string;
+  characterName: string;
+} {
+  return typeof value.characterId === 'string' && typeof value.characterName === 'string';
 }
 
 export async function loadAdminDashboardData(options: LoadAdminDashboardDataOptions = {}): Promise<AdminDashboardData> {
@@ -110,6 +113,10 @@ export async function loadAdminDashboardData(options: LoadAdminDashboardDataOpti
       const accountId = user.metadata.email.trim().toLowerCase();
 
       if (rosterRawRows[accountId]) {
+        continue;
+      }
+
+      if (!hasBackfillableCharacterMetadata(user.metadata)) {
         continue;
       }
 
