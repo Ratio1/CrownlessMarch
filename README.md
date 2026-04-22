@@ -85,10 +85,15 @@ The current `/play` surface renders a text-forward field HUD:
 - the center playfield is a tile map for the visible fog window
 - the side HUD shows the character card, quest ledger, movement pad, and override controls
 - the combat panel is a dice-text log driven by server-authoritative encounter rounds
+- the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
 
 Combat rules are intentionally simplified:
 
 - stepping onto hostile tiles starts combat
+- stepping onto `shrine`, `ruin`, and `town` tiles now triggers automatic world interactions
+- `shrine` grants a one-time recovery and marks the survey quest ready to report
+- `ruin` grants a one-time cache reward even though it is still hostile ground
+- `town` heals the PC and turns in any quest already marked ready
 - initiative is rolled once when the encounter opens
 - rounds advance automatically on the live socket heartbeat cadence
 - attacks log the D20 roll, defense target, hit or miss, and damage
@@ -143,6 +148,10 @@ Optional settings:
 - `THORNWRITHE_EMAIL_FROM`: sender address for verification mail, defaults to `RESEND_FROM` and then `onboarding@resend.dev`
 - `RESEND_FROM`: sender address fallback for verification mail
 - `THORNWRITHE_EXPOSE_VERIFICATION_TOKEN=1`: expose verification tokens in HTTP responses for test-only flows
+
+Proxy note:
+
+- verification emails and `/api/auth/verify` redirects now resolve the public origin from forwarded host and proto headers, rather than trusting the worker-local `request.url`
 
 ## Local Commands
 

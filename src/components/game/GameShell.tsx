@@ -63,7 +63,7 @@ export function GameShell({ gameplayPath }: { gameplayPath: string }) {
 
         <aside className="play-sidebar">
           <CharacterPanel snapshot={snapshot} />
-          <CombatLogPanel encounter={encounter} status={status} />
+          <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
           <QuestPanel snapshot={snapshot} />
           <MovementPad disabled={!canMove} onMove={sendMove} />
           <OverrideBar encounter={encounter} onQueue={sendOverride} />

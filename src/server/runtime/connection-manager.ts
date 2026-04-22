@@ -398,7 +398,8 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         };
 
         send(socket, attachedMessage);
-        await emitRuntimeState(socket, session, runtimeUpdate.snapshot);
+        const initialState = await maybePersistProgression(session, runtimeUpdate);
+        await emitRuntimeState(socket, session, initialState);
         return;
       } catch {
         if (sessionRef.pending) {

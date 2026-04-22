@@ -174,4 +174,39 @@ describe('auth routes', () => {
     const errorBody = (await createCharacterResponse.json()) as { error?: string };
     expect(errorBody.error).toMatch(/point-buy/i);
   });
+
+  it('redirects verification using forwarded public origin headers', async () => {
+    const registerRoute = await import('../../app/api/auth/register/route');
+    const verifyRoute = await import('../../app/api/auth/verify/route');
+
+    const forwardedHeaders = {
+      host: 'localhost:3000',
+      'x-forwarded-host': 'devnet-thorn.ratio1.link',
+      'x-forwarded-proto': 'https',
+    };
+
+    const registerResponse = await registerRoute.POST(
+      jsonRequest(
+        `${baseUrl}/api/auth/register`,
+        {
+          email: 'proxy-thorn@example.com',
+          password: 'S3curePassw0rd!',
+        },
+        {
+          headers: forwardedHeaders,
+        }
+      )
+    );
+    const registerBody = (await registerResponse.json()) as { verificationToken?: string };
+
+    const verifyResponse = await verifyRoute.GET(
+      new Request(`${baseUrl}/api/auth/verify?token=${encodeURIComponent(registerBody.verificationToken ?? '')}`, {
+        method: 'GET',
+        headers: forwardedHeaders,
+      })
+    );
+
+    expect(verifyResponse.status).toBe(302);
+    expect(verifyResponse.headers.get('location')).toBe('https://devnet-thorn.ratio1.link/?verification=verified');
+  });
 });

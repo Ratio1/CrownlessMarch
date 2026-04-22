@@ -31,6 +31,7 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
 
           <div className="play-chip-row">
             <span className="status-pill">Gold {card.gold}</span>
+            <span className="status-pill">Ground {snapshot?.currentTile.kind ?? 'unknown'}</span>
             <span className="status-pill">Passive: {card.passive}</span>
           </div>
 

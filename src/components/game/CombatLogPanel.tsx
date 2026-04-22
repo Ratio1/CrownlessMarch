@@ -1,23 +1,35 @@
+import type { GameplayActivityEntry, GameplaySocketStatus } from '@/shared/gameplay';
 import type { EncounterSnapshot } from '@/shared/domain/combat';
-import type { GameplaySocketStatus } from '@/shared/gameplay';
 
 interface CombatLogPanelProps {
   encounter: EncounterSnapshot | null;
   status: GameplaySocketStatus;
+  activityLog: GameplayActivityEntry[];
 }
 
-export function CombatLogPanel({ encounter, status }: CombatLogPanelProps) {
+export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPanelProps) {
   const logs = encounter?.logs ?? [];
 
   return (
     <section className="panel play-panel">
       <div className="panel-title">Dice Log</div>
       {!encounter ? (
-        <p className="muted">
-          {status === 'connected'
-            ? 'The forest is listening. Move into hostile ground to start a fight.'
-            : 'The combat feed will wake once the shard is bound.'}
-        </p>
+        activityLog.length > 0 ? (
+          <ol className="combat-log">
+            {activityLog.map((entry) => (
+              <li key={entry.id}>
+                <span className="combat-log__round">{entry.kind.toUpperCase()}</span>
+                <span>{entry.text}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">
+            {status === 'connected'
+              ? 'The forest is listening. Move into hostile ground to start a fight.'
+              : 'The combat feed will wake once the shard is bound.'}
+          </p>
+        )
       ) : (
         <div className="play-card-stack">
           <div className="status-banner">

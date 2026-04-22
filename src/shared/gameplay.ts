@@ -47,6 +47,14 @@ export interface GameplayQuestEntry {
   label: string;
   objective: string;
   rewardXp: number;
+  status: 'active' | 'ready_to_turn_in';
+  progress: string;
+}
+
+export interface GameplayActivityEntry {
+  id: string;
+  text: string;
+  kind: 'system' | 'quest' | 'reward';
 }
 
 export interface GameplayCharacterCard {
@@ -82,12 +90,14 @@ export interface GameplayShardSnapshot {
     radius: number;
     size: number;
   };
+  currentTile: GameplayTileSnapshot;
   visibleTiles: GameplayTileSnapshot[];
   characters: Record<string, GameplayCharacterMarker>;
   monsters: Record<string, GameplayMonsterMarker>;
   character: GameplayCharacterCard;
   encounter: EncounterSnapshot | null;
   movementLocked: boolean;
+  activityLog: GameplayActivityEntry[];
 }
 
 export type GameplaySocketStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';

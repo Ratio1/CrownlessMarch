@@ -1,13 +1,14 @@
 import { AccountServiceError, verifyAccountEmail } from '../../../../src/server/auth/account-service';
+import { resolveRequestOrigin } from '../../../../src/server/http/request-origin';
 
-function redirectTo(requestUrl: string, status: 'verified' | 'failed', error?: string) {
+function redirectTo(request: Request, status: 'verified' | 'failed', error?: string) {
   const params = new URLSearchParams({ verification: status });
 
   if (error) {
     params.set('verification_error', error);
   }
 
-  return Response.redirect(new URL(`/?${params.toString()}`, requestUrl), 302);
+  return Response.redirect(new URL(`/?${params.toString()}`, `${resolveRequestOrigin(request)}/`), 302);
 }
 
 export async function POST(request: Request) {
@@ -44,17 +45,17 @@ export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token')?.trim() ?? '';
 
   if (!token) {
-    return redirectTo(request.url, 'failed', 'Verification token is required.');
+    return redirectTo(request, 'failed', 'Verification token is required.');
   }
 
   try {
     await verifyAccountEmail(token);
-    return redirectTo(request.url, 'verified');
+    return redirectTo(request, 'verified');
   } catch (error) {
     if (error instanceof AccountServiceError) {
-      return redirectTo(request.url, 'failed', error.message);
+      return redirectTo(request, 'failed', error.message);
     }
 
-    return redirectTo(request.url, 'failed', 'Failed to verify account.');
+    return redirectTo(request, 'failed', 'Failed to verify account.');
   }
 }

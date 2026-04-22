@@ -1,4 +1,5 @@
 import { AccountServiceError, registerAccount } from '../../../../src/server/auth/account-service';
+import { resolveRequestOrigin } from '../../../../src/server/http/request-origin';
 
 export async function POST(request: Request) {
   let body: {
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const origin = new URL(request.url).origin;
+    const origin = resolveRequestOrigin(request);
     const result = await registerAccount({
       email: body.email ?? '',
       password: body.password ?? '',

@@ -80,6 +80,7 @@ export function WorldField({ snapshot }: WorldFieldProps) {
           <h2>Forest Field</h2>
         </div>
         <div className="world-field__badges">
+          <span className="status-pill">Ground {snapshot.currentTile.kind}</span>
           <span className="status-pill">Vision {snapshot.vision.size}x{snapshot.vision.size}</span>
           <span className="status-pill">Hostiles {Object.keys(snapshot.monsters).length}</span>
         </div>

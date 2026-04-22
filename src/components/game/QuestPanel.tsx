@@ -15,7 +15,11 @@ export function QuestPanel({ snapshot }: QuestPanelProps) {
         <ul className="plain-list">
           {quests.map((quest) => (
             <li key={quest.id}>
-              <strong>{quest.label}</strong>
+              <strong>{quest.label}</strong>{' '}
+              <span className="status-pill">
+                {quest.status === 'ready_to_turn_in' ? 'Ready To Turn In' : 'Active'}
+              </span>
+              <div>{quest.progress}</div>
               <div className="muted">{quest.objective}</div>
             </li>
           ))}
