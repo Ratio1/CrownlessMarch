@@ -1,6 +1,6 @@
 # Thornwrithe v1
 
-Thornwrithe v1 is a server-authoritative browser game shell for disposable shard-worlds. Each Ratio1 node runs one Thornwrithe container, and each container hosts one live shard-world. Players keep durable character progression in `R1FS` and attach to whatever shard answers their gameplay WebSocket.
+Thornwrithe v1 is a server-authoritative browser game for disposable shard-worlds. Each Ratio1 node runs one Thornwrithe container, and each container hosts one live shard-world. Players keep durable character progression in `R1FS` and attach to whatever shard answers their gameplay WebSocket.
 
 ## Current Runtime Model
 
@@ -12,6 +12,9 @@ The shipped v1 runtime has these boundaries:
 - one dedicated `/admin` diagnostics surface
 - one gameplay WebSocket path on the same origin
 - one live shard runtime per container
+- one repo-owned starter content bundle under `content/`
+- one tile field surface with fog-window snapshots and visible hostile markers
+- one automated encounter loop with MUD-style dice logs and override actions
 - one `CStore` durable roster row per player-character
 - one `CStore` live lease row per active player-character
 - one `R1FS` checkpoint chain per character
@@ -28,7 +31,13 @@ The current browser flow is:
 8. the socket sends `attach`
 9. the server loads the character from `R1FS` and inserts it into the local shard
 
-After attach, gameplay is WebSocket-only.
+After attach, gameplay is WebSocket-only. The socket now carries:
+
+- world snapshots with visible tiles, visible PCs, visible hostile markers, and the live character card
+- movement updates on the same shard
+- automated encounter progression during heartbeat ticks
+- queued override commands for `encounter power`, `potion`, and `retreat`
+- durable checkpoint advancement when a resolved encounter changes the PC's long-lived state
 
 Registration note:
 
@@ -59,7 +68,31 @@ Registration note:
   - lease expiry
   - last persisted revision and timestamp
 
-Shard-local position and shard-local encounter state are disposable in v1. Reconnect loads the latest durable checkpoint from the roster hset, not the last live location.
+Shard-local position and active encounters are disposable in v1. Reconnect loads the latest durable checkpoint from the roster hset, not the last live location.
+
+## Content And Combat
+
+Starter content ships from repo-owned packs:
+
+- `content/classes.json`
+- `content/items.json`
+- `content/monsters.json`
+- `content/quests.json`
+- `content/regions/briar-march.json`
+
+The current `/play` surface renders a text-forward field HUD:
+
+- the center playfield is a tile map for the visible fog window
+- the side HUD shows the character card, quest ledger, movement pad, and override controls
+- the combat panel is a dice-text log driven by server-authoritative encounter rounds
+
+Combat rules are intentionally simplified:
+
+- stepping onto hostile tiles starts combat
+- initiative is rolled once when the encounter opens
+- rounds advance automatically on the live socket heartbeat cadence
+- attacks log the D20 roll, defense target, hit or miss, and damage
+- resolved encounters write XP, gold, HP changes, and any loot back into the latest durable checkpoint
 
 ## Session Rules
 
@@ -141,6 +174,12 @@ For the attach/runtime slices, run:
 
 ```bash
 pnpm test -- tests/integration/auth-attach.test.ts tests/integration/websocket-session.test.ts
+```
+
+For the Phase 3 and Phase 4 gameplay slices, run:
+
+```bash
+pnpm test -- tests/unit/content-loader.test.ts tests/unit/shard-runtime.test.ts
 ```
 
 For the persistence slice, run:

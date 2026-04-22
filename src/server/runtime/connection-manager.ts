@@ -22,6 +22,11 @@ export interface SessionHostDependencies {
   writePresenceLease(accountId: string, lease: PresenceLease): Promise<unknown>;
   clearPresenceLease(accountId: string, connectionId: string): Promise<boolean>;
   loadCharacterByCid(cid: string): Promise<CharacterCheckpoint>;
+  persistProgression?(input: {
+    accountId: string;
+    connectionId: string;
+    progression: Record<string, unknown>;
+  }): Promise<CharacterCheckpoint>;
   createConnectionId?: () => string;
   now?: () => number;
 }
@@ -39,26 +44,6 @@ interface PendingAttach {
   accountId: string;
   characterId: string;
   connectionId: string;
-}
-
-function cloneState<T>(value: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(value);
-  }
-
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isPosition(value: unknown): value is { x: number; y: number } {
-  return (
-    isObject(value) &&
-    typeof value.x === 'number' &&
-    typeof value.y === 'number'
-  );
 }
 
 function createError(code: string): ErrorOutboundMessage {
@@ -236,7 +221,12 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
     const nextLease: PresenceLease = {
       ...ownership.lease,
-      lease_expires_at: new Date(now() + dependencies.heartbeatGraceMs).toISOString(),
+      lease_expires_at: new Date(
+        Math.max(
+          Date.parse(ownership.lease.lease_expires_at) + 1,
+          now() + dependencies.heartbeatGraceMs
+        )
+      ).toISOString(),
     };
 
     await dependencies.writePresenceLease(session.accountId, nextLease);
@@ -260,6 +250,34 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
     armExpiryTimer(session);
     return true;
+  }
+
+  async function emitRuntimeState(socket: WebSocket, session: ActiveSession, state: StateOutboundMessage['state']) {
+    send(socket, { type: 'state', state });
+  }
+
+  async function maybePersistProgression(
+    session: ActiveSession,
+    update: { snapshot: StateOutboundMessage['state']; progressionToPersist?: Record<string, unknown> }
+  ) {
+    if (!dependencies.persistProgression || !update.progressionToPersist) {
+      return update.snapshot;
+    }
+
+    try {
+      const saved = await dependencies.persistProgression({
+        accountId: session.accountId,
+        connectionId: session.connectionId,
+        progression: update.progressionToPersist,
+      });
+
+      shardRuntime.markProgressionPersisted(session.characterId, saved.cid);
+      session.characterId = saved.cid;
+
+      return shardRuntime.snapshotFor(session.characterId);
+    } catch {
+      return update.snapshot;
+    }
   }
 
   async function onMessage(
@@ -348,12 +366,9 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           return;
         }
 
-        const snapshot = cloneState(checkpoint.snapshot);
-        const characterPosition = isPosition(snapshot.position) ? snapshot.position : { x: 0, y: 0 };
         const character = {
-          ...snapshot,
+          ...checkpoint.snapshot,
           cid: attachPayload.characterId,
-          position: characterPosition,
         };
 
         const session: ActiveSession = {
@@ -366,7 +381,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         };
 
         activeSessions.set(session.accountId, session);
-        shardRuntime.addPlayer(character);
+        const runtimeUpdate = shardRuntime.addPlayer(character);
         sessionRef.current = session;
         sessionRef.pending = null;
         armExpiryTimer(session);
@@ -378,7 +393,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
         };
 
         send(socket, attachedMessage);
-        send(socket, { type: 'state', state: shardRuntime.snapshotFor(session.characterId) });
+        await emitRuntimeState(socket, session, runtimeUpdate.snapshot);
         return;
       } catch {
         if (sessionRef.pending) {
@@ -409,17 +424,28 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     }
 
     if (message.type === 'heartbeat') {
-      await refreshHeartbeat(session);
+      const refreshed = await refreshHeartbeat(session);
+      if (!refreshed || session.ended) {
+        return;
+      }
+
+      const runtimeUpdate = shardRuntime.tickPlayer(session.characterId);
+      const nextState = await maybePersistProgression(session, runtimeUpdate);
+      await emitRuntimeState(socket, session, nextState);
       return;
     }
 
     if (message.type === 'move') {
-      shardRuntime.movePlayer(session.characterId, message.direction);
-      const stateMessage: StateOutboundMessage = {
-        type: 'state',
-        state: shardRuntime.snapshotFor(session.characterId),
-      };
-      send(socket, stateMessage);
+      const runtimeUpdate = shardRuntime.movePlayer(session.characterId, message.direction);
+      const nextState = await maybePersistProgression(session, runtimeUpdate);
+      await emitRuntimeState(socket, session, nextState);
+      return;
+    }
+
+    if (message.type === 'override') {
+      const runtimeUpdate = shardRuntime.queueOverride(session.characterId, message.command);
+      const nextState = await maybePersistProgression(session, runtimeUpdate);
+      await emitRuntimeState(socket, session, nextState);
       return;
     }
 

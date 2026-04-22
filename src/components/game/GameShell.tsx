@@ -2,6 +2,12 @@
 
 import Link from 'next/link';
 import { useGameplaySocket } from '@/client/useGameplaySocket';
+import { CharacterPanel } from './CharacterPanel';
+import { CombatLogPanel } from './CombatLogPanel';
+import { MovementPad } from './MovementPad';
+import { OverrideBar } from './OverrideBar';
+import { QuestPanel } from './QuestPanel';
+import { WorldField } from './WorldField';
 
 function describeStatus(status: ReturnType<typeof useGameplaySocket>['status']) {
   switch (status) {
@@ -17,29 +23,30 @@ function describeStatus(status: ReturnType<typeof useGameplaySocket>['status']) 
 }
 
 export function GameShell({ gameplayPath }: { gameplayPath: string }) {
-  const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove } =
-    useGameplaySocket(gameplayPath);
-  const characters = Object.values(snapshot?.characters ?? {});
-  const canMove = status === 'connected' && characters.length > 0;
+  const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendOverride } = useGameplaySocket(gameplayPath);
+  const encounter = snapshot?.encounter ?? null;
+  const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
 
   return (
-    <section className="shell">
-      <section className="panel shell__status">
+    <section className="play-shell">
+      <header className="panel play-header">
         <div>
-          <div className="eyebrow">Thornwrithe play</div>
-          <h1>Shard console</h1>
+          <p className="eyebrow">Thornwrithe field interface</p>
+          <h1>Forest-bound shard, text-forward fight.</h1>
+          <p className="play-header__copy">
+            Push through the Briar March, read the round-by-round dice feed, and keep the center of the field clear enough to understand danger at a glance.
+          </p>
         </div>
 
-        <div className="status-line" aria-live="polite">
-          <span className={`status-dot status-dot--${status}`} />
-          <span>{describeStatus(status)}</span>
-          <span className="status-separator">•</span>
-          <span className="monospace">
-            {shardWorldInstanceId ?? 'awaiting shard id'}
-          </span>
+        <div className="play-header__status">
+          <div className="status-line" aria-live="polite">
+            <span className={`status-dot status-dot--${status}`} />
+            <span>{describeStatus(status)}</span>
+            <span className="status-separator">•</span>
+            <span className="monospace">{shardWorldInstanceId ?? 'awaiting shard id'}</span>
+          </div>
+          <p className="muted">{statusDetail}</p>
         </div>
-
-        <p className="muted status-copy">{statusDetail}</p>
 
         {status === 'disconnected' ? (
           <div className="status-banner">
@@ -49,53 +56,18 @@ export function GameShell({ gameplayPath }: { gameplayPath: string }) {
             </Link>
           </div>
         ) : null}
-      </section>
+      </header>
 
-      <section className="panel world-panel">
-        <div className="panel-title">First shard snapshot</div>
+      <section className="play-layout">
+        <WorldField snapshot={snapshot} />
 
-        {characters.length > 0 ? (
-          <ul className="roster">
-            {characters.map((character) => (
-              <li className="roster__item" key={character.cid}>
-                <strong>{character.name ?? character.cid}</strong>
-                <span className="muted">{character.cid}</span>
-                <span className="monospace">
-                  {character.position.x}, {character.position.y}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted world-panel__empty">
-            Waiting for the first shard snapshot. If the host changes, the client
-            will reattach and treat the new shard as a fresh session.
-          </p>
-        )}
-      </section>
-
-      <section className="panel controls-panel">
-        <div className="panel-title">Move</div>
-        <p className="muted controls-copy">
-          Movement is shard-local and disposable in v1. Durable character
-          progression survives through R1FS checkpoints, not through position
-          restore.
-        </p>
-
-        <div className="dpad" aria-label="movement controls">
-          <button disabled={!canMove} onClick={() => sendMove('north')} type="button">
-            North
-          </button>
-          <button disabled={!canMove} onClick={() => sendMove('west')} type="button">
-            West
-          </button>
-          <button disabled={!canMove} onClick={() => sendMove('east')} type="button">
-            East
-          </button>
-          <button disabled={!canMove} onClick={() => sendMove('south')} type="button">
-            South
-          </button>
-        </div>
+        <aside className="play-sidebar">
+          <CharacterPanel snapshot={snapshot} />
+          <CombatLogPanel encounter={encounter} status={status} />
+          <QuestPanel snapshot={snapshot} />
+          <MovementPad disabled={!canMove} onMove={sendMove} />
+          <OverrideBar encounter={encounter} onQueue={sendOverride} />
+        </aside>
       </section>
     </section>
   );

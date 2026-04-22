@@ -515,7 +515,10 @@ export async function createCharacterForAccount(input: {
     name: characterName,
     classId: input.classId,
     attributes: input.attributes,
-    inventory: input.classId === 'wizard' ? ['ash-staff', 'field-rations'] : ['rusted-sword', 'field-rations'],
+    inventory:
+      input.classId === 'wizard'
+        ? ['ash-staff', 'field-rations', 'health-potion']
+        : ['rusted-sword', 'field-rations', 'health-potion'],
     equipment:
       input.classId === 'wizard'
         ? { implement: 'ash-staff', armor: 'travel-cloak' }

@@ -14,11 +14,21 @@ export interface MoveInboundMessage {
   direction: 'north' | 'south' | 'west' | 'east';
 }
 
+export interface OverrideInboundMessage {
+  type: 'override';
+  command: 'encounter power' | 'potion' | 'retreat';
+}
+
 export interface LogoutInboundMessage {
   type: 'logout';
 }
 
-export type InboundMessage = AttachInboundMessage | HeartbeatInboundMessage | MoveInboundMessage | LogoutInboundMessage;
+export type InboundMessage =
+  | AttachInboundMessage
+  | HeartbeatInboundMessage
+  | MoveInboundMessage
+  | OverrideInboundMessage
+  | LogoutInboundMessage;
 
 export interface AttachedOutboundMessage {
   type: 'attached';
@@ -102,6 +112,15 @@ export function parseInboundMessage(raw: RawData): InboundMessage | null {
         ? {
             type: 'move',
             direction: parsed.direction,
+          }
+        : null;
+    case 'override':
+      return parsed.command === 'encounter power' ||
+        parsed.command === 'potion' ||
+        parsed.command === 'retreat'
+        ? {
+            type: 'override',
+            command: parsed.command,
           }
         : null;
     case 'logout':

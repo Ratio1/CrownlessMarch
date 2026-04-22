@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   GameplayDirection,
+  GameplayOverrideCommand,
   GameplayShardSnapshot,
   GameplaySocketStatus,
 } from '@/shared/gameplay';
@@ -34,7 +35,7 @@ type GameplayInboundMessage =
   | ErrorMessage;
 
 const ATTACH_ENDPOINT = '/api/auth/attach';
-const HEARTBEAT_INTERVAL_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 2_000;
 const RECONNECT_DELAY_MS = 1_500;
 
 function resolveGameplaySocketUrl(gameplayPath: string) {
@@ -292,11 +293,22 @@ export function useGameplaySocket(gameplayPath: string) {
     socket.send(JSON.stringify({ type: 'move', direction }));
   }
 
+  function sendOverride(command: GameplayOverrideCommand) {
+    const socket = socketRef.current;
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    socket.send(JSON.stringify({ type: 'override', command }));
+  }
+
   return {
     status,
     statusDetail,
     shardWorldInstanceId,
     snapshot,
     sendMove,
+    sendOverride,
   };
 }

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "rusted-sword",
+    "slot": "weapon",
+    "label": "Rusted Sword",
+    "bonus": 0,
+    "effect": "+0 attack, 1d8 damage"
+  },
+  {
+    "id": "ash-staff",
+    "slot": "weapon",
+    "label": "Ash Staff",
+    "bonus": 0,
+    "effect": "+0 attack, 1d6 force damage"
+  },
+  {
+    "id": "patchwork-leather",
+    "slot": "armor",
+    "label": "Patchwork Leather",
+    "bonus": 0,
+    "effect": "+0 AC"
+  },
+  {
+    "id": "travel-cloak",
+    "slot": "armor",
+    "label": "Travel Cloak",
+    "bonus": 0,
+    "effect": "+0 AC, woven against the briar rain"
+  },
+  {
+    "id": "health-potion",
+    "slot": "consumable",
+    "label": "Health Potion",
+    "bonus": 0,
+    "effect": "Restore 2d6 + 4 HP"
+  },
+  {
+    "id": "field-rations",
+    "slot": "consumable",
+    "label": "Field Rations",
+    "bonus": 0,
+    "effect": "Dry bread and smoked roots for the march."
+  }
+]

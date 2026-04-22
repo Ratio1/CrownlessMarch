@@ -1,0 +1,34 @@
+[
+  {
+    "id": "fighter",
+    "label": "Fighter",
+    "primaryAttributes": ["strength", "constitution"],
+    "passive": "Steelbound Presence",
+    "encounterAbility": "Shield Rush",
+    "utilityAbility": "Second Wind"
+  },
+  {
+    "id": "rogue",
+    "label": "Rogue",
+    "primaryAttributes": ["dexterity", "charisma"],
+    "passive": "Shadowed Openings",
+    "encounterAbility": "Shadow Lunge",
+    "utilityAbility": "Slip Away"
+  },
+  {
+    "id": "wizard",
+    "label": "Wizard",
+    "primaryAttributes": ["intelligence", "wisdom"],
+    "passive": "Arcane Reach",
+    "encounterAbility": "Bramblefire Sigil",
+    "utilityAbility": "Ward Pulse"
+  },
+  {
+    "id": "cleric",
+    "label": "Cleric",
+    "primaryAttributes": ["wisdom", "charisma"],
+    "passive": "Blessed Steadiness",
+    "encounterAbility": "Radiant Rebuke",
+    "utilityAbility": "Field Prayer"
+  }
+]

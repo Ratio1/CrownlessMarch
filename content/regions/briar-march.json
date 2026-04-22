@@ -1,0 +1,89 @@
+{
+  "id": "briar-march",
+  "width": 11,
+  "height": 11,
+  "spawn": {
+    "x": 5,
+    "y": 5
+  },
+  "tiles": [
+    {
+      "x": 5,
+      "y": 5,
+      "kind": "town",
+      "blocked": false
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "kind": "road",
+      "blocked": false
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "kind": "road",
+      "blocked": false
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "kind": "roots",
+      "blocked": false
+    },
+    {
+      "x": 7,
+      "y": 5,
+      "kind": "forest",
+      "blocked": false
+    },
+    {
+      "x": 6,
+      "y": 4,
+      "kind": "forest",
+      "blocked": false
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "kind": "forest",
+      "blocked": false
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "kind": "roots",
+      "blocked": false
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "kind": "forest",
+      "blocked": false
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "kind": "road",
+      "blocked": false
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "kind": "ruin",
+      "blocked": false
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "kind": "shrine",
+      "blocked": false
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "kind": "water",
+      "blocked": true
+    }
+  ]
+}

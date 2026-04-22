@@ -62,16 +62,25 @@ function createSmokeHarness() {
   const runtime = new ShardRuntime();
   const shardRuntime: ShardRuntimeLike = {
     addPlayer(character) {
-      runtime.addPlayer(character);
+      return runtime.addPlayer(character);
     },
     removePlayer(characterId) {
       runtime.removePlayer(characterId);
     },
     movePlayer(characterId, direction) {
-      runtime.movePlayer(characterId, direction);
+      return runtime.movePlayer(characterId, direction);
+    },
+    tickPlayer(characterId) {
+      return runtime.tickPlayer(characterId);
+    },
+    queueOverride(characterId, command) {
+      return runtime.queueOverride(characterId, command);
     },
     snapshotFor(characterId) {
       return runtime.snapshotFor(characterId);
+    },
+    markProgressionPersisted(characterId, nextCharacterId) {
+      runtime.markProgressionPersisted(characterId, nextCharacterId);
     },
   };
   const httpServer = http.createServer();

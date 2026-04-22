@@ -275,38 +275,234 @@ select {
   transform: none;
 }
 
-.shell {
-  width: min(100%, 1120px);
+.play-shell {
+  width: min(100%, 1280px);
   margin: 0 auto;
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
-  grid-template-areas:
-    "status status"
-    "world controls";
 }
 
-.shell__status {
-  grid-area: status;
+.play-header {
   padding: 24px;
   display: grid;
   gap: 16px;
 }
 
-.world-panel,
-.controls-panel {
-  padding: 22px;
+.play-header h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 4.1rem);
+  line-height: 0.94;
 }
 
-.world-panel {
-  grid-area: world;
+.play-header__copy {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--text-muted);
 }
 
-.controls-panel {
-  grid-area: controls;
+.play-header__status {
+  display: grid;
+  gap: 8px;
+}
+
+.play-layout {
   display: grid;
   gap: 18px;
-  align-content: start;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.95fr);
+  align-items: start;
+}
+
+.play-sidebar {
+  display: grid;
+  gap: 18px;
+}
+
+.play-panel,
+.world-field {
+  padding: 20px;
+}
+
+.play-panel__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  line-height: 0.96;
+}
+
+.play-card-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.play-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.play-info-block {
+  display: grid;
+  gap: 8px;
+}
+
+.play-info-block h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-ember);
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.world-field {
+  display: grid;
+  gap: 18px;
+}
+
+.world-field__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.world-field__header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  line-height: 0.96;
+}
+
+.world-field__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.world-field__empty {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.world-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.world-tile {
+  position: relative;
+  min-height: 92px;
+  padding: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+}
+
+.world-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.88;
+}
+
+.world-tile--town::before {
+  background: linear-gradient(180deg, rgba(126, 162, 112, 0.4), rgba(74, 88, 58, 0.8));
+}
+
+.world-tile--road::before {
+  background: linear-gradient(180deg, rgba(142, 118, 71, 0.55), rgba(96, 74, 38, 0.84));
+}
+
+.world-tile--forest::before {
+  background: linear-gradient(180deg, rgba(48, 86, 58, 0.72), rgba(23, 46, 32, 0.95));
+}
+
+.world-tile--roots::before {
+  background: linear-gradient(180deg, rgba(93, 65, 40, 0.8), rgba(55, 36, 20, 0.98));
+}
+
+.world-tile--ruin::before {
+  background: linear-gradient(180deg, rgba(92, 88, 102, 0.72), rgba(48, 44, 57, 0.96));
+}
+
+.world-tile--shrine::before {
+  background: linear-gradient(180deg, rgba(113, 126, 95, 0.72), rgba(64, 77, 55, 0.94));
+}
+
+.world-tile--water::before {
+  background: linear-gradient(180deg, rgba(50, 93, 122, 0.78), rgba(19, 43, 61, 0.96));
+}
+
+.world-tile--blocked::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 2px solid rgba(255, 140, 120, 0.7);
+  border-radius: 14px;
+  background:
+    linear-gradient(45deg, transparent 47%, rgba(255, 140, 120, 0.6) 48%, rgba(255, 140, 120, 0.6) 52%, transparent 53%),
+    linear-gradient(-45deg, transparent 47%, rgba(255, 140, 120, 0.6) 48%, rgba(255, 140, 120, 0.6) 52%, transparent 53%);
+}
+
+.world-tile__coords,
+.world-tile__occupants {
+  position: relative;
+  z-index: 1;
+}
+
+.world-tile__coords {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.world-tile__occupants {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.world-token {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #0e100c;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.world-token--hero {
+  background: linear-gradient(135deg, #f1dba0, #f7c978);
+}
+
+.world-token--ally {
+  background: linear-gradient(135deg, #bdd6b9, #8fc48b);
+}
+
+.world-token--monster {
+  background: linear-gradient(135deg, #e68b68, #c95d3f);
 }
 
 .panel-title {
@@ -361,6 +557,38 @@ select {
 .controls-copy,
 .world-panel__empty {
   margin: 0;
+}
+
+.combat-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.combat-log li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.combat-log__round {
+  color: var(--text-ember);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+}
+
+.override-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .roster {
@@ -699,15 +927,8 @@ select {
 
 @media (max-width: 900px) {
   .auth-grid,
-  .shell {
+  .play-layout {
     grid-template-columns: 1fr;
-  }
-
-  .shell {
-    grid-template-areas:
-      "status"
-      "world"
-      "controls";
   }
 
   .page {
@@ -718,15 +939,15 @@ select {
   .character-card,
   .admin-card,
   .auth-hero,
-  .shell__status,
-  .world-panel,
-  .controls-panel {
+  .play-header,
+  .world-field,
+  .play-panel {
     padding: 20px;
   }
 
   .login-card h1,
   .admin-card h1,
-  .shell__status h1 {
+  .play-header h1 {
     font-size: clamp(2.1rem, 10vw, 3.2rem);
   }
 
@@ -734,10 +955,19 @@ select {
   .admin-hsets {
     grid-template-columns: 1fr;
   }
+
+  .world-tile {
+    min-height: 78px;
+  }
 }
 
 @media (max-width: 720px) {
   .attribute-grid {
     grid-template-columns: 1fr;
+  }
+
+  .play-chip-row,
+  .override-row {
+    flex-direction: column;
   }
 }

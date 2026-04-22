@@ -115,7 +115,7 @@ function createHarness(options: {
   const shardRuntime = {
     addPlayer(character: Parameters<ShardRuntime['addPlayer']>[0]) {
       runtimeEvents.push(`add:${character.cid}`);
-      baseRuntime.addPlayer(character);
+      return baseRuntime.addPlayer(character);
     },
     removePlayer(characterId: string) {
       runtimeEvents.push(`remove:${characterId}`);
@@ -123,10 +123,22 @@ function createHarness(options: {
     },
     movePlayer(characterId: string, direction: Parameters<ShardRuntime['movePlayer']>[1]) {
       runtimeEvents.push(`move:${characterId}:${direction}`);
-      baseRuntime.movePlayer(characterId, direction);
+      return baseRuntime.movePlayer(characterId, direction);
+    },
+    tickPlayer(characterId: string) {
+      runtimeEvents.push(`tick:${characterId}`);
+      return baseRuntime.tickPlayer(characterId);
+    },
+    queueOverride(characterId: string, command: string) {
+      runtimeEvents.push(`override:${characterId}:${command}`);
+      return baseRuntime.queueOverride(characterId, command);
     },
     snapshotFor(characterId: string) {
       return baseRuntime.snapshotFor(characterId);
+    },
+    markProgressionPersisted(characterId: string, nextCharacterId?: string) {
+      runtimeEvents.push(`persisted:${characterId}:${nextCharacterId ?? characterId}`);
+      baseRuntime.markProgressionPersisted(characterId, nextCharacterId);
     },
   } satisfies ShardRuntimeLike;
 

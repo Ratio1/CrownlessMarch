@@ -7,9 +7,13 @@ import { WebSocketServer } from 'ws';
 import { verifyAttachToken } from './src/server/auth/attach-token';
 import { createSessionHost } from './src/server/runtime/connection-manager';
 import { createPresenceLeaseStore } from './src/server/platform/cstore-presence';
+import { readRosterEntry, writeRosterEntry } from './src/server/platform/cstore-roster';
 import { createCharacterCheckpointStore } from './src/server/platform/r1fs-characters';
 import { getRatio1ServerClient } from './src/server/platform/ratio1';
 import { resolveThornwritheNodeId } from './src/server/platform/runtime-env';
+import { createPersistenceService } from './src/server/runtime/persistence-service';
+import { ShardRuntime } from './src/server/runtime/shard-runtime';
+import { loadContentBundle } from './src/server/content/load-content';
 
 const REQUIRED_RUNTIME_ENV = ['THORNWRITHE_GAME_ID', 'SESSION_SECRET', 'ATTACH_TOKEN_SECRET'] as const;
 
@@ -94,18 +98,46 @@ export async function createServer() {
     void requestHandler(req, res);
   });
   const wss = new WebSocketServer({ noServer: true });
+  const content = await loadContentBundle(process.cwd());
   const ratio1 = getRatio1ServerClient();
   const presenceStore = createPresenceLeaseStore({ cstore: ratio1.cstore });
   const characterStore = createCharacterCheckpointStore({ r1fs: ratio1.r1fs });
+  const shardRuntime = new ShardRuntime({ content });
+  const persistenceService = createPersistenceService({
+    nodeId: resolveThornwritheNodeId(),
+    readPresenceLease: presenceStore.readPresenceLease,
+    writePresenceLease: presenceStore.writePresenceLease,
+    saveCharacterCheckpoint: characterStore.saveCharacterCheckpoint,
+  });
   const sessionHost = createSessionHost({
     nodeId: resolveThornwritheNodeId(),
     shardWorldInstanceId: getShardWorldInstanceId(),
     heartbeatGraceMs: getHeartbeatGraceMs(),
+    shardRuntime,
     verifyAttachToken,
     readPresenceLease: presenceStore.readPresenceLease,
     writePresenceLease: presenceStore.writePresenceLease,
     clearPresenceLease: presenceStore.clearPresenceLease,
     loadCharacterByCid: characterStore.loadCharacterByCid,
+    persistProgression: async ({ accountId, connectionId, progression }) => {
+      const saved = await persistenceService.persistProgression({
+        characterId: accountId,
+        connectionId,
+        progression,
+      });
+      const rosterEntry = await readRosterEntry(accountId);
+
+      if (rosterEntry) {
+        await writeRosterEntry(accountId, {
+          ...rosterEntry,
+          latestCharacterCid: saved.cid,
+          persistRevision: saved.persist_revision,
+          lastPersistedAt: new Date().toISOString(),
+        });
+      }
+
+      return saved;
+    },
     createConnectionId: () => crypto.randomUUID(),
   });
 
