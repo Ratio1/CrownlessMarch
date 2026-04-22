@@ -360,7 +360,7 @@ describe('shard runtime', () => {
         wisdom: 10,
         charisma: 8,
       },
-        currency: 7,
+      currency: 7,
     });
 
     runtime.addPlayer({
@@ -390,5 +390,75 @@ describe('shard runtime', () => {
     expect(
       resolved.snapshot.activityLog.some((entry) => entry.text.includes('spent salves and lantern oil'))
     ).toBe(true);
+  });
+
+  it('turns in a ready survey quest when defeat returns the player to town', async () => {
+    const content = await loadContentBundle(process.cwd());
+    let now = Date.parse('2026-04-22T08:30:00.000Z');
+    const runtime = new ShardRuntime({
+      content,
+      now: () => now,
+      random: makeRandom([
+        0.0,
+        0.99,
+        0.99,
+        0.99,
+      ]),
+    });
+
+    const snapshot = buildInitialCharacterSnapshot({
+      name: 'Tamar',
+      classId: 'fighter',
+      attributes: {
+        strength: 15,
+        dexterity: 13,
+        constitution: 12,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 8,
+      },
+      currency: 7,
+      activeQuestIds: ['survey-the-briar-edge'],
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-loss-2',
+      position: { x: 6, y: 4 },
+      ...snapshot,
+      hitPoints: {
+        ...snapshot.hitPoints,
+        current: 4,
+      },
+      quest_progress: {
+        'survey-the-briar-edge': {
+          status: 'ready_to_turn_in',
+        },
+      },
+    });
+
+    runtime.movePlayer('cid-loss-2', 'south');
+    now += 4_100;
+    const resolved = runtime.tickPlayer('cid-loss-2');
+
+    expect(resolved.snapshot.encounter?.status).toBe('lost');
+    expect(resolved.progressionToPersist).toMatchObject({
+      xp: 120,
+      gold: 9,
+      activeQuestIds: ['burn-the-first-nest'],
+      quest_progress: {
+        'survey-the-briar-edge': {
+          status: 'turned_in',
+        },
+        'burn-the-first-nest': {
+          status: 'active',
+        },
+      },
+    });
+    expect(resolved.snapshot.character.quests).toEqual([
+      expect.objectContaining({
+        id: 'burn-the-first-nest',
+        progress: '0/2 Briar Goblins defeated.',
+      }),
+    ]);
   });
 });

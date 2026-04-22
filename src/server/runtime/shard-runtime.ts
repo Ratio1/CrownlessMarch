@@ -822,84 +822,9 @@ export class ShardRuntime implements ShardRuntimeLike {
     }
 
     if (tile.kind === 'town') {
-      if (currentHp !== null && maxHp !== null && currentHp < maxHp) {
-        nextSnapshot = healToFull(nextSnapshot);
-        if (source === 'move') {
-          nextSnapshot = appendActivityLog(
-            nextSnapshot,
-            'Town hearths mend your wounds before the next march.',
-            'system',
-            nowIso,
-          );
-        }
-        changed = true;
-      }
-
-      if (getActiveQuestIds(nextSnapshot).includes(SURVEY_QUEST_ID) && getQuestStatus(nextSnapshot, SURVEY_QUEST_ID) === 'ready_to_turn_in') {
-        nextSnapshot = this.turnInQuest(
-          nextSnapshot,
-          SURVEY_QUEST_ID,
-          5,
-          'Captain Mire sets a goblin cull on the ruined watchpost lanes.',
-          nowIso,
-        );
-
-        if (getQuestStatus(nextSnapshot, BURN_QUEST_ID) !== 'turned_in') {
-          nextSnapshot = withActiveQuest(nextSnapshot, BURN_QUEST_ID);
-          nextSnapshot = withQuestState(nextSnapshot, BURN_QUEST_ID, {
-            status: 'active',
-            goblinsDefeated: Number(getQuestProgressRecord(nextSnapshot, BURN_QUEST_ID).goblinsDefeated ?? 0),
-            target: 2,
-            acceptedAt: nowIso,
-          });
-        }
-
-        changed = true;
-      }
-
-      if (getActiveQuestIds(nextSnapshot).includes(BURN_QUEST_ID) && getQuestStatus(nextSnapshot, BURN_QUEST_ID) === 'ready_to_turn_in') {
-        nextSnapshot = this.turnInQuest(
-          nextSnapshot,
-          BURN_QUEST_ID,
-          8,
-          'The watchpost lanes are quieter, if only for tonight.',
-          nowIso,
-        );
-        nextSnapshot = addInventoryItem(nextSnapshot, 'health-potion');
-        if (getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) !== 'turned_in') {
-          nextSnapshot = withActiveQuest(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID);
-          nextSnapshot = withQuestState(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID, {
-            status: 'active',
-            shrineVisited: false,
-            wolfDefeated: false,
-            wolvesDefeated: 0,
-            target: 1,
-            acceptedAt: nowIso,
-          });
-          nextSnapshot = appendActivityLog(
-            nextSnapshot,
-            'Captain Mire orders the shrine road reopened. Revisit the Ember Shrine, then break the Sap Wolf stalking the grove.',
-            'quest',
-            nowIso,
-          );
-        }
-        changed = true;
-      }
-
-      if (
-        getActiveQuestIds(nextSnapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID) &&
-        getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) === 'ready_to_turn_in'
-      ) {
-        nextSnapshot = this.turnInQuest(
-          nextSnapshot,
-          SECURE_SHRINE_ROAD_QUEST_ID,
-          10,
-          'The shrine road holds for another night under ember watchfires.',
-          nowIso,
-        );
-        nextSnapshot = addInventoryItem(nextSnapshot, 'field-rations');
-        changed = true;
-      }
+      const townArrival = this.resolveTownArrival(nextSnapshot, source, nowIso);
+      nextSnapshot = townArrival.snapshot;
+      changed = changed || townArrival.changed;
     }
 
     if (
@@ -1012,6 +937,8 @@ export class ShardRuntime implements ShardRuntimeLike {
         'system',
         nowIso,
       );
+      const townArrival = this.resolveTownArrival(nextSnapshot, 'move', nowIso);
+      nextSnapshot = townArrival.snapshot;
       changed = true;
     }
 
@@ -1027,5 +954,106 @@ export class ShardRuntime implements ShardRuntimeLike {
       position.x < this.content.region.width &&
       position.y < this.content.region.height
     );
+  }
+
+  private resolveTownArrival(
+    snapshot: Record<string, unknown>,
+    source: 'attach' | 'move',
+    nowIso: string,
+  ) {
+    let nextSnapshot = snapshot;
+    let changed = false;
+    const currentHp =
+      isRecord(nextSnapshot.hitPoints) && typeof nextSnapshot.hitPoints.current === 'number'
+        ? nextSnapshot.hitPoints.current
+        : null;
+    const maxHp =
+      isRecord(nextSnapshot.hitPoints) && typeof nextSnapshot.hitPoints.max === 'number'
+        ? nextSnapshot.hitPoints.max
+        : null;
+
+    if (currentHp !== null && maxHp !== null && currentHp < maxHp) {
+      nextSnapshot = healToFull(nextSnapshot);
+      if (source === 'move') {
+        nextSnapshot = appendActivityLog(
+          nextSnapshot,
+          'Town hearths mend your wounds before the next march.',
+          'system',
+          nowIso,
+        );
+      }
+      changed = true;
+    }
+
+    if (getActiveQuestIds(nextSnapshot).includes(SURVEY_QUEST_ID) && getQuestStatus(nextSnapshot, SURVEY_QUEST_ID) === 'ready_to_turn_in') {
+      nextSnapshot = this.turnInQuest(
+        nextSnapshot,
+        SURVEY_QUEST_ID,
+        5,
+        'Captain Mire sets a goblin cull on the ruined watchpost lanes.',
+        nowIso,
+      );
+
+      if (getQuestStatus(nextSnapshot, BURN_QUEST_ID) !== 'turned_in') {
+        nextSnapshot = withActiveQuest(nextSnapshot, BURN_QUEST_ID);
+        nextSnapshot = withQuestState(nextSnapshot, BURN_QUEST_ID, {
+          status: 'active',
+          goblinsDefeated: Number(getQuestProgressRecord(nextSnapshot, BURN_QUEST_ID).goblinsDefeated ?? 0),
+          target: 2,
+          acceptedAt: nowIso,
+        });
+      }
+
+      changed = true;
+    }
+
+    if (getActiveQuestIds(nextSnapshot).includes(BURN_QUEST_ID) && getQuestStatus(nextSnapshot, BURN_QUEST_ID) === 'ready_to_turn_in') {
+      nextSnapshot = this.turnInQuest(
+        nextSnapshot,
+        BURN_QUEST_ID,
+        8,
+        'The watchpost lanes are quieter, if only for tonight.',
+        nowIso,
+      );
+      nextSnapshot = addInventoryItem(nextSnapshot, 'health-potion');
+      if (getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) !== 'turned_in') {
+        nextSnapshot = withActiveQuest(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID);
+        nextSnapshot = withQuestState(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID, {
+          status: 'active',
+          shrineVisited: false,
+          wolfDefeated: false,
+          wolvesDefeated: 0,
+          target: 1,
+          acceptedAt: nowIso,
+        });
+        nextSnapshot = appendActivityLog(
+          nextSnapshot,
+          'Captain Mire orders the shrine road reopened. Revisit the Ember Shrine, then break the Sap Wolf stalking the grove.',
+          'quest',
+          nowIso,
+        );
+      }
+      changed = true;
+    }
+
+    if (
+      getActiveQuestIds(nextSnapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID) &&
+      getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) === 'ready_to_turn_in'
+    ) {
+      nextSnapshot = this.turnInQuest(
+        nextSnapshot,
+        SECURE_SHRINE_ROAD_QUEST_ID,
+        10,
+        'The shrine road holds for another night under ember watchfires.',
+        nowIso,
+      );
+      nextSnapshot = addInventoryItem(nextSnapshot, 'field-rations');
+      changed = true;
+    }
+
+    return {
+      snapshot: nextSnapshot,
+      changed,
+    };
   }
 }
