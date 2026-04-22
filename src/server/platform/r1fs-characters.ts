@@ -54,6 +54,20 @@ function isCharacterCheckpointRecord(value: unknown): value is CharacterCheckpoi
 }
 
 export function createCharacterCheckpointStore(options: CharacterCheckpointStoreOptions) {
+  async function loadCharacterByCid(cid: string): Promise<CharacterCheckpoint> {
+    const payload = await options.r1fs.getYaml({ cid });
+
+    if (!isCharacterCheckpointRecord(payload.file_data)) {
+      throw new Error('Invalid character checkpoint payload');
+    }
+
+    return {
+      cid,
+      persist_revision: payload.file_data.persist_revision,
+      snapshot: payload.file_data.snapshot,
+    };
+  }
+
   return {
     async createInitialCharacterCheckpoint(input: CreateInitialCharacterCheckpointInput): Promise<CharacterCheckpoint> {
       const snapshot = normalizeDurableProgression({
@@ -75,26 +89,14 @@ export function createCharacterCheckpointStore(options: CharacterCheckpointStore
       };
     },
 
-    async loadCharacterByCid(cid: string): Promise<CharacterCheckpoint> {
-      const payload = await options.r1fs.getYaml({ cid });
-
-      if (!isCharacterCheckpointRecord(payload.file_data)) {
-        throw new Error('Invalid character checkpoint payload');
-      }
-
-      return {
-        cid,
-        persist_revision: payload.file_data.persist_revision,
-        snapshot: payload.file_data.snapshot,
-      };
-    },
+    loadCharacterByCid,
 
     async saveCharacterCheckpoint(input: {
       cid: string;
       persistRevision: number;
       snapshot: Record<string, unknown>;
     }): Promise<CharacterCheckpoint> {
-      const current = await this.loadCharacterByCid(input.cid);
+      const current = await loadCharacterByCid(input.cid);
 
       if (current.persist_revision > input.persistRevision) {
         throw new Error('Stale persist_revision');

@@ -95,6 +95,29 @@ describe('r1fs character checkpoints', () => {
     });
   });
 
+  it('supports an extracted saveCharacterCheckpoint callback', async () => {
+    const r1fs = createFakeR1fs();
+    const store = createCharacterCheckpointStore({ r1fs });
+    const saveCharacterCheckpoint = store.saveCharacterCheckpoint;
+
+    r1fs.seed('cid-1', {
+      persist_revision: 1,
+      snapshot: { xp: 10 },
+    });
+
+    await expect(
+      saveCharacterCheckpoint({
+        cid: 'cid-1',
+        persistRevision: 1,
+        snapshot: { xp: 20 },
+      }),
+    ).resolves.toEqual({
+      cid: 'cid-next-1',
+      persist_revision: 2,
+      snapshot: { xp: 20 },
+    });
+  });
+
   it('creates an initial checkpoint with normalized durable progression', async () => {
     const r1fs = createFakeR1fs();
     const store = createCharacterCheckpointStore({ r1fs });

@@ -275,7 +275,12 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       session.characterId = saved.cid;
 
       return shardRuntime.snapshotFor(session.characterId);
-    } catch {
+    } catch (error) {
+      console.error('[thornwrithe] failed to persist progression', {
+        accountId: session.accountId,
+        characterId: session.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return update.snapshot;
     }
   }
