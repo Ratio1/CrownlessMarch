@@ -39,10 +39,10 @@ export function GameShell({
     <section className="play-shell">
       <header className="panel play-header">
         <div>
-          <p className="eyebrow">Thornwrithe field interface</p>
-          <h1>Forest-bound shard, text-forward fight.</h1>
+          <p className="eyebrow">Thornwrithe live field</p>
+          <h1>Watchfire map, live shard, steel on the line.</h1>
           <p className="play-header__copy">
-            Push through the Briar March, read the round-by-round dice feed, and keep the field readable enough to judge terrain, threat, and pursuit in one glance.
+            Read the Briar March as a real surface: route line, threat lane, live fog window, and round-by-round combat pressure without losing the geography of the fight.
           </p>
         </div>
 

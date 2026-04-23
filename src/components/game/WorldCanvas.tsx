@@ -12,6 +12,14 @@ function classCrest(value: string) {
   return value.slice(0, 3).toUpperCase();
 }
 
+function prettifyLabel(value: string) {
+  return value
+    .split('-')
+    .filter(Boolean)
+    .map((entry) => entry[0]?.toUpperCase() + entry.slice(1))
+    .join(' ');
+}
+
 export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<ThornwritheGameBridge | null>(null);
@@ -19,6 +27,11 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   const encounter = snapshot?.encounter ?? null;
   const activeQuest = snapshot?.character.quests[0] ?? null;
   const objectiveFocus = snapshot?.objectiveFocus ?? null;
+  const visibleMonsterCount = snapshot ? Object.keys(snapshot.monsters).length : 0;
+  const visibleAllies =
+    snapshot
+      ? Object.values(snapshot.characters).filter((character) => character.cid !== snapshot.character.cid).length
+      : 0;
 
   useEffect(() => {
     let disposed = false;
@@ -79,10 +92,18 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   return (
     <section className="world-canvas" aria-label="World canvas">
       <div ref={canvasHostRef} className="world-canvas__host" />
+      {snapshot ? (
+        <div className="world-canvas__marquee">
+          <span className="world-canvas__marquee-label">Shard atlas</span>
+          <strong>{prettifyLabel(snapshot.regionId)}</strong>
+          <span>{objectiveFocus?.stateLabel ?? activeQuest?.label ?? 'Read the watchfire line and hold.'}</span>
+        </div>
+      ) : null}
       <div className="world-canvas__chrome">
+        <span className="status-pill">Surface live map</span>
         <span className="status-pill">Renderer Phaser</span>
-        <span className="status-pill">Surface Live fog window</span>
-        {snapshot ? <span className="status-pill">Hostiles {Object.keys(snapshot.monsters).length}</span> : null}
+        {snapshot ? <span className="status-pill">Hostiles {visibleMonsterCount}</span> : null}
+        {snapshot ? <span className="status-pill">Allies {visibleAllies}</span> : null}
         {snapshot ? <span className="status-pill">Tile {snapshot.currentTile.kind}</span> : null}
       </div>
       {snapshot ? (
@@ -93,20 +114,25 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
             <span>
               {snapshot.character.classLabel} | HP {snapshot.character.hitPoints.current}/{snapshot.character.hitPoints.max}
             </span>
+            <div className="play-chip-row world-canvas__hero-stats">
+              <span className="status-pill">Level {snapshot.character.level}</span>
+              <span className="status-pill">Gold {snapshot.character.gold}</span>
+            </div>
           </div>
         </div>
       ) : null}
       {activeQuest ? (
         <div className="world-canvas__objective">
-          <div className="panel-title">March order</div>
+          <div className="panel-title">Trail warrant</div>
           <strong>{objectiveFocus?.label ?? activeQuest.label}</strong>
           <p>{objectiveFocus?.detail ?? activeQuest.progress}</p>
           {objectiveFocus ? (
             <div className="play-chip-row">
-              <span className="status-pill">{objectiveFocus.stateLabel}</span>
+              <span className="status-pill status-pill--objective">{objectiveFocus.stateLabel}</span>
               <span className="status-pill">
                 {objectiveFocus.target.x},{objectiveFocus.target.y}
               </span>
+              <span className="status-pill">{objectiveFocus.terrain}</span>
             </div>
           ) : null}
         </div>

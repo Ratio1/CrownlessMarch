@@ -139,13 +139,13 @@ export function WorldField({ snapshot }: WorldFieldProps) {
       </div>
 
       <div className="world-field__scene">
-        <article className="world-field__objective">
+        <article className="world-field__objective world-field__objective--primary">
           <div className="panel-title">Field directive</div>
           <strong>{objectiveFocus?.label ?? model.activeQuest?.label ?? 'Hold the line until the shard resolves.'}</strong>
           <p>{objectiveFocus?.detail ?? model.activeQuest?.progress ?? 'No active objective yet. Stay mobile and read the field.'}</p>
           {objectiveFocus ? (
             <div className="play-chip-row">
-              <span className="status-pill">{objectiveFocus.stateLabel}</span>
+              <span className="status-pill status-pill--objective">{objectiveFocus.stateLabel}</span>
               <span className="status-pill">
                 Target {objectiveFocus.target.x},{objectiveFocus.target.y}
               </span>

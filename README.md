@@ -225,7 +225,7 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.3.1
+pnpm live:devnet -- --expect-version=1.4.0
 ```
 
 ## Operational Notes
