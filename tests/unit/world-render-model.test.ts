@@ -67,6 +67,7 @@ function createSnapshot(): GameplayShardSnapshot {
       inventory: [],
       equipment: [],
       unlocks: [],
+      completedQuests: [],
       quests: [
         {
           id: 'survey-the-briar-edge',
@@ -77,6 +78,13 @@ function createSnapshot(): GameplayShardSnapshot {
           progress: 'Push east from the town hearth.',
         },
       ],
+    },
+    objectiveFocus: {
+      label: 'Survey the Briar Edge',
+      detail: 'Reach the Ember Shrine east of town.',
+      stateLabel: 'March to shrine',
+      target: { x: 6, y: 6 },
+      terrain: 'shrine',
     },
     encounter: null,
     movementLocked: false,
@@ -101,6 +109,7 @@ describe('world render model', () => {
     expect(model.cells).toHaveLength(9);
     expect(model.cells[0]?.key).toBe('4:4');
     expect(model.cells[4]?.isCurrent).toBe(true);
+    expect(model.cells[8]?.isObjectiveTarget).toBe(true);
     expect(model.cells[5]?.tile.blocked).toBe(true);
     expect(model.cells[2]?.monster?.label).toBe('Briar Goblin');
     expect(model.cells[1]?.character?.name).toBe('Reed Warden');

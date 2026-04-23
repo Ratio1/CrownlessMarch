@@ -10,10 +10,15 @@ interface WorldFieldProps {
 
 const SHRINE_UNLOCK_ID = 'location:ember-shrine';
 const RUIN_CACHE_UNLOCK_ID = 'location:watchpost-cache';
+const SHRINE_ROAD_SECURED_UNLOCK_ID = 'route:shrine-road-secured';
 
 function buildSiteNotes(snapshot: GameplayShardSnapshot) {
   const unlocks = new Set(snapshot.character.unlocks);
   const readyQuest = snapshot.character.quests.find((quest) => quest.status === 'ready_to_turn_in');
+  const objectiveFocus = snapshot.objectiveFocus;
+  const onObjectiveTile =
+    objectiveFocus?.target.x === snapshot.position.x && objectiveFocus?.target.y === snapshot.position.y;
+  const shrineRoadSecured = unlocks.has(SHRINE_ROAD_SECURED_UNLOCK_ID);
 
   switch (snapshot.currentTile.kind) {
     case 'town':
@@ -21,14 +26,16 @@ function buildSiteNotes(snapshot: GameplayShardSnapshot) {
         readyQuest
           ? `${readyQuest.label} can be debriefed here for durable rewards.`
           : 'Quest debriefs resolve here once an objective is ready.',
-        'Defeats now route back through the town hearth and restore full HP.',
+        shrineRoadSecured
+          ? 'The shrine road is currently secured and marked safe on the field surface.'
+          : 'Defeats now route back through the town hearth and restore full HP.',
       ];
     case 'shrine':
       return [
         unlocks.has(SHRINE_UNLOCK_ID)
           ? 'The Ember Shrine has already been rekindled and remains a rally point.'
           : 'First contact restores full HP and grants a health potion.',
-        'Shrine visits drive the survey and shrine-road quest chain.',
+        onObjectiveTile ? 'This shrine is the current objective anchor for the active contract.' : 'Shrine visits drive the survey and shrine-road quest chain.',
       ];
     case 'ruin':
       return [
@@ -38,9 +45,17 @@ function buildSiteNotes(snapshot: GameplayShardSnapshot) {
         'Ruin lanes stay hostile even after the cache is cleared.',
       ];
     case 'roots':
-      return ['Briar Goblins spawn here and advance the goblin-cull contract.'];
+      return [
+        onObjectiveTile ? 'This roots lane is the current goblin-cull target tile.' : 'Briar Goblins spawn here and advance the goblin-cull contract.',
+      ];
     case 'forest':
-      return ['Sap Wolves prowl these woods and now drive the shrine-road hunt.'];
+      return [
+        shrineRoadSecured && onObjectiveTile
+          ? 'The grove is quiet now. Shrine-road hostiles no longer spawn on this tile.'
+          : onObjectiveTile
+            ? 'This grove is the shrine-road kill zone for the Sap Wolf contract.'
+            : 'The deep woods still crowd the road, but the objective lane is now explicit on the field map.',
+      ];
     case 'road':
       return ['Road tiles keep the route to town readable and fast under pursuit.'];
     case 'water':
@@ -103,6 +118,8 @@ export function WorldField({ snapshot }: WorldFieldProps) {
     .map((cell) => cell.character);
   const siteNotes = buildSiteNotes(snapshot);
   const trailState = buildTrailState(snapshot);
+  const objectiveFocus = snapshot.objectiveFocus;
+  const shrineRoadSecured = snapshot.character.unlocks.includes(SHRINE_ROAD_SECURED_UNLOCK_ID);
 
   return (
     <section className="panel world-field" aria-label="World field">
@@ -115,14 +132,26 @@ export function WorldField({ snapshot }: WorldFieldProps) {
           <span className="status-pill">Ground {model.currentTerrain.label}</span>
           <span className="status-pill">Vision {snapshot.vision.size}x{snapshot.vision.size}</span>
           <span className="status-pill">Hostiles {Object.keys(snapshot.monsters).length}</span>
+          <span className={`status-pill ${shrineRoadSecured ? 'status-pill--online' : ''}`}>
+            Shrine road {shrineRoadSecured ? 'secured' : 'contested'}
+          </span>
         </div>
       </div>
 
       <div className="world-field__scene">
         <article className="world-field__objective">
           <div className="panel-title">Field directive</div>
-          <strong>{model.activeQuest?.label ?? 'Hold the line until the shard resolves.'}</strong>
-          <p>{model.activeQuest?.progress ?? 'No active objective yet. Stay mobile and read the field.'}</p>
+          <strong>{objectiveFocus?.label ?? model.activeQuest?.label ?? 'Hold the line until the shard resolves.'}</strong>
+          <p>{objectiveFocus?.detail ?? model.activeQuest?.progress ?? 'No active objective yet. Stay mobile and read the field.'}</p>
+          {objectiveFocus ? (
+            <div className="play-chip-row">
+              <span className="status-pill">{objectiveFocus.stateLabel}</span>
+              <span className="status-pill">
+                Target {objectiveFocus.target.x},{objectiveFocus.target.y}
+              </span>
+              <span className="status-pill">Ground {objectiveFocus.terrain}</span>
+            </div>
+          ) : null}
         </article>
 
         <article className="world-field__objective world-field__objective--terrain">
@@ -149,11 +178,13 @@ export function WorldField({ snapshot }: WorldFieldProps) {
 
       <div className="world-sighting-strip">
         <article className="world-sighting-card">
-          <div className="panel-title">Visible grid</div>
-          <strong>
-            {model.bounds.columns} x {model.bounds.rows}
-          </strong>
-          <p className="muted">Live fog window around the active PC.</p>
+          <div className="panel-title">Objective target</div>
+          <strong>{objectiveFocus ? `${objectiveFocus.target.x},${objectiveFocus.target.y}` : 'None'}</strong>
+          <p className="muted">
+            {objectiveFocus
+              ? `${objectiveFocus.stateLabel} on ${objectiveFocus.terrain}.`
+              : 'No active route marker on the current shard.'}
+          </p>
         </article>
 
         <article className="world-sighting-card">

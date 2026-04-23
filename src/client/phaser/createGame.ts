@@ -207,6 +207,13 @@ function drawTile(
     graphics.strokeRoundedRect(x + 5, y + 5, tileSize - 10, tileSize - 10, 14);
   }
 
+  if (cell.isObjectiveTarget) {
+    graphics.lineStyle(3, 0xf7d889, 0.9);
+    graphics.strokeRoundedRect(x + 8, y + 8, tileSize - 16, tileSize - 16, 14);
+    graphics.lineStyle(1, 0xf7d889, 0.32);
+    graphics.strokeRoundedRect(x + 13, y + 13, tileSize - 26, tileSize - 26, 10);
+  }
+
   if (cell.isCurrent && snapshot.encounter) {
     const encounterEdge =
       snapshot.encounter.status === 'active'

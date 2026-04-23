@@ -33,6 +33,7 @@ export function GameShell({
   const encounter = snapshot?.encounter ?? null;
   const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
   const primaryQuest = snapshot?.character.quests?.[0] ?? null;
+  const objectiveFocus = snapshot?.objectiveFocus ?? null;
 
   return (
     <section className="play-shell">
@@ -59,15 +60,23 @@ export function GameShell({
           <span className="status-pill">Release {versionLabel}</span>
           <span className="status-pill">Region {snapshot?.regionId ?? 'binding'}</span>
           <span className="status-pill">
-            Directive {primaryQuest ? primaryQuest.label : 'Hold until the shard settles'}
+            Directive {objectiveFocus?.label ?? primaryQuest?.label ?? 'Hold until the shard settles'}
           </span>
         </div>
 
         {primaryQuest ? (
           <div className="play-header__directive">
             <div className="panel-title">Current directive</div>
-            <strong>{primaryQuest.progress}</strong>
+            <strong>{objectiveFocus?.detail ?? primaryQuest.progress}</strong>
             <p className="muted">{primaryQuest.objective}</p>
+            {objectiveFocus ? (
+              <div className="play-chip-row">
+                <span className="status-pill">{objectiveFocus.stateLabel}</span>
+                <span className="status-pill">
+                  Target {objectiveFocus.target.x},{objectiveFocus.target.y}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

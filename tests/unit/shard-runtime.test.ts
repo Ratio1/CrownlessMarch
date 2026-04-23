@@ -335,6 +335,64 @@ describe('shard runtime', () => {
     ]);
   });
 
+  it('turns in the shrine-road hunt, records completion, and clears the grove threat', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({ content });
+
+    const update = runtime.addPlayer({
+      cid: 'cid-secure-2',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Vey',
+        classId: 'fighter',
+        attributes: {
+          strength: 16,
+          dexterity: 14,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+        currency: 14,
+        activeQuestIds: ['secure-the-shrine-road'],
+        unlocks: ['location:ember-shrine'],
+      }),
+      quest_progress: {
+        'secure-the-shrine-road': {
+          status: 'ready_to_turn_in',
+          shrineVisited: true,
+          wolfDefeated: true,
+          wolvesDefeated: 1,
+          target: 1,
+        },
+      },
+    });
+
+    expect(update.progressionToPersist).toMatchObject({
+      xp: 220,
+      gold: 24,
+      activeQuestIds: [],
+      unlocks: expect.arrayContaining(['route:shrine-road-secured']),
+      quest_progress: {
+        'secure-the-shrine-road': {
+          status: 'turned_in',
+        },
+      },
+    });
+    expect(update.snapshot.character.quests).toEqual([]);
+    expect(update.snapshot.character.completedQuests).toEqual([
+      expect.objectContaining({
+        id: 'secure-the-shrine-road',
+        status: 'turned_in',
+      }),
+    ]);
+    expect(update.snapshot.objectiveFocus).toBeNull();
+    expect(Object.values(update.snapshot.monsters).some((monster) => monster.label === 'Sap Wolf')).toBe(false);
+    expect(
+      update.snapshot.activityLog.some((entry) => entry.text.includes('shrine road now reads as secured on the field map'))
+    ).toBe(true);
+  });
+
   it('routes a defeat back to town, restores HP, and deducts supply costs', async () => {
     const content = await loadContentBundle(process.cwd());
     let now = Date.parse('2026-04-22T08:00:00.000Z');

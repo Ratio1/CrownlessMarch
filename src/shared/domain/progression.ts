@@ -216,7 +216,12 @@ function buildActiveQuestIds(value: unknown, questProgress: Record<string, unkno
     return direct;
   }
 
-  return Object.keys(questProgress);
+  return Object.entries(questProgress)
+    .filter((entry) => {
+      const progress = isRecord(entry[1]) ? entry[1] : {};
+      return progress.status !== 'turned_in';
+    })
+    .map(([questId]) => questId);
 }
 
 export function stripShardLocalProgression(snapshot: Record<string, unknown>): Record<string, unknown> {

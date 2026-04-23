@@ -18,6 +18,7 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   const latestSnapshotRef = useRef<GameplayShardSnapshot | null>(null);
   const encounter = snapshot?.encounter ?? null;
   const activeQuest = snapshot?.character.quests[0] ?? null;
+  const objectiveFocus = snapshot?.objectiveFocus ?? null;
 
   useEffect(() => {
     let disposed = false;
@@ -98,8 +99,16 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
       {activeQuest ? (
         <div className="world-canvas__objective">
           <div className="panel-title">March order</div>
-          <strong>{activeQuest.label}</strong>
-          <p>{activeQuest.progress}</p>
+          <strong>{objectiveFocus?.label ?? activeQuest.label}</strong>
+          <p>{objectiveFocus?.detail ?? activeQuest.progress}</p>
+          {objectiveFocus ? (
+            <div className="play-chip-row">
+              <span className="status-pill">{objectiveFocus.stateLabel}</span>
+              <span className="status-pill">
+                {objectiveFocus.target.x},{objectiveFocus.target.y}
+              </span>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {encounter ? (

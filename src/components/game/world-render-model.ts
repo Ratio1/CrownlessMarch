@@ -1,6 +1,7 @@
 import type {
   GameplayCharacterMarker,
   GameplayMonsterMarker,
+  GameplayObjectiveFocus,
   GameplayQuestEntry,
   GameplayShardSnapshot,
   GameplayTileSnapshot,
@@ -113,12 +114,14 @@ export interface WorldRenderCell {
   tile: GameplayTileSnapshot;
   terrain: WorldTerrainDetails;
   isCurrent: boolean;
+  isObjectiveTarget: boolean;
   character: GameplayCharacterMarker | null;
   monster: GameplayMonsterMarker | null;
 }
 
 export interface WorldRenderModel {
   activeQuest: GameplayQuestEntry | null;
+  objectiveFocus: GameplayObjectiveFocus | null;
   bounds: {
     minX: number;
     maxX: number;
@@ -178,6 +181,7 @@ export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRen
         tile,
         terrain: WORLD_TERRAIN_DETAILS[tile.kind],
         isCurrent: snapshot.position.x === x && snapshot.position.y === y,
+        isObjectiveTarget: snapshot.objectiveFocus?.target.x === x && snapshot.objectiveFocus?.target.y === y,
         character: characterAt(snapshot, x, y),
         monster: monsterAt(snapshot, x, y),
       });
@@ -186,6 +190,7 @@ export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRen
 
   return {
     activeQuest: snapshot.character.quests[0] ?? null,
+    objectiveFocus: snapshot.objectiveFocus,
     bounds: {
       minX,
       maxX,

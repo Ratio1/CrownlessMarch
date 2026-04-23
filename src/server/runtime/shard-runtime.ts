@@ -12,6 +12,7 @@ import type {
   GameplayActivityEntry,
   GameplayCharacterCard,
   GameplayMonsterMarker,
+  GameplayObjectiveFocus,
   GameplayQuestEntry,
   GameplayShardSnapshot,
   GameplayTileSnapshot,
@@ -71,19 +72,18 @@ const DIRECTION_DELTAS: Record<Direction, PresencePosition> = {
   east: { x: 1, y: 0 },
 };
 
-const HOSTILE_TILE_MONSTERS: Record<string, string> = {
-  roots: 'briar-goblin',
-  forest: 'sap-wolf',
-  ruin: 'briar-goblin',
-};
-
 const ACTIVITY_LOG_LIMIT = 8;
 const SURVEY_QUEST_ID = 'survey-the-briar-edge';
 const BURN_QUEST_ID = 'burn-the-first-nest';
 const SECURE_SHRINE_ROAD_QUEST_ID = 'secure-the-shrine-road';
 const SHRINE_UNLOCK_ID = 'location:ember-shrine';
 const RUIN_CACHE_UNLOCK_ID = 'location:watchpost-cache';
+const SHRINE_ROAD_SECURED_UNLOCK_ID = 'route:shrine-road-secured';
 const DEFEAT_SUPPLY_LOSS_GOLD = 3;
+const TOWN_TILE = { x: 5, y: 5 } as const;
+const WATCHPOST_LANE_TILE = { x: 6, y: 5 } as const;
+const EMBER_SHRINE_TILE = { x: 7, y: 6 } as const;
+const SHRINE_ROAD_GROVE_TILE = { x: 7, y: 5 } as const;
 
 const FALLBACK_CONTENT: ContentBundle = {
   classes: [
@@ -154,6 +154,10 @@ function getUnlocks(snapshot: Record<string, unknown>) {
     : [];
 }
 
+function hasUnlock(snapshot: Record<string, unknown>, unlockId: string) {
+  return getUnlocks(snapshot).includes(unlockId);
+}
+
 function withUnlock(snapshot: Record<string, unknown>, unlockId: string): Record<string, unknown> {
   const unlocks = getUnlocks(snapshot);
 
@@ -182,6 +186,14 @@ function getQuestStatus(snapshot: Record<string, unknown>, questId: string) {
 function getQuestCounter(snapshot: Record<string, unknown>, questId: string, key: string, fallback: number) {
   const value = Number(getQuestProgressRecord(snapshot, questId)[key] ?? fallback);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function isTilePosition(tile: { x: number; y: number }, target: { x: number; y: number }) {
+  return tile.x === target.x && tile.y === target.y;
+}
+
+function isShrineRoadSecured(snapshot: Record<string, unknown>) {
+  return hasUnlock(snapshot, SHRINE_ROAD_SECURED_UNLOCK_ID) || getQuestStatus(snapshot, SECURE_SHRINE_ROAD_QUEST_ID) === 'turned_in';
 }
 
 function getActiveQuestIds(snapshot: Record<string, unknown>) {
@@ -259,6 +271,210 @@ function appendActivityLog(
   };
 }
 
+function questProgressText(snapshot: Record<string, unknown>, questId: string) {
+  if (questId === SURVEY_QUEST_ID) {
+    const status = getQuestStatus(snapshot, questId);
+    if (status === 'turned_in') {
+      return 'Debrief complete. Captain Mire now holds the shrine report.';
+    }
+    return status === 'ready_to_turn_in'
+      ? 'Return to town with the shrine report.'
+      : 'Reach the Ember Shrine east of town.';
+  }
+
+  if (questId === BURN_QUEST_ID) {
+    const status = getQuestStatus(snapshot, questId);
+    if (status === 'turned_in') {
+      return 'Debrief complete. The first goblin nest burned clean.';
+    }
+    return status === 'ready_to_turn_in'
+      ? 'Return to town for the debrief.'
+      : `${Math.min(
+          getQuestCounter(snapshot, questId, 'goblinsDefeated', 0),
+          getQuestCounter(snapshot, questId, 'target', 2),
+        )}/${getQuestCounter(snapshot, questId, 'target', 2)} Briar Goblins defeated.`;
+  }
+
+  if (questId === SECURE_SHRINE_ROAD_QUEST_ID) {
+    const status = getQuestStatus(snapshot, questId);
+    if (status === 'turned_in') {
+      return 'Debrief complete. The shrine road is holding under ember watchfires.';
+    }
+    if (status === 'ready_to_turn_in') {
+      return 'Return to town with word that the shrine road is safe.';
+    }
+
+    const progress = getQuestProgressRecord(snapshot, questId);
+    if (progress.shrineVisited === true && progress.wolfDefeated === true) {
+      return 'Return to town with word that the shrine road is safe.';
+    }
+    if (progress.shrineVisited === true) {
+      return `${Math.min(
+        getQuestCounter(snapshot, questId, 'wolvesDefeated', 0),
+        getQuestCounter(snapshot, questId, 'target', 1),
+      )}/${getQuestCounter(snapshot, questId, 'target', 1)} Sap Wolves defeated on the shrine road.`;
+    }
+    if (progress.wolfDefeated === true) {
+      return 'Return to the Ember Shrine to bless the cleared grove.';
+    }
+    return 'Revisit the Ember Shrine, then cull the Sap Wolf in the grove.';
+  }
+
+  return 'In progress.';
+}
+
+function toQuestEntry(snapshot: Record<string, unknown>, content: ContentBundle, questId: string): GameplayQuestEntry | null {
+  const quest = content.quests.find((entry) => entry.id === questId);
+
+  if (!quest) {
+    return null;
+  }
+
+  const progress = getQuestProgressRecord(snapshot, questId);
+  const status = getQuestStatus(snapshot, questId);
+  const entry: GameplayQuestEntry = {
+    id: quest.id,
+    label: quest.label,
+    objective: quest.objective,
+    rewardXp: quest.rewardXp,
+    status,
+    progress: questProgressText(snapshot, quest.id),
+  };
+
+  if (status === 'turned_in' && typeof progress.turnedInAt === 'string') {
+    entry.completedAt = progress.turnedInAt;
+  }
+
+  return entry;
+}
+
+function toCompletedQuestEntries(snapshot: Record<string, unknown>, content: ContentBundle): GameplayQuestEntry[] {
+  const questProgress = isRecord(snapshot.quest_progress) ? snapshot.quest_progress : {};
+
+  return Object.keys(questProgress)
+    .map((questId) => toQuestEntry(snapshot, content, questId))
+    .filter((entry): entry is GameplayQuestEntry => {
+      if (!entry) {
+        return false;
+      }
+
+      return entry.status === 'turned_in';
+    })
+    .sort((left, right) => {
+      const leftTime = left.completedAt ? Date.parse(left.completedAt) : 0;
+      const rightTime = right.completedAt ? Date.parse(right.completedAt) : 0;
+      return rightTime - leftTime;
+    });
+}
+
+function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBundle): GameplayObjectiveFocus | null {
+  const questId = getActiveQuestIds(snapshot)[0];
+
+  if (!questId) {
+    return null;
+  }
+
+  const quest = content.quests.find((entry) => entry.id === questId);
+
+  if (!quest) {
+    return null;
+  }
+
+  if (questId === SURVEY_QUEST_ID) {
+    const ready = getQuestStatus(snapshot, questId) === 'ready_to_turn_in';
+    return {
+      label: quest.label,
+      detail: ready ? 'Carry the shrine report back to Captain Mire.' : 'Reach the Ember Shrine east of town.',
+      stateLabel: ready ? 'Return to town' : 'March to shrine',
+      target: ready ? TOWN_TILE : EMBER_SHRINE_TILE,
+      terrain: ready ? 'town' : 'shrine',
+    };
+  }
+
+  if (questId === BURN_QUEST_ID) {
+    const ready = getQuestStatus(snapshot, questId) === 'ready_to_turn_in';
+    return {
+      label: quest.label,
+      detail: ready ? 'Return to town for the watchpost debrief.' : 'Cull Briar Goblins on the watchpost lane.',
+      stateLabel: ready ? 'Return to town' : 'Cull goblins',
+      target: ready ? TOWN_TILE : WATCHPOST_LANE_TILE,
+      terrain: ready ? 'town' : 'roots',
+    };
+  }
+
+  if (questId === SECURE_SHRINE_ROAD_QUEST_ID) {
+    const status = getQuestStatus(snapshot, questId);
+    const progress = getQuestProgressRecord(snapshot, questId);
+
+    if (status === 'ready_to_turn_in') {
+      return {
+        label: quest.label,
+        detail: 'Report back to town that the shrine road is holding.',
+        stateLabel: 'Return to town',
+        target: TOWN_TILE,
+        terrain: 'town',
+      };
+    }
+
+    if (progress.wolfDefeated === true && progress.shrineVisited !== true) {
+      return {
+        label: quest.label,
+        detail: 'Return to the Ember Shrine to bless the cleared grove.',
+        stateLabel: 'Revisit shrine',
+        target: EMBER_SHRINE_TILE,
+        terrain: 'shrine',
+      };
+    }
+
+    if (progress.shrineVisited === true) {
+      return {
+        label: quest.label,
+        detail: isShrineRoadSecured(snapshot)
+          ? 'The grove is quiet, but return to town and close the contract.'
+          : 'Bring down the Sap Wolf in the grove north of the shrine.',
+        stateLabel: 'Break the grove wolf',
+        target: SHRINE_ROAD_GROVE_TILE,
+        terrain: 'forest',
+      };
+    }
+
+    return {
+      label: quest.label,
+      detail: 'Revisit the Ember Shrine and prepare the grove hunt.',
+      stateLabel: 'Revisit shrine',
+      target: EMBER_SHRINE_TILE,
+      terrain: 'shrine',
+    };
+  }
+
+  return {
+    label: quest.label,
+    detail: quest.objective,
+    stateLabel: 'Hold course',
+    target: TOWN_TILE,
+    terrain: 'town',
+  };
+}
+
+function resolveHostileMonsterId(
+  snapshot: Record<string, unknown>,
+  tile: { x: number; y: number; kind: GameplayTileSnapshot['kind'] }
+) {
+  if (tile.kind === 'roots' || tile.kind === 'ruin') {
+    return 'briar-goblin';
+  }
+
+  if (tile.kind !== 'forest') {
+    return null;
+  }
+
+  if (isTilePosition(tile, SHRINE_ROAD_GROVE_TILE)) {
+    return isShrineRoadSecured(snapshot) ? null : 'sap-wolf';
+  }
+
+  return null;
+}
+
 function healToFull(snapshot: Record<string, unknown>): Record<string, unknown> {
   const normalized = normalizeDurableProgression(snapshot);
   const hitPoints = isRecord(normalized.hitPoints) ? clone(normalized.hitPoints) : { current: 10, max: 10, bloodied: 5 };
@@ -288,42 +504,14 @@ function toQuestEntries(snapshot: Record<string, unknown>, content: ContentBundl
     : [];
 
   return questIds
-    .map((questId) => content.quests.find((entry) => entry.id === questId))
-    .filter((entry): entry is ContentBundle['quests'][number] => Boolean(entry))
-    .map((quest) => ({
-      id: quest.id,
-      label: quest.label,
-      objective: quest.objective,
-      rewardXp: quest.rewardXp,
-      status: getQuestStatus(snapshot, quest.id) === 'ready_to_turn_in' ? 'ready_to_turn_in' : 'active',
-      progress:
-        quest.id === SURVEY_QUEST_ID
-          ? getQuestStatus(snapshot, quest.id) === 'ready_to_turn_in'
-            ? 'Return to town with the shrine report.'
-            : 'Reach the Ember Shrine east of town.'
-          : quest.id === BURN_QUEST_ID
-            ? getQuestStatus(snapshot, quest.id) === 'ready_to_turn_in'
-              ? 'Return to town for the debrief.'
-              : `${Math.min(
-                  getQuestCounter(snapshot, quest.id, 'goblinsDefeated', 0),
-                  getQuestCounter(snapshot, quest.id, 'target', 2),
-                )}/${getQuestCounter(snapshot, quest.id, 'target', 2)} Briar Goblins defeated.`
-            : quest.id === SECURE_SHRINE_ROAD_QUEST_ID
-              ? getQuestStatus(snapshot, quest.id) === 'ready_to_turn_in'
-                ? 'Return to town with word that the shrine road is safe.'
-                : getQuestProgressRecord(snapshot, quest.id).shrineVisited === true &&
-                    getQuestProgressRecord(snapshot, quest.id).wolfDefeated === true
-                  ? 'Return to town with word that the shrine road is safe.'
-                  : getQuestProgressRecord(snapshot, quest.id).shrineVisited === true
-                    ? `${Math.min(
-                        getQuestCounter(snapshot, quest.id, 'wolvesDefeated', 0),
-                        getQuestCounter(snapshot, quest.id, 'target', 1),
-                      )}/${getQuestCounter(snapshot, quest.id, 'target', 1)} Sap Wolves defeated on the shrine road.`
-                    : getQuestProgressRecord(snapshot, quest.id).wolfDefeated === true
-                      ? 'Return to the Ember Shrine to bless the cleared grove.'
-                      : 'Revisit the Ember Shrine, then cull the Sap Wolf in the grove.'
-              : 'In progress.',
-    }));
+    .map((questId) => toQuestEntry(snapshot, content, questId))
+    .filter((entry): entry is GameplayQuestEntry => {
+      if (!entry) {
+        return false;
+      }
+
+      return entry.status === 'active' || entry.status === 'ready_to_turn_in';
+    });
 }
 
 function toInventory(snapshot: Record<string, unknown>, content: ContentBundle) {
@@ -396,6 +584,7 @@ function toCharacterCard(
     equipment: toEquipment(player.snapshot, content),
     unlocks: getUnlocks(player.snapshot),
     quests: toQuestEntries(player.snapshot, content),
+    completedQuests: toCompletedQuestEntries(player.snapshot, content),
   };
 }
 
@@ -484,7 +673,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     player.position = nextPosition;
     this.applyTileInteractions(player, tile, 'move');
 
-    const monsterId = HOSTILE_TILE_MONSTERS[tile.kind];
+    const monsterId = resolveHostileMonsterId(player.snapshot, tile);
     if (monsterId) {
       const monster = this.content.monsters.find((entry) => entry.id === monsterId);
       if (monster) {
@@ -587,7 +776,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     const currentTile = this.toGameplayTileSnapshot(this.getTileAt(position.x, position.y));
     const visibleTiles = this.getVisibleTiles(position, vision.radius);
     const visibleCharacters = this.getVisibleCharacters(characterId, position, vision.radius);
-    const visibleMonsters = this.getVisibleMonsters(position, vision.radius);
+    const visibleMonsters = this.getVisibleMonsters(player?.snapshot ?? {}, position, vision.radius);
     const fallbackCard = player
       ? toCharacterCard(player, this.content)
       : {
@@ -609,6 +798,7 @@ export class ShardRuntime implements ShardRuntimeLike {
           equipment: [],
           unlocks: [],
           quests: [],
+          completedQuests: [],
         };
 
     return {
@@ -620,6 +810,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       characters: visibleCharacters,
       monsters: visibleMonsters,
       character: fallbackCard,
+      objectiveFocus: player ? toObjectiveFocus(player.snapshot, this.content) : null,
       encounter: player?.activeEncounter ? clone(player.activeEncounter) : null,
       movementLocked: player?.activeEncounter?.status === 'active',
       activityLog: player ? toActivityEntries(player.snapshot) : [],
@@ -669,7 +860,11 @@ export class ShardRuntime implements ShardRuntimeLike {
     return visible;
   }
 
-  private getVisibleMonsters(position: PresencePosition, radius: number): Record<string, GameplayMonsterMarker> {
+  private getVisibleMonsters(
+    snapshot: Record<string, unknown>,
+    position: PresencePosition,
+    radius: number
+  ): Record<string, GameplayMonsterMarker> {
     const visible: Record<string, GameplayMonsterMarker> = {};
 
     for (let y = position.y - radius; y <= position.y + radius; y += 1) {
@@ -679,7 +874,7 @@ export class ShardRuntime implements ShardRuntimeLike {
         }
 
         const tile = this.getTileAt(x, y);
-        const monsterId = HOSTILE_TILE_MONSTERS[tile.kind];
+        const monsterId = resolveHostileMonsterId(snapshot, tile);
         if (!monsterId) {
           continue;
         }
@@ -1047,7 +1242,14 @@ export class ShardRuntime implements ShardRuntimeLike {
         'The shrine road holds for another night under ember watchfires.',
         nowIso,
       );
+      nextSnapshot = withUnlock(nextSnapshot, SHRINE_ROAD_SECURED_UNLOCK_ID);
       nextSnapshot = addInventoryItem(nextSnapshot, 'field-rations');
+      nextSnapshot = appendActivityLog(
+        nextSnapshot,
+        'Captain Mire posts ember watchfires through the grove. The shrine road now reads as secured on the field map.',
+        'system',
+        nowIso,
+      );
       changed = true;
     }
 

@@ -524,6 +524,11 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.world-field__objective .play-chip-row,
+.play-header__directive .play-chip-row {
+  margin-top: auto;
+}
+
 .world-field__objective--terrain {
   background: linear-gradient(135deg, rgba(40, 80, 59, 0.18), rgba(255, 255, 255, 0.03));
 }
@@ -1217,6 +1222,11 @@ select {
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.quest-card--completed {
+  background: linear-gradient(135deg, rgba(127, 207, 141, 0.08), rgba(255, 255, 255, 0.03));
+  border-color: rgba(127, 207, 141, 0.16);
 }
 
 .quest-card__header {

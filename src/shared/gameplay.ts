@@ -47,8 +47,20 @@ export interface GameplayQuestEntry {
   label: string;
   objective: string;
   rewardXp: number;
-  status: 'active' | 'ready_to_turn_in';
+  status: 'active' | 'ready_to_turn_in' | 'turned_in';
   progress: string;
+  completedAt?: string;
+}
+
+export interface GameplayObjectiveFocus {
+  label: string;
+  detail: string;
+  stateLabel: string;
+  target: {
+    x: number;
+    y: number;
+  };
+  terrain: GameplayTileSnapshot['kind'];
 }
 
 export interface GameplayActivityEntry {
@@ -79,6 +91,7 @@ export interface GameplayCharacterCard {
   equipment: GameplayEquipmentItem[];
   unlocks: string[];
   quests: GameplayQuestEntry[];
+  completedQuests: GameplayQuestEntry[];
 }
 
 export interface GameplayShardSnapshot {
@@ -96,6 +109,7 @@ export interface GameplayShardSnapshot {
   characters: Record<string, GameplayCharacterMarker>;
   monsters: Record<string, GameplayMonsterMarker>;
   character: GameplayCharacterCard;
+  objectiveFocus: GameplayObjectiveFocus | null;
   encounter: EncounterSnapshot | null;
   movementLocked: boolean;
   activityLog: GameplayActivityEntry[];
