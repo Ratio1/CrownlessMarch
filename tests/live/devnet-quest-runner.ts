@@ -28,6 +28,7 @@ interface LiveOptions {
   expectVersion: string | null;
   pollTimeoutMs: number;
   resendToken: string;
+  maxDefeats: number;
 }
 
 interface HealthInfo {
@@ -71,9 +72,14 @@ function readFlag(name: string) {
 
 function parseOptions(): LiveOptions {
   const resendToken = process.env.RESEND_TOKEN ?? process.env.RESEND_API_KEY ?? null;
+  const maxDefeats = Number(readFlag('--max-defeats') ?? process.env.THORNWRITHE_LIVE_MAX_DEFEATS ?? 1);
 
   if (!resendToken) {
     throw new Error('RESEND_TOKEN or RESEND_API_KEY is required for the live devnet runner');
+  }
+
+  if (!Number.isFinite(maxDefeats) || maxDefeats < 0) {
+    throw new Error('--max-defeats must be a non-negative number');
   }
 
   return {
@@ -81,6 +87,7 @@ function parseOptions(): LiveOptions {
     expectVersion: readFlag('--expect-version') ?? process.env.THORNWRITHE_EXPECT_VERSION ?? null,
     pollTimeoutMs: Number(readFlag('--timeout-ms') ?? process.env.THORNWRITHE_LIVE_TIMEOUT_MS ?? 180_000),
     resendToken,
+    maxDefeats,
   };
 }
 
@@ -432,8 +439,9 @@ async function waitForEncounterResolution(session: LiveShardSession, snapshot: G
   }, 15_000);
 }
 
-async function runQuestLoop(session: LiveShardSession) {
+async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
   let guard = 0;
+  let defeats = 0;
   const recentSteps: string[] = [];
   let lastQuestSignature = '';
   let lastFocusSignature = '';
@@ -493,7 +501,17 @@ async function runQuestLoop(session: LiveShardSession) {
         session.sendOverride(command);
       }
 
-      await waitForEncounterResolution(session, snapshot);
+      const resolved = await waitForEncounterResolution(session, snapshot);
+      if (resolved.encounter?.status === 'lost') {
+        defeats += 1;
+        record(`encounter-lost:${snapshot.encounter.monsterName ?? 'unknown'}:defeats=${defeats}`);
+
+        if (defeats > maxDefeats) {
+          throw new Error(
+            `Quest loop exceeded the defeat budget (${defeats}/${maxDefeats}). Recent steps: ${recentSteps.join(' | ')}`
+          );
+        }
+      }
       continue;
     }
 
@@ -554,7 +572,10 @@ async function runQuestLoop(session: LiveShardSession) {
     throw new Error(`Quest loop finished without a final state. Recent steps: ${recentSteps.join(' | ')}`);
   }
 
-  return session.latestState;
+  return {
+    finalState: session.latestState,
+    defeats,
+  };
 }
 
 async function main() {
@@ -650,7 +671,7 @@ async function main() {
     logStage('connecting websocket');
     await session.connect();
     logStage(`attached to ${session.shardWorldInstanceId ?? 'unknown-shard'}, running quest loop`);
-    const finalState = await runQuestLoop(session);
+    const { finalState, defeats } = await runQuestLoop(session, options.maxDefeats);
     const secureQuest = finalState?.character.completedQuests.find((quest) => quest.id === 'secure-the-shrine-road') ?? null;
 
     if (!finalState || !secureQuestCompleted(finalState) || !secureQuest) {
@@ -672,6 +693,8 @@ async function main() {
           finalPosition: finalState.position,
           finalGround: finalState.currentTile.kind,
           secureQuest,
+          defeats,
+          maxDefeats: options.maxDefeats,
           completedQuestCount: finalState.character.completedQuests.length,
           gold: finalState.character.gold,
           xp: finalState.character.xp,

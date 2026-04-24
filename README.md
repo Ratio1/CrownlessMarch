@@ -169,7 +169,7 @@ Proxy note:
 
 `pnpm test`, `pnpm lint`, and `pnpm typecheck` are the local verification commands used in this repo.
 
-`pnpm live:devnet` runs the public devnet quest runner in `tests/live/devnet-quest-runner.ts`. It waits for `/e`, registers a fresh account through Resend, verifies the email link, creates a character, attaches over `/ws`, and drives the live quest chain through `Secure the Shrine Road`.
+`pnpm live:devnet` runs the public devnet quest runner in `tests/live/devnet-quest-runner.ts`. It waits for `/e`, registers a fresh account through Resend, verifies the email link, creates a character, attaches over `/ws`, and drives the live quest chain through `Secure the Shrine Road`. The runner fails if the route exceeds its defeat budget, which defaults to one defeat and can be changed with `--max-defeats`.
 
 `GET /e` returns the current Thornwrithe version contract as JSON and mirrors it in headers:
 
@@ -230,7 +230,7 @@ pnpm live:devnet -- --expect-version=1.4.0
 
 ## Operational Notes
 
-The repo includes a `syncPresenceHset()` helper in `src/server/platform/cstore-presence.ts`, but `server.ts` does not wire it into startup yet. Treat fresh-start presence state as best-effort until you add startup `hsync` or enforce it outside the app.
+`server.ts` now blocks startup on `syncPresenceHset()` before it binds the gameplay WebSocket server. A thorn node that cannot refresh the Thornwrithe presence hset should fail fast instead of serving a stale duplicate-login view.
 
 ## Admin Surface
 

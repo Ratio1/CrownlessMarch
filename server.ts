@@ -101,6 +101,7 @@ export async function createServer() {
   const content = await loadContentBundle(process.cwd());
   const ratio1 = getRatio1ServerClient();
   const presenceStore = createPresenceLeaseStore({ cstore: ratio1.cstore });
+  await presenceStore.syncPresenceHset();
   const characterStore = createCharacterCheckpointStore({ r1fs: ratio1.r1fs });
   const shardRuntime = new ShardRuntime({ content });
   const persistenceService = createPersistenceService({

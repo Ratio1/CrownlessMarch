@@ -3,6 +3,7 @@
  */
 import { loadContentBundle } from '../../src/server/content/load-content';
 import { buildInitialCharacterSnapshot } from '../../src/shared/domain/progression';
+import type { GameplayDirection, GameplayOverrideCommand, GameplayShardSnapshot } from '../../src/shared/gameplay';
 import { ShardRuntime } from '../../src/server/runtime/shard-runtime';
 
 function makeRandom(sequence: number[]) {
@@ -11,6 +12,128 @@ function makeRandom(sequence: number[]) {
     const value = sequence[index];
     index += 1;
     return value ?? 0;
+  };
+}
+
+function makeSeededRandom(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function nextStepDirection(
+  current: { x: number; y: number },
+  target: { x: number; y: number }
+): GameplayDirection | null {
+  if (current.x < target.x) {
+    return 'east';
+  }
+
+  if (current.x > target.x) {
+    return 'west';
+  }
+
+  if (current.y < target.y) {
+    return 'south';
+  }
+
+  if (current.y > target.y) {
+    return 'north';
+  }
+
+  return null;
+}
+
+function secureQuestCompleted(snapshot: GameplayShardSnapshot) {
+  return (
+    snapshot.character.completedQuests.some((quest) => quest.id === 'secure-the-shrine-road') &&
+    snapshot.character.unlocks.includes('route:shrine-road-secured')
+  );
+}
+
+function liveRunnerCommand(snapshot: GameplayShardSnapshot): GameplayOverrideCommand {
+  const hero = snapshot.encounter?.combatants.find((entry) => entry.kind === 'hero') ?? null;
+  const hasPotion = snapshot.character.inventory.some((entry) => entry.id === 'health-potion');
+
+  if (hero && hasPotion) {
+    const bloodiedThreshold = Math.max(1, Math.floor(hero.maxHp / 2));
+    if (hero.currentHp <= bloodiedThreshold) {
+      return 'potion';
+    }
+  }
+
+  return 'encounter power';
+}
+
+function runLiveQuestRoute(input: {
+  runtime: ShardRuntime;
+  characterId: string;
+  initial: GameplayShardSnapshot;
+  advanceTime: (ms: number) => void;
+}) {
+  let update = { snapshot: input.initial };
+  let defeats = 0;
+  let wins = 0;
+
+  for (let guard = 0; guard < 240 && !secureQuestCompleted(update.snapshot); guard += 1) {
+    const snapshot = update.snapshot;
+
+    if (snapshot.encounter?.status === 'active') {
+      if (snapshot.encounter.queuedOverrides.length === 0) {
+        input.runtime.queueOverride(input.characterId, liveRunnerCommand(snapshot));
+      }
+
+      input.advanceTime(4_100);
+      update = input.runtime.tickPlayer(input.characterId);
+
+      if (update.snapshot.encounter?.status === 'lost') {
+        defeats += 1;
+      }
+
+      if (update.snapshot.encounter?.status === 'won') {
+        wins += 1;
+      }
+
+      continue;
+    }
+
+    const focus = snapshot.objectiveFocus;
+    if (!focus) {
+      break;
+    }
+
+    const direction = nextStepDirection(snapshot.position, focus.target);
+    if (!direction) {
+      const activeQuest = snapshot.character.quests[0]?.label ?? null;
+
+      if (activeQuest === 'Burn the First Nest' && snapshot.currentTile.kind === 'roots') {
+        update = input.runtime.movePlayer(input.characterId, 'west');
+        continue;
+      }
+
+      if (
+        activeQuest === 'Secure the Shrine Road' &&
+        snapshot.currentTile.kind === 'forest' &&
+        focus.stateLabel === 'Break the grove wolf'
+      ) {
+        update = input.runtime.movePlayer(input.characterId, 'south');
+        continue;
+      }
+
+      input.advanceTime(1_000);
+      update = input.runtime.tickPlayer(input.characterId);
+      continue;
+    }
+
+    update = input.runtime.movePlayer(input.characterId, direction);
+  }
+
+  return {
+    snapshot: update.snapshot,
+    defeats,
+    wins,
   };
 }
 
@@ -391,6 +514,49 @@ describe('shard runtime', () => {
     expect(
       update.snapshot.activityLog.some((entry) => entry.text.includes('shrine road now reads as secured on the field map'))
     ).toBe(true);
+  });
+
+  it('keeps the starter live quest route from relying on repeated defeat loops', async () => {
+    const content = await loadContentBundle(process.cwd());
+    let now = Date.parse('2026-04-22T07:30:00.000Z');
+    const runtime = new ShardRuntime({
+      content,
+      now: () => now,
+      random: makeSeededRandom(42),
+    });
+    const characterId = 'cid-live-balance-1';
+
+    const initial = runtime.addPlayer({
+      cid: characterId,
+      ...buildInitialCharacterSnapshot({
+        name: 'Warden',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 14,
+          constitution: 11,
+          intelligence: 10,
+          wisdom: 9,
+          charisma: 8,
+        },
+        inventory: ['field-rations', 'field-rations'],
+        equipment: { weapon: 'rusted-sword', armor: 'patchwork-leather' },
+        currency: 7,
+        activeQuestIds: ['survey-the-briar-edge'],
+      }),
+    });
+
+    const result = runLiveQuestRoute({
+      runtime,
+      characterId,
+      initial: initial.snapshot,
+      advanceTime: (ms) => {
+        now += ms;
+      },
+    });
+
+    expect(secureQuestCompleted(result.snapshot)).toBe(true);
+    expect(result.defeats).toBeLessThanOrEqual(1);
   });
 
   it('routes a defeat back to town, restores HP, and deducts supply costs', async () => {

@@ -9,11 +9,11 @@
       "reflex": 13,
       "will": 11
     },
-    "hitPoints": 18,
-    "attackBonus": 4,
+    "hitPoints": 12,
+    "attackBonus": 2,
     "damage": {
-      "dice": "1d6",
-      "bonus": 2
+      "dice": "1d4",
+      "bonus": 0
     },
     "behavior": "skirmisher"
   },
@@ -27,11 +27,11 @@
       "reflex": 14,
       "will": 11
     },
-    "hitPoints": 24,
-    "attackBonus": 5,
+    "hitPoints": 14,
+    "attackBonus": 3,
     "damage": {
-      "dice": "1d8",
-      "bonus": 3
+      "dice": "1d4",
+      "bonus": 1
     },
     "behavior": "skirmisher"
   },
