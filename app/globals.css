@@ -172,6 +172,10 @@ select {
   font-weight: 700;
 }
 
+.thornwrithe-ui:has(.page--play) .release-badge {
+  display: none;
+}
+
 .auth-shell {
   width: min(100%, 1120px);
   display: grid;
@@ -362,16 +366,24 @@ select {
 }
 
 .play-header {
-  padding: 24px;
+  position: relative;
+  padding: 14px 18px;
   display: grid;
-  gap: 16px;
+  gap: 14px;
+  grid-template-columns: minmax(140px, 0.45fr) minmax(220px, 0.8fr) minmax(0, 1fr);
+  align-items: center;
 }
 
 .play-header h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5vw, 4.1rem);
-  line-height: 0.94;
+  font-size: clamp(1.55rem, 2.5vw, 2.15rem);
+  line-height: 0.92;
+}
+
+.play-header__identity {
+  display: grid;
+  gap: 2px;
 }
 
 .play-header__copy {
@@ -382,19 +394,21 @@ select {
 
 .play-header__status {
   display: grid;
-  gap: 8px;
+  gap: 5px;
 }
 
 .play-header__chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
 }
 
 .play-header__directive {
   display: grid;
-  gap: 6px;
-  padding: 14px 16px;
+  grid-column: 1 / -1;
+  gap: 5px;
+  padding: 10px 12px;
   border-radius: var(--radius-lg);
   background: linear-gradient(135deg, rgba(247, 201, 120, 0.08), rgba(255, 255, 255, 0.03));
   border: 1px solid rgba(247, 201, 120, 0.14);
@@ -504,6 +518,7 @@ select {
 }
 
 .world-field__surface {
+  order: -1;
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -798,10 +813,52 @@ select {
 
 .world-canvas__alert {
   right: 18px;
-  top: 92px;
-  min-width: 220px;
+  top: 84px;
+  min-width: 250px;
+  max-width: min(360px, calc(100% - 36px));
   border-color: rgba(231, 120, 87, 0.18);
   background: rgba(38, 15, 11, 0.76);
+}
+
+.world-canvas__alert--active {
+  border-color: rgba(247, 201, 120, 0.3);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(247, 201, 120, 0.08),
+    0 0 26px rgba(247, 201, 120, 0.08);
+}
+
+.world-canvas__alert-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.world-canvas__combat-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.world-canvas__combat-grid span {
+  padding: 7px 8px;
+  border-radius: 999px;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.world-canvas__alert p {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1.35;
 }
 
 .world-sighting-strip {
@@ -1640,9 +1697,19 @@ select {
     padding: 20px;
   }
 
+  .play-header {
+    padding: 14px;
+    gap: 10px;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .play-header__chips {
+    justify-content: flex-start;
+  }
+
   .login-card h1,
-  .admin-card h1,
-  .play-header h1 {
+  .admin-card h1 {
     font-size: clamp(2.1rem, 10vw, 3.2rem);
   }
 
@@ -1673,10 +1740,21 @@ select {
   }
 
   .release-badge {
+    position: static;
+    width: auto;
+    margin: 0 16px 16px;
     right: 12px;
     left: 12px;
     bottom: 12px;
     justify-content: space-between;
+  }
+
+  .thornwrithe-ui:has(.page--play) .release-badge {
+    display: none;
+  }
+
+  .play-header__directive {
+    display: none;
   }
 
   .world-canvas {
@@ -1687,6 +1765,10 @@ select {
     left: 12px;
     right: 12px;
     top: 12px;
+  }
+
+  .world-canvas__chrome .status-pill:nth-child(2) {
+    display: none;
   }
 
   .world-canvas__marquee {
@@ -1700,6 +1782,7 @@ select {
   .world-canvas__alert {
     position: static;
     margin: 12px;
+    max-width: none;
   }
 
   .world-canvas__hero {
@@ -1708,5 +1791,9 @@ select {
 
   .world-canvas__alert {
     margin-top: 0;
+  }
+
+  .world-canvas__combat-grid {
+    grid-template-columns: 1fr;
   }
 }

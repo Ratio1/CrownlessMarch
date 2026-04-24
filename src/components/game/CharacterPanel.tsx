@@ -66,8 +66,8 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
             <h3>Inventory</h3>
             <div className="token-strip">
               {card.inventory.length === 0 ? <span className="status-pill">Pack is empty.</span> : null}
-              {card.inventory.map((entry) => (
-                <span className="status-pill" key={entry.id}>
+              {card.inventory.map((entry, index) => (
+                <span className="status-pill" key={`${entry.id}:${index}`}>
                   {entry.label}
                 </span>
               ))}

@@ -38,12 +38,9 @@ export function GameShell({
   return (
     <section className="play-shell">
       <header className="panel play-header">
-        <div>
+        <div className="play-header__identity">
           <p className="eyebrow">Thornwrithe live field</p>
-          <h1>Watchfire map, live shard, steel on the line.</h1>
-          <p className="play-header__copy">
-            Read the Briar March as a real surface: route line, threat lane, live fog window, and round-by-round combat pressure without losing the geography of the fight.
-          </p>
+          <h1>Live field</h1>
         </div>
 
         <div className="play-header__status">
@@ -68,7 +65,6 @@ export function GameShell({
           <div className="play-header__directive">
             <div className="panel-title">Current directive</div>
             <strong>{objectiveFocus?.detail ?? primaryQuest.progress}</strong>
-            <p className="muted">{primaryQuest.objective}</p>
             {objectiveFocus ? (
               <div className="play-chip-row">
                 <span className="status-pill">{objectiveFocus.stateLabel}</span>

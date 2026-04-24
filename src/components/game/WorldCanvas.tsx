@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { createGame, type ThornwritheGameBridge } from '@/client/phaser/createGame';
 import type { GameplayShardSnapshot } from '@/shared/gameplay';
+import { buildCombatHudModel } from './combat-hud-model';
 
 interface WorldCanvasProps {
   snapshot: GameplayShardSnapshot | null;
@@ -25,6 +26,7 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   const gameRef = useRef<ThornwritheGameBridge | null>(null);
   const latestSnapshotRef = useRef<GameplayShardSnapshot | null>(null);
   const encounter = snapshot?.encounter ?? null;
+  const combatHud = buildCombatHudModel(encounter);
   const activeQuest = snapshot?.character.quests[0] ?? null;
   const objectiveFocus = snapshot?.objectiveFocus ?? null;
   const visibleMonsterCount = snapshot ? Object.keys(snapshot.monsters).length : 0;
@@ -137,12 +139,19 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
           ) : null}
         </div>
       ) : null}
-      {encounter ? (
-        <div className="world-canvas__alert">
-          <strong>{encounter.status.toUpperCase()}</strong>
-          <span>
-            {encounter.monsterName ?? 'Unknown threat'} | round {encounter.round}
-          </span>
+      {combatHud ? (
+        <div className={`world-canvas__alert ${combatHud.isActive ? 'world-canvas__alert--active' : ''}`}>
+          <div className="world-canvas__alert-head">
+            <strong>{combatHud.statusLabel}</strong>
+            <span>{combatHud.roundLabel}</span>
+          </div>
+          <span>{combatHud.threatLabel}</span>
+          <div className="world-canvas__combat-grid">
+            <span>Hero {combatHud.heroHpLabel}</span>
+            <span>Threat {combatHud.threatHpLabel}</span>
+            <span>{combatHud.queueLabel}</span>
+          </div>
+          {combatHud.latestLog ? <p>{combatHud.latestLog}</p> : null}
         </div>
       ) : null}
       {!snapshot ? <p className="world-canvas__placeholder">Awaiting the first shard snapshot.</p> : null}

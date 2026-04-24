@@ -138,40 +138,6 @@ export function WorldField({ snapshot }: WorldFieldProps) {
         </div>
       </div>
 
-      <div className="world-field__scene">
-        <article className="world-field__objective world-field__objective--primary">
-          <div className="panel-title">Field directive</div>
-          <strong>{objectiveFocus?.label ?? model.activeQuest?.label ?? 'Hold the line until the shard resolves.'}</strong>
-          <p>{objectiveFocus?.detail ?? model.activeQuest?.progress ?? 'No active objective yet. Stay mobile and read the field.'}</p>
-          {objectiveFocus ? (
-            <div className="play-chip-row">
-              <span className="status-pill status-pill--objective">{objectiveFocus.stateLabel}</span>
-              <span className="status-pill">
-                Target {objectiveFocus.target.x},{objectiveFocus.target.y}
-              </span>
-              <span className="status-pill">Ground {objectiveFocus.terrain}</span>
-            </div>
-          ) : null}
-        </article>
-
-        <article className="world-field__objective world-field__objective--terrain">
-          <div className="panel-title">Current ground</div>
-          <strong>{model.currentTerrain.label}</strong>
-          <p>{model.currentTerrain.summary}</p>
-          <ul className="world-field__note-list">
-            {siteNotes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        </article>
-
-        <article className="world-field__objective world-field__objective--trail">
-          <div className="panel-title">Trail state</div>
-          <strong>{trailState.title}</strong>
-          <p>{trailState.detail}</p>
-        </article>
-      </div>
-
       <div className="world-field__surface">
         <WorldCanvas snapshot={snapshot} />
       </div>
@@ -205,6 +171,40 @@ export function WorldField({ snapshot }: WorldFieldProps) {
               ? visibleAllies.map((character) => character?.name ?? character?.cid).filter(Boolean).join(', ')
               : 'No other PCs visible on this shard window.'}
           </p>
+        </article>
+      </div>
+
+      <div className="world-field__scene">
+        <article className="world-field__objective world-field__objective--primary">
+          <div className="panel-title">Field directive</div>
+          <strong>{objectiveFocus?.label ?? model.activeQuest?.label ?? 'Hold the line until the shard resolves.'}</strong>
+          <p>{objectiveFocus?.detail ?? model.activeQuest?.progress ?? 'No active objective yet. Stay mobile and read the field.'}</p>
+          {objectiveFocus ? (
+            <div className="play-chip-row">
+              <span className="status-pill status-pill--objective">{objectiveFocus.stateLabel}</span>
+              <span className="status-pill">
+                Target {objectiveFocus.target.x},{objectiveFocus.target.y}
+              </span>
+              <span className="status-pill">Ground {objectiveFocus.terrain}</span>
+            </div>
+          ) : null}
+        </article>
+
+        <article className="world-field__objective world-field__objective--terrain">
+          <div className="panel-title">Current ground</div>
+          <strong>{model.currentTerrain.label}</strong>
+          <p>{model.currentTerrain.summary}</p>
+          <ul className="world-field__note-list">
+            {siteNotes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="world-field__objective world-field__objective--trail">
+          <div className="panel-title">Trail state</div>
+          <strong>{trailState.title}</strong>
+          <p>{trailState.detail}</p>
         </article>
       </div>
 
