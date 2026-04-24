@@ -6,6 +6,18 @@
 - `dr1-thorn-01` and `dr1-thorn-02` automatically pick up the app by pushing `apps/Thornwrithe` `main` to `origin/main`.
 - Treat `git push origin main` in the Thornwrithe submodule as a deployment step, not just source control.
 
+## Version And Commit Rules
+
+- Thornwrithe uses `RELEASE.FEATURE.BUILD`, exposed visibly in the UI and through `GET /e`.
+- When no explicit `THORNWRITHE_VERSION` or split `THORNWRITHE_RELEASE` / `THORNWRITHE_FEATURE` / `THORNWRITHE_BUILD` env is set, the canonical local version is `package.json` `version`.
+- Every shipped Thornwrithe app update must use a commit subject that starts with one of the supported change classes and must update the version in the same commit:
+  - `feat:` for new player-visible gameplay, UX, content, graphics, mechanics, or capability changes. Increment `FEATURE` and reset `BUILD` to `0`.
+  - `fix:` for bug fixes, balance corrections, deployment fixes, regressions, and production recovery. Increment `BUILD`.
+  - `chore:` for tooling, dependency, operational, observability, or non-player-facing maintenance that still changes the shipped app or deployment behavior. Increment `BUILD`.
+- Increment `RELEASE` and reset `FEATURE` and `BUILD` to `0` only for a milestone release, incompatible live-state contract change, major runtime/deployment contract change, or intentional world/progression reset. Use a `feat:` or explicit release commit subject and call out the reason in the final summary.
+- Docs-only or agent-rule-only changes may use `docs:` and do not require a Thornwrithe app version bump when they do not change shipped runtime behavior. If such a commit is pushed to the WAR-tracked `main`, still run `/e` verification and state that the semantic version intentionally did not change.
+- Before editing, record the previous local version and current online `/e` version. After the version bump, verify the new local version and, after deployment, the online `/e` version.
+
 ## Live Validation Rule
 
 - After each completed Thornwrithe recovery phase, push `main` to `origin/main`.
