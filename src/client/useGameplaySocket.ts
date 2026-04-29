@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   GameplayDirection,
+  GameplayMudCommand,
   GameplayOverrideCommand,
   GameplayShardSnapshot,
   GameplaySocketStatus,
@@ -303,6 +304,17 @@ export function useGameplaySocket(gameplayPath: string) {
     socket.send(JSON.stringify({ type: 'override', command }));
   }
 
+  function sendCommand(command: GameplayMudCommand) {
+    const socket = socketRef.current;
+    const nextCommand = command.trim();
+
+    if (!socket || socket.readyState !== WebSocket.OPEN || !nextCommand) {
+      return;
+    }
+
+    socket.send(JSON.stringify({ type: 'command', command: nextCommand }));
+  }
+
   return {
     status,
     statusDetail,
@@ -310,5 +322,6 @@ export function useGameplaySocket(gameplayPath: string) {
     snapshot,
     sendMove,
     sendOverride,
+    sendCommand,
   };
 }

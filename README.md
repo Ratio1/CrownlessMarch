@@ -39,6 +39,7 @@ After attach, gameplay is WebSocket-only. The socket now carries:
 - movement updates on the same shard
 - automated encounter progression during heartbeat ticks
 - queued override commands for `encounter power`, `potion`, and `retreat`
+- MUD-style field commands such as `look`, `examine`, `search`, `scout`, `pray`, and cardinal movement aliases
 - durable checkpoint advancement when a resolved encounter changes the PC's long-lived state
 
 Registration note:
@@ -88,6 +89,7 @@ The current `/play` surface renders a Phaser-backed world surface with a text-fo
 - the canvas draws terrain silhouettes, live PC tokens, and monster tokens from the shard snapshot
 - the side HUD shows the character card, quest ledger, movement pad, and override controls
 - the combat panel is a dice-text log driven by server-authoritative encounter rounds
+- the field command prompt accepts room-style MUD verbs and D20 terrain checks
 - the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
 - the fixed release badge links to `/e` so operators can confirm the exact live build from the UI
 
@@ -225,7 +227,7 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.4.1
+pnpm live:devnet -- --expect-version=1.5.0
 ```
 
 ## Operational Notes

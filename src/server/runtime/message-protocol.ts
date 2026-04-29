@@ -19,6 +19,11 @@ export interface OverrideInboundMessage {
   command: 'encounter power' | 'potion' | 'retreat';
 }
 
+export interface CommandInboundMessage {
+  type: 'command';
+  command: string;
+}
+
 export interface LogoutInboundMessage {
   type: 'logout';
 }
@@ -28,6 +33,7 @@ export type InboundMessage =
   | HeartbeatInboundMessage
   | MoveInboundMessage
   | OverrideInboundMessage
+  | CommandInboundMessage
   | LogoutInboundMessage;
 
 export interface AttachedOutboundMessage {
@@ -123,6 +129,14 @@ export function parseInboundMessage(raw: RawData): InboundMessage | null {
             command: parsed.command,
           }
         : null;
+    case 'command': {
+      if (typeof parsed.command !== 'string') {
+        return null;
+      }
+
+      const command = parsed.command.trim().replace(/\s+/g, ' ');
+      return command ? { type: 'command', command } : null;
+    }
     case 'logout':
       return { type: 'logout' };
     default:

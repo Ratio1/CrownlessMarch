@@ -76,6 +76,9 @@ function createSmokeHarness() {
     queueOverride(characterId, command) {
       return runtime.queueOverride(characterId, command);
     },
+    commandPlayer(characterId, command) {
+      return runtime.commandPlayer(characterId, command);
+    },
     snapshotFor(characterId) {
       return runtime.snapshotFor(characterId);
     },

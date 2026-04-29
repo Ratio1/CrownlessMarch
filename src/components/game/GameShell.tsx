@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useGameplaySocket } from '@/client/useGameplaySocket';
 import { CharacterPanel } from './CharacterPanel';
+import { CommandPanel } from './CommandPanel';
 import { CombatLogPanel } from './CombatLogPanel';
 import { MovementPad } from './MovementPad';
 import { OverrideBar } from './OverrideBar';
@@ -29,9 +30,10 @@ export function GameShell({
   gameplayPath: string;
   versionLabel: string;
 }) {
-  const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendOverride } = useGameplaySocket(gameplayPath);
+  const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendOverride, sendCommand } = useGameplaySocket(gameplayPath);
   const encounter = snapshot?.encounter ?? null;
   const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
+  const canCommand = status === 'connected' && Boolean(snapshot);
   const primaryQuest = snapshot?.character.quests?.[0] ?? null;
   const objectiveFocus = snapshot?.objectiveFocus ?? null;
 
@@ -94,6 +96,7 @@ export function GameShell({
           <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
           <QuestPanel snapshot={snapshot} />
           <div className="play-controls">
+            <CommandPanel disabled={!canCommand} onCommand={sendCommand} />
             <MovementPad disabled={!canMove} onMove={sendMove} />
             <OverrideBar encounter={encounter} onQueue={sendOverride} />
           </div>

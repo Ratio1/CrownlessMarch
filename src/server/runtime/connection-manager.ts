@@ -455,6 +455,13 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       return;
     }
 
+    if (message.type === 'command') {
+      const runtimeUpdate = shardRuntime.commandPlayer(session.characterId, message.command);
+      const nextState = await maybePersistProgression(session, runtimeUpdate);
+      await emitRuntimeState(socket, session, nextState);
+      return;
+    }
+
     if (message.type === 'logout') {
       await logoutSession(session);
       return;

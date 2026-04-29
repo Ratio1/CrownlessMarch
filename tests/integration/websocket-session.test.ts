@@ -133,6 +133,10 @@ function createHarness(options: {
       runtimeEvents.push(`override:${characterId}:${command}`);
       return baseRuntime.queueOverride(characterId, command);
     },
+    commandPlayer(characterId: string, command: string) {
+      runtimeEvents.push(`command:${characterId}:${command}`);
+      return baseRuntime.commandPlayer(characterId, command);
+    },
     snapshotFor(characterId: string) {
       return baseRuntime.snapshotFor(characterId);
     },

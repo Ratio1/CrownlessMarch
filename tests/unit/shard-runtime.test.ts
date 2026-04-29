@@ -685,4 +685,67 @@ describe('shard runtime', () => {
       }),
     ]);
   });
+
+  it('answers look commands with a room-style MUD description and exits', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({ content });
+
+    runtime.addPlayer({
+      cid: 'cid-command-look',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Aelis',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+      }),
+    });
+
+    const update = runtime.commandPlayer('cid-command-look', 'look');
+
+    expect(update.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'system',
+      text: expect.stringContaining('Town Hearth'),
+    });
+    expect(update.snapshot.activityLog.at(-1)?.text).toContain('Exits: north, south, west, east.');
+  });
+
+  it('resolves search commands as D20 field checks against terrain DCs', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({
+      content,
+      random: makeRandom([0.7]),
+      now: () => Date.parse('2026-04-30T09:00:00.000Z'),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-command-search',
+      position: { x: 3, y: 6 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Mire',
+        classId: 'cleric',
+        attributes: {
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 12,
+          wisdom: 15,
+          charisma: 13,
+        },
+      }),
+    });
+
+    const update = runtime.commandPlayer('cid-command-search', 'search ruin');
+
+    expect(update.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'check',
+      text: 'Mire rolls 15 + 2 = 17 vs DC 14 to search Watchpost Ruin: success. You find old claw tracks, loose stones, and the safest line through the ruin.',
+    });
+  });
 });

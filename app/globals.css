@@ -1254,6 +1254,11 @@ select {
   background: rgba(44, 88, 124, 0.14);
 }
 
+.combat-log__entry--check {
+  border-color: rgba(180, 143, 230, 0.22);
+  background: rgba(78, 56, 112, 0.16);
+}
+
 .combat-log__entry--effect,
 .combat-log__entry--system {
   border-color: rgba(130, 164, 118, 0.18);
@@ -1274,6 +1279,45 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.command-panel {
+  grid-column: 1 / -1;
+}
+
+.command-panel__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.command-panel__label {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(3, 7, 6, 0.42);
+  color: var(--text-ember);
+  font-family: var(--font-mono);
+}
+
+.command-panel__label input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+}
+
+.command-panel__label:focus-within {
+  border-color: rgba(216, 135, 50, 0.45);
+  box-shadow: 0 0 0 2px rgba(216, 135, 50, 0.18);
 }
 
 .roster {

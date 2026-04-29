@@ -42,6 +42,7 @@ export interface ShardRuntimeLike {
   movePlayer(characterId: string, direction: Direction): ShardRuntimeUpdate;
   tickPlayer(characterId: string): ShardRuntimeUpdate;
   queueOverride(characterId: string, command: string): ShardRuntimeUpdate;
+  commandPlayer(characterId: string, command: string): ShardRuntimeUpdate;
   snapshotFor(characterId: string): GameplayShardSnapshot;
   markProgressionPersisted(characterId: string, nextCharacterId?: string): void;
 }
@@ -84,6 +85,67 @@ const TOWN_TILE = { x: 5, y: 5 } as const;
 const WATCHPOST_LANE_TILE = { x: 6, y: 5 } as const;
 const EMBER_SHRINE_TILE = { x: 7, y: 6 } as const;
 const SHRINE_ROAD_GROVE_TILE = { x: 7, y: 5 } as const;
+
+const TERRAIN_COMMAND_DETAILS: Record<
+  GameplayTileSnapshot['kind'],
+  {
+    label: string;
+    summary: string;
+    dc: number;
+    success: string;
+    failure: string;
+  }
+> = {
+  town: {
+    label: 'Town Hearth',
+    summary: 'Safe ground for rest, debriefs, and regrouping under ember watchfires.',
+    dc: 10,
+    success: 'You read the road signs, watch posts, and fresh boot tracks around the hearth.',
+    failure: 'The hearth noise hides anything subtler than the open road.',
+  },
+  road: {
+    label: 'Road Lane',
+    summary: 'A worn lane where the forest has not yet swallowed the route.',
+    dc: 10,
+    success: 'You spot wagon ruts and safe footing along the lane.',
+    failure: 'The road gives up no new sign beyond its worn direction.',
+  },
+  forest: {
+    label: 'Dark Forest',
+    summary: 'Dense canopy and low-visibility hunting ground.',
+    dc: 13,
+    success: 'You pick out bent moss, listening branches, and the cleanest line forward.',
+    failure: 'The canopy shifts and swallows the trail signs before they settle.',
+  },
+  roots: {
+    label: 'Briar Roots',
+    summary: 'Aggressive thorn corridors where goblins break cover.',
+    dc: 14,
+    success: 'You spot snare roots, goblin scuffs, and a narrow path through the briars.',
+    failure: 'The roots twitch underfoot and blur the safer path.',
+  },
+  ruin: {
+    label: 'Watchpost Ruin',
+    summary: 'Broken stone lanes with loot and old blood in the moss.',
+    dc: 14,
+    success: 'You find old claw tracks, loose stones, and the safest line through the ruin.',
+    failure: 'The broken watchpost keeps its useful marks under moss and old ash.',
+  },
+  shrine: {
+    label: 'Ember Shrine',
+    summary: 'Ancient refuge where the march briefly loosens its grip.',
+    dc: 12,
+    success: 'You read the ember rite and feel the shrine answer under the ash.',
+    failure: 'The shrine glows, but its older marks remain shut.',
+  },
+  water: {
+    label: 'Blackwater',
+    summary: 'Flooded and blocked ground.',
+    dc: 15,
+    success: 'You spot the flooded edge and the point where the bank gives way.',
+    failure: 'The blackwater reflects only the canopy and your own lantern.',
+  },
+};
 
 const FALLBACK_CONTENT: ContentBundle = {
   classes: [
@@ -244,7 +306,7 @@ function getActivityLog(snapshot: Record<string, unknown>): GameplayActivityEntr
           isRecord(entry) &&
           typeof entry.id === 'string' &&
           typeof entry.text === 'string' &&
-          (entry.kind === 'system' || entry.kind === 'quest' || entry.kind === 'reward')
+          (entry.kind === 'system' || entry.kind === 'quest' || entry.kind === 'reward' || entry.kind === 'check')
         );
       })
     : [];
@@ -269,6 +331,77 @@ function appendActivityLog(
       },
     ].slice(-ACTIVITY_LOG_LIMIT),
   };
+}
+
+function normalizeCommand(command: string) {
+  return command.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function rollD20(random: () => number) {
+  return Math.floor(random() * 20) + 1;
+}
+
+function getModifier(snapshot: Record<string, unknown>, key: 'strength' | 'dexterity' | 'constitution' | 'intelligence' | 'wisdom' | 'charisma') {
+  if (!isRecord(snapshot.modifiers)) {
+    return 0;
+  }
+
+  const value = snapshot.modifiers[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function directionFromCommand(command: string): Direction | null {
+  switch (command) {
+    case 'n':
+    case 'north':
+      return 'north';
+    case 's':
+    case 'south':
+      return 'south';
+    case 'w':
+    case 'west':
+      return 'west';
+    case 'e':
+    case 'east':
+      return 'east';
+    default:
+      return null;
+  }
+}
+
+function overrideFromCommand(command: string) {
+  switch (command) {
+    case 'power':
+    case 'encounter':
+    case 'encounter power':
+    case 'use power':
+      return 'encounter power';
+    case 'potion':
+    case 'drink potion':
+    case 'use potion':
+      return 'potion';
+    case 'retreat':
+    case 'flee':
+      return 'retreat';
+    default:
+      return null;
+  }
+}
+
+function exitsForTile(
+  position: PresencePosition,
+  getTileAt: (x: number, y: number) => { blocked: boolean },
+  isWithinBounds: (position: PresencePosition) => boolean,
+) {
+  return (Object.entries(DIRECTION_DELTAS) as Array<[Direction, PresencePosition]>)
+    .filter(([, delta]) => {
+      const nextPosition = {
+        x: position.x + delta.x,
+        y: position.y + delta.y,
+      };
+      return isWithinBounds(nextPosition) && !getTileAt(nextPosition.x, nextPosition.y).blocked;
+    })
+    .map(([direction]) => direction);
 }
 
 function questProgressText(snapshot: Record<string, unknown>, questId: string) {
@@ -750,6 +883,40 @@ export class ShardRuntime implements ShardRuntimeLike {
     };
   }
 
+  commandPlayer(characterId: string, command: string): ShardRuntimeUpdate {
+    const player = this.players.get(characterId);
+
+    if (!player) {
+      return {
+        snapshot: this.snapshotFor(characterId),
+      };
+    }
+
+    const normalizedCommand = normalizeCommand(command);
+    const direction = directionFromCommand(normalizedCommand);
+
+    if (direction) {
+      return this.movePlayer(characterId, direction);
+    }
+
+    const overrideCommand = overrideFromCommand(normalizedCommand);
+
+    if (overrideCommand && player.activeEncounter?.status === 'active') {
+      return this.queueOverride(characterId, overrideCommand);
+    }
+
+    const nowIso = new Date(this.now()).toISOString();
+    const text = this.resolveMudCommandText(player, normalizedCommand);
+    const kind: GameplayActivityEntry['kind'] = text.startsWith(`${this.characterName(player)} rolls `)
+      ? 'check'
+      : 'system';
+    player.snapshot = normalizeDurableProgression(appendActivityLog(player.snapshot, text, kind, nowIso));
+
+    return {
+      snapshot: this.snapshotFor(characterId),
+    };
+  }
+
   markProgressionPersisted(characterId: string, nextCharacterId?: string): void {
     const player = this.players.get(characterId);
 
@@ -764,6 +931,85 @@ export class ShardRuntime implements ShardRuntimeLike {
       player.cid = nextCharacterId;
       this.players.set(nextCharacterId, player);
     }
+  }
+
+  private characterName(player: RuntimePlayerState) {
+    return typeof player.snapshot.name === 'string' ? player.snapshot.name : 'Adventurer';
+  }
+
+  private describeCurrentRoom(player: RuntimePlayerState) {
+    const tile = this.getTileAt(player.position.x, player.position.y);
+    const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
+    const exits = exitsForTile(
+      player.position,
+      (x, y) => this.getTileAt(x, y),
+      (position) => this.isWithinBounds(position)
+    );
+    const hostileId = resolveHostileMonsterId(player.snapshot, tile);
+    const hostile = hostileId ? this.content.monsters.find((entry) => entry.id === hostileId) : null;
+    const hostileText = hostile ? ` Threat: ${hostile.label}.` : '';
+
+    return `${terrain.label}. ${terrain.summary}${hostileText} Exits: ${exits.join(', ') || 'none'}.`;
+  }
+
+  private describeExamine(player: RuntimePlayerState, command: string) {
+    const tile = this.getTileAt(player.position.x, player.position.y);
+    const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
+    const target = command.replace(/^(examine|x|look at)\s*/, '').trim();
+
+    if (!target || target === 'ground' || target === 'room' || target === tile.kind || target === terrain.label.toLowerCase()) {
+      return `${terrain.label}: ${terrain.summary}`;
+    }
+
+    if (target === 'self' || target === 'me') {
+      const card = toCharacterCard(player, this.content);
+      return `${card.name}: ${card.classLabel} level ${card.level}, HP ${card.hitPoints.current}/${card.hitPoints.max}, AC ${card.defenses.armorClass}.`;
+    }
+
+    const visibleMonster = Object.values(this.getVisibleMonsters(player.snapshot, player.position, 0))[0] ?? null;
+    if (visibleMonster && (target.includes('monster') || target.includes('goblin') || target.includes('wolf'))) {
+      return `${visibleMonster.label}: level ${visibleMonster.level} ${visibleMonster.behavior}, close enough to force the next exchange.`;
+    }
+
+    return `You study ${target}, but the ${terrain.label} offers no clear answer.`;
+  }
+
+  private resolveFieldCheck(player: RuntimePlayerState, command: string) {
+    const tile = this.getTileAt(player.position.x, player.position.y);
+    const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
+    const roll = rollD20(this.random);
+    const modifier = getModifier(player.snapshot, 'wisdom');
+    const total = roll + modifier;
+    const success = total >= terrain.dc;
+    const verb = command.split(' ')[0] || 'search';
+
+    return `${this.characterName(player)} rolls ${roll} + ${modifier} = ${total} vs DC ${terrain.dc} to ${verb} ${terrain.label}: ${
+      success ? 'success' : 'failure'
+    }. ${success ? terrain.success : terrain.failure}`;
+  }
+
+  private resolveMudCommandText(player: RuntimePlayerState, command: string) {
+    if (!command || command === 'help' || command === '?') {
+      return 'Commands: look, examine <thing>, search, scout, pray, north, south, east, west, potion, power, retreat.';
+    }
+
+    if (command === 'look' || command === 'l') {
+      return this.describeCurrentRoom(player);
+    }
+
+    if (command.startsWith('examine ') || command.startsWith('x ') || command.startsWith('look at ')) {
+      return this.describeExamine(player, command);
+    }
+
+    if (command === 'search' || command.startsWith('search ') || command === 'scout' || command.startsWith('scout ') || command === 'pray' || command.startsWith('pray ')) {
+      return this.resolveFieldCheck(player, command);
+    }
+
+    if (overrideFromCommand(command)) {
+      return 'That override only matters while an encounter is active.';
+    }
+
+    return `Unknown command "${command}". Try look, examine, search, scout, pray, north, south, east, west, potion, power, or retreat.`;
   }
 
   snapshotFor(characterId: string): GameplayShardSnapshot {

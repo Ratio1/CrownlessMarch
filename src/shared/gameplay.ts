@@ -3,6 +3,7 @@ import type { CharacterAction, CharacterDefenses, CharacterHitPoints } from './d
 
 export type GameplayDirection = 'north' | 'south' | 'west' | 'east';
 export type GameplayOverrideCommand = 'encounter power' | 'potion' | 'retreat';
+export type GameplayMudCommand = string;
 
 export interface GameplayTileSnapshot {
   x: number;
@@ -66,7 +67,7 @@ export interface GameplayObjectiveFocus {
 export interface GameplayActivityEntry {
   id: string;
   text: string;
-  kind: 'system' | 'quest' | 'reward';
+  kind: 'system' | 'quest' | 'reward' | 'check';
 }
 
 export interface GameplayCharacterCard {
