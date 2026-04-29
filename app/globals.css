@@ -1762,17 +1762,11 @@ select {
   }
 
   .world-canvas__chrome {
-    left: 12px;
-    right: 12px;
-    top: 12px;
-  }
-
-  .world-canvas__chrome .status-pill:nth-child(2) {
     display: none;
   }
 
   .world-canvas__marquee {
-    top: 58px;
+    top: 16px;
     min-width: 0;
     width: calc(100% - 24px);
   }

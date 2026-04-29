@@ -1,0 +1,44 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+function readGlobalCss() {
+  return fs.readFileSync(path.join(process.cwd(), 'app/globals.css'), 'utf8');
+}
+
+function extractMediaBlock(css: string, query: string) {
+  const start = css.indexOf(query);
+
+  if (start < 0) {
+    return '';
+  }
+
+  const open = css.indexOf('{', start);
+  let depth = 0;
+
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === '{') {
+      depth += 1;
+    }
+
+    if (css[index] === '}') {
+      depth -= 1;
+
+      if (depth === 0) {
+        return css.slice(open + 1, index);
+      }
+    }
+  }
+
+  return '';
+}
+
+describe('mobile playfield CSS', () => {
+  it('hides duplicate canvas chrome and lifts the shard marquee into a clear mobile slot', () => {
+    const mobileCss = extractMediaBlock(readGlobalCss(), '@media (max-width: 720px)');
+
+    expect(mobileCss).toContain('.world-canvas__chrome');
+    expect(mobileCss).toMatch(/\.world-canvas__chrome\s*\{[^}]*display:\s*none;/s);
+    expect(mobileCss).toMatch(/\.world-canvas__marquee\s*\{[^}]*top:\s*16px;/s);
+    expect(mobileCss).toMatch(/\.world-canvas__marquee\s*\{[^}]*width:\s*calc\(100% - 24px\);/s);
+  });
+});
