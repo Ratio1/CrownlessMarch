@@ -180,7 +180,8 @@ function drawSnapshot(
     }
   }
 
-  const southMarker = scene.add.text(originX, originY + worldHeight + 20, 'Watchfire route // live shard visibility', {
+  const compactCaption = width < 560 || worldWidth < 330;
+  const southMarker = scene.add.text(originX, originY + worldHeight + 20, compactCaption ? 'Watchfire route' : 'Watchfire route // live shard visibility', {
     color: '#b9ab8a',
     fontFamily: 'IBM Plex Mono, monospace',
     fontSize: '11px',
@@ -189,15 +190,17 @@ function drawSnapshot(
   southMarker.setAlpha(0.84);
   labels.push(southMarker);
 
-  const shardMarker = scene.add.text(originX + worldWidth, originY + worldHeight + 20, snapshot.regionId.replace(/-/g, ' ').toUpperCase(), {
-    color: '#f7d889',
-    fontFamily: 'IBM Plex Mono, monospace',
-    fontSize: '11px',
-    letterSpacing: 1.4,
-  });
-  shardMarker.setOrigin(1, 0);
-  shardMarker.setAlpha(0.9);
-  labels.push(shardMarker);
+  if (!compactCaption) {
+    const shardMarker = scene.add.text(originX + worldWidth, originY + worldHeight + 20, snapshot.regionId.replace(/-/g, ' ').toUpperCase(), {
+      color: '#f7d889',
+      fontFamily: 'IBM Plex Mono, monospace',
+      fontSize: '11px',
+      letterSpacing: 1.4,
+    });
+    shardMarker.setOrigin(1, 0);
+    shardMarker.setAlpha(0.9);
+    labels.push(shardMarker);
+  }
 }
 
 function drawBackdrop(

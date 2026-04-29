@@ -689,6 +689,10 @@ select {
   pointer-events: none;
 }
 
+.world-canvas__chrome .status-pill:not(:first-child) {
+  display: none;
+}
+
 .world-canvas__marquee {
   position: absolute;
   top: 14px;

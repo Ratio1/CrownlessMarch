@@ -33,6 +33,12 @@ function extractMediaBlock(css: string, query: string) {
 }
 
 describe('mobile playfield CSS', () => {
+  it('keeps desktop canvas chrome from crowding the atlas marquee', () => {
+    const css = readGlobalCss();
+
+    expect(css).toMatch(/\.world-canvas__chrome \.status-pill:not\(:first-child\)\s*\{[^}]*display:\s*none;/s);
+  });
+
   it('hides duplicate canvas chrome and lifts the shard marquee into a clear mobile slot', () => {
     const mobileCss = extractMediaBlock(readGlobalCss(), '@media (max-width: 720px)');
 
