@@ -485,12 +485,15 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   function bindWebSocketServer(wss: WebSocketServer) {
     wss.on('connection', (socket) => {
       const sessionRef = { current: null as ActiveSession | null, pending: null as PendingAttach | null };
+      let messageQueue = Promise.resolve();
 
       socket.on('message', (raw) => {
-        void onMessage(sessionRef, socket, raw).catch(() => {
-          send(socket, createError('session_error'));
-          socket.close();
-        });
+        messageQueue = messageQueue
+          .then(() => onMessage(sessionRef, socket, raw))
+          .catch(() => {
+            send(socket, createError('session_error'));
+            socket.close();
+          });
       });
 
       socket.on('close', () => {

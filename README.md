@@ -239,12 +239,12 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.8.3
+pnpm live:devnet -- --expect-version=1.8.4
 ```
 
 ## Operational Notes
 
-`server.ts` now blocks startup on `syncPresenceHset()` before it binds the gameplay WebSocket server. A thorn node that cannot refresh the Thornwrithe presence hset should fail fast instead of serving a stale duplicate-login view.
+`server.ts` attempts a startup `syncPresenceHset()` before it binds the gameplay WebSocket server, but a slow CStore hsync is logged and treated as non-fatal so `/e` and the game can still come up during devnet CStore latency spikes.
 
 ## Admin Surface
 

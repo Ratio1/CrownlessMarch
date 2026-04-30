@@ -97,6 +97,7 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
 function createHarness(options: {
   deferLoad?: boolean;
   deferHeartbeatWrite?: boolean;
+  deferReadAt?: number[];
   deferClear?: boolean;
   failLoad?: boolean;
   leaseRefreshIntervalMs?: number;
@@ -108,9 +109,11 @@ function createHarness(options: {
   const records = new Map<string, { persist_revision: number; snapshot: Record<string, unknown> }>();
   const sockets = new Set<WebSocket>();
   const loadRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
+  const readRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   const writeRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   const clearRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
+  let readCount = 0;
   let writeCount = 0;
   const baseRuntime = new ShardRuntime();
   const shardRuntime = {
@@ -162,6 +165,14 @@ function createHarness(options: {
     },
     verifyAttachToken,
     readPresenceLease: async (characterId) => {
+      readCount += 1;
+      if (options.deferReadAt?.includes(readCount)) {
+        events.push(`read_started:${readCount}:${characterId}`);
+        const request = createDeferred<void>();
+        readRequests.push(request);
+        await request.promise;
+      }
+
       events.push(`read:${characterId}`);
       return leases.get(characterId) ?? null;
     },
@@ -259,6 +270,14 @@ function createHarness(options: {
       const request = loadRequests[index];
       if (!request) {
         throw new Error(`Missing deferred load at index ${index}`);
+      }
+
+      request.resolve();
+    },
+    releaseRead(index: number = 0) {
+      const request = readRequests[index];
+      if (!request) {
+        throw new Error(`Missing deferred read at index ${index}`);
       }
 
       request.resolve();
@@ -546,6 +565,36 @@ describe('websocket session host', () => {
     });
     expect(afterHeartbeat?.lease_expires_at).not.toEqual(beforeHeartbeat?.lease_expires_at);
     expect(harness.readLease('cid-1')).toBeNull();
+
+    socket.close();
+  });
+
+  it('serializes heartbeat handling so a slow lease read cannot start duplicate refreshes', async () => {
+    harness = createHarness({ deferReadAt: [4], leaseRefreshIntervalMs: 0 });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    const attached = waitForSocketMessage(socket, 'attached');
+    const initialState = waitForSocketMessage(socket, 'state');
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await attached;
+    await initialState;
+
+    socket.send(encode({ type: 'heartbeat' }));
+    await waitForEventCount(harness.events, 'read_started:4:account-1', 1);
+
+    socket.send(encode({ type: 'heartbeat' }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(harness.events.filter((event) => event.startsWith('read_started:'))).toEqual([
+      'read_started:4:account-1',
+    ]);
+    expect(harness.runtimeEvents.filter((event) => event === 'tick:cid-1')).toHaveLength(0);
+
+    harness.releaseRead(0);
+    await waitForEventCount(harness.runtimeEvents, 'tick:cid-1', 2);
 
     socket.close();
   });
