@@ -21,7 +21,7 @@ next rule set to implement.
 - Server authority: combat, checks, loot, character advancement, and durable
   state are resolved on the server.
 - Visible fiction: mechanical traits such as holy damage, boss protections, and
-  critical threats should have clear log text and HUD cues.
+  critical hits should have clear log text and HUD cues.
 - Small durable state: progression belongs in R1FS checkpoints; shard-local
   encounter state can remain disposable.
 
@@ -31,7 +31,7 @@ next rule set to implement.
 | --- | --- | --- |
 | Weapon damage | Hero damage dice come from class defaults. | Equipped weapon type supplies damage dice. |
 | Weapon bonuses | Item `bonus` can validate up to `+9`. | Weapon enhancement is capped at `+5`. |
-| Critical hits | Not implemented. | Weapon-specific threat ranges and multipliers. |
+| Critical hits | Not implemented. | Weapon-specific critical ranges and multipliers. |
 | Alignment | Not implemented. | D20-style nine-alignment system. |
 | Holy modifier | Not implemented. | Holy weapons deal `2x` damage against Evil targets. |
 | Boss protection | Not implemented as an enhancement gate. | Only boss mobs may require `+1` to `+3` enhancement to hit. |
@@ -46,8 +46,8 @@ next rule set to implement.
 - Monsters may use larger expressions when the creature itself is the weapon,
   such as a boss claw attack dealing `3d6`.
 - `1d8+3` means roll one eight-sided die and add three.
-- `19-20/x2` means a natural 19 or 20 threatens a critical hit, and a confirmed
-  critical multiplies weapon damage by two.
+- `19-20/x2` means a natural 19 or 20 is a critical hit if the attack lands,
+  and the critical multiplies weapon damage by two.
 
 ## Core Combat Loop
 
@@ -55,7 +55,8 @@ next rule set to implement.
 2. Select or queue an action.
 3. Roll the attack: `d20 + attack bonuses`.
 4. Check boss enhancement protection before damage is applied.
-5. If the natural roll is inside the weapon's critical range, roll to confirm.
+5. If the natural roll is inside the weapon's critical range and the attack
+   lands, mark the hit as critical.
 6. Roll damage, apply critical multiplication, apply modifiers such as Holy,
    then apply protection and resistance.
 7. Log the result in clear MUD-style text.
@@ -77,7 +78,8 @@ Natural roll rules:
 
 - Natural `1` always misses.
 - Natural `20` always hits if the attack is allowed to affect the target.
-- Natural `20` always threatens a critical hit if the target can be affected.
+- Natural `20` is always a critical hit if the target can be affected and the
+  attack is not blocked.
 - Natural `20` does not bypass boss minimum-enhancement protection.
 
 ## Defenses
@@ -129,7 +131,7 @@ weapon table is the baseline.
 | Quarterstaff | Simple | `1d6` | `20/x2` | Staff, ash staff, monk staff, or caster focus. |
 | Mace | Simple | `1d8` | `20/x2` | Reliable blunt weapon against armored enemies. |
 | Longsword | Martial | `1d8` | `19-20/x2` | Standard knightly blade. |
-| Scimitar | Martial | `1d6` | `18-20/x2` | Curved blade with wide critical range. `scymita` is accepted as a content alias only. |
+| Scimitar | Martial | `1d6` | `18-20/x2` | Curved blade with wide critical range. |
 | Warhammer | Martial | `1d8` | `20/x3` | Narrow critical range, heavy critical impact. |
 | Bastard Sword | Exotic | `1d10` | `19-20/x2` | One-handed with proficiency; otherwise treated as two-handed. |
 | Katana | Exotic | `1d10` | `19-20/x2` | Precision exotic blade, mechanically parallel to bastard sword. |
@@ -139,9 +141,8 @@ Implementation notes:
 
 - Weapon IDs should be stable lowercase keys such as `greatsword`, `warhammer`,
   and `scimitar`.
-- `scymita` should not become the canonical data key. If needed, support it as a
-  search, command, or migration alias for `scimitar`.
-- Critical range is stored as the lowest natural d20 roll that threatens, such
+- Do not add alternate spellings for canonical weapon keys.
+- Critical range is stored as the lowest natural d20 roll that crits, such
   as `18` for scimitar and `20` for warhammer.
 - Critical multiplier is stored as an integer such as `2` or `3`.
 
@@ -180,7 +181,7 @@ Damage order for a Holy weapon:
 
 1. Roll weapon damage.
 2. Add ability, enhancement, and weapon damage modifiers.
-3. Apply confirmed critical multiplier, if any.
+3. Apply the critical multiplier, if any.
 4. Apply Holy `2x` multiplier if the target is Evil.
 5. Apply target protection, resistance, or vulnerability.
 
@@ -189,21 +190,20 @@ weapon flares against Evil, and the HUD should show a short holy impact cue.
 
 ## Critical Hits
 
-Critical hits use D20-style threat and confirmation.
+Critical hits are resolved on the attack roll. Thornwrithe does not use a
+separate confirmation roll.
 
 1. Roll the attack.
 2. If the natural d20 is inside the weapon's critical range and the attack hits,
-   the attack threatens a critical.
-3. Roll a confirmation attack with the same attack bonus against the same
-   defense.
-4. If the confirmation hits, multiply weapon damage by the weapon's critical
-   multiplier.
-5. If the confirmation misses, resolve a normal hit.
+   the attack is a critical hit.
+3. Multiply weapon damage by the weapon's critical multiplier.
+4. If the attack misses, it is not a critical hit even if the natural d20 was
+   inside the weapon's critical range.
 
 Critical rules:
 
 - A blocked attack cannot become a critical hit.
-- A natural `20` threatens only if the weapon can affect the target.
+- A natural `20` crits only if the weapon can affect the target.
 - Extra damage dice from poison, burning, or non-weapon spell riders are not
   multiplied unless the effect says otherwise.
 - Holy is not a critical multiplier; it is a separate post-critical multiplier
@@ -214,7 +214,7 @@ Example:
 ```text
 Scimitar: 1d6, 18-20/x2
 Attack roll: natural 18, total 24 vs AC 19
-Confirmation roll: total 21 vs AC 19
+Result: critical hit
 Damage roll: 4 + 3 Dexterity + 1 enhancement = 8
 Critical damage: 8 x 2 = 16
 ```
@@ -438,7 +438,7 @@ Target: Lawful Evil
 Damage roll: 9 on 2d6
 Normal weapon damage: 9 + 4 + 5 = 18
 Holy damage vs Evil: 18 x 2 = 36
-Confirmed critical vs Evil: (18 x 2) x 2 = 72
+Critical vs Evil: (18 x 2) x 2 = 72
 ```
 
 ### Vampire Lord
@@ -478,7 +478,7 @@ Result: no damage, no critical, log the ward rejection.
 ```text
 Weapon: +1 Warhammer, 1d8, 20/x3
 Attack roll: natural 20, total 27 vs AC 18
-Confirmation roll: total 23 vs AC 18
+Result: critical hit
 Damage roll: 6 + 3 Strength + 1 enhancement = 10
 Critical damage: 10 x 3 = 30
 ```
@@ -547,18 +547,17 @@ Required log details:
 - natural d20 roll
 - total attack value
 - target defense
-- hit, miss, threat, confirmation, or block
+- hit, miss, critical, or block
 - weapon damage roll
 - enhancement bonus
-- critical multiplier when confirmed
+- critical multiplier when applied
 - Holy multiplier when applied
 - boss protection failure when relevant
 
 Example:
 
 ```text
-You swing The Holy Avenger at the Vampire Lord: d20 19 + 12 = 31 vs AC 25, threat.
-Confirm: d20 14 + 12 = 26 vs AC 25, critical.
+You swing The Holy Avenger at the Vampire Lord: d20 19 + 12 = 31 vs AC 25, critical.
 Damage: 2d6 9 + 4 STR + 5 enhancement = 18, x2 critical, x2 Holy vs Evil = 72.
 ```
 
@@ -584,8 +583,7 @@ playfield, token motion, target flashes, and short-lived effects.
 
 1. Implement item-driven weapon damage using the weapon table in this document.
 2. Cap weapon enhancement at `+5` in schema validation and content.
-3. Add critical threat, confirmation, range, and multiplier to the combat
-   resolver.
+3. Add critical range and multiplier handling to the combat resolver.
 4. Add alignment to monsters, player-facing inspection, and combat logs.
 5. Add Holy as a weapon modifier with `2x` damage against Evil targets.
 6. Add boss-only minimum enhancement protection with `+1`, `+2`, and `+3`
@@ -610,7 +608,7 @@ Phase 2: combat resolver.
 
 - Replace class-only hero damage dice with equipped weapon damage.
 - Add weapon enhancement to attack and damage from the weapon record.
-- Add critical threat and confirmation rolls.
+- Add critical range detection and multiplier application.
 - Add Holy damage against Evil targets.
 - Add boss enhancement protection before damage and critical resolution.
 - Extend combat log entries with critical, Holy, and protection details.
