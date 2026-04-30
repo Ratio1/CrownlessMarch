@@ -49,6 +49,14 @@ function getShardWorldInstanceId() {
   return process.env.THORNWRITHE_SHARD_WORLD_INSTANCE_ID ?? resolveThornwritheNodeId() ?? 'thornwrithe-shard';
 }
 
+async function syncPresenceHsetForStartup(presenceStore: ReturnType<typeof createPresenceLeaseStore>) {
+  try {
+    await presenceStore.syncPresenceHset();
+  } catch (error) {
+    console.warn('[thornwrithe] startup presence sync failed; continuing with lazy CStore writes', error);
+  }
+}
+
 function hasGameId(env: NodeJS.ProcessEnv) {
   return Boolean(env.THORNWRITHE_GAME_ID?.trim() || env.R1EN_CSTORE_AUTH_HKEY?.trim());
 }
@@ -101,7 +109,7 @@ export async function createServer() {
   const content = await loadContentBundle(process.cwd());
   const ratio1 = getRatio1ServerClient();
   const presenceStore = createPresenceLeaseStore({ cstore: ratio1.cstore });
-  await presenceStore.syncPresenceHset();
+  await syncPresenceHsetForStartup(presenceStore);
   const characterStore = createCharacterCheckpointStore({ r1fs: ratio1.r1fs });
   const shardRuntime = new ShardRuntime({ content });
   const persistenceService = createPersistenceService({

@@ -149,4 +149,100 @@ describe('server bootstrap', () => {
       process.env = originalEnv;
     }
   });
+
+  it('continues booting when the startup presence hsync times out', async () => {
+    const bindWebSocketServer = jest.fn();
+    const prepare = jest.fn().mockResolvedValue(undefined);
+    const requestHandler = jest.fn();
+    const nextFactory = jest.fn(() => ({
+      prepare,
+      getRequestHandler: () => requestHandler,
+    }));
+    const hsync = jest.fn().mockRejectedValue(new Error('hsync timed out after 10s'));
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    jest.doMock('next', () => ({
+      __esModule: true,
+      default: nextFactory,
+    }));
+    jest.doMock('ws', () => ({
+      WebSocketServer: jest.fn().mockImplementation(() => ({
+        handleUpgrade: jest.fn(),
+        emit: jest.fn(),
+      })),
+    }));
+    jest.doMock('../../src/server/auth/attach-token', () => ({
+      verifyAttachToken: jest.fn(),
+    }));
+    jest.doMock('../../src/server/runtime/connection-manager', () => ({
+      createSessionHost: jest.fn(() => ({
+        bindWebSocketServer,
+      })),
+    }));
+    jest.doMock('../../src/server/platform/cstore-roster', () => ({
+      readRosterEntry: jest.fn(),
+      writeRosterEntry: jest.fn(),
+    }));
+    jest.doMock('../../src/server/platform/r1fs-characters', () => ({
+      createCharacterCheckpointStore: jest.fn(() => ({
+        saveCharacterCheckpoint: jest.fn(),
+        loadCharacterByCid: jest.fn(),
+      })),
+    }));
+    jest.doMock('../../src/server/platform/ratio1', () => ({
+      getRatio1ServerClient: jest.fn(() => ({
+        cstore: {
+          hset: jest.fn(),
+          hget: jest.fn(),
+          hgetall: jest.fn(),
+          hsync,
+        },
+        r1fs: {},
+      })),
+    }));
+    jest.doMock('../../src/server/platform/runtime-env', () => ({
+      resolveThornwritheGameId: jest.fn(() => 'thornwrithe-v1'),
+      resolveThornwritheNodeId: jest.fn(() => 'dr1-thorn-01-4c'),
+    }));
+    jest.doMock('../../src/server/runtime/persistence-service', () => ({
+      createPersistenceService: jest.fn(() => ({
+        persistProgression: jest.fn(),
+      })),
+    }));
+    jest.doMock('../../src/server/runtime/shard-runtime', () => ({
+      ShardRuntime: jest.fn().mockImplementation(() => ({})),
+    }));
+    jest.doMock('../../src/server/content/load-content', () => ({
+      loadContentBundle: jest.fn().mockResolvedValue({}),
+    }));
+
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      THORNWRITHE_GAME_ID: 'thornwrithe-v1',
+      SESSION_SECRET: 'session-secret',
+      ATTACH_TOKEN_SECRET: 'attach-secret',
+    };
+
+    try {
+      const mod = await import('../../server');
+
+      await expect(mod.createServer()).resolves.toEqual(
+        expect.objectContaining({
+          httpServer: expect.any(Object),
+          sessionHost: expect.any(Object),
+        })
+      );
+
+      expect(hsync).toHaveBeenCalledTimes(1);
+      expect(bindWebSocketServer).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[thornwrithe] startup presence sync failed; continuing with lazy CStore writes',
+        expect.any(Error)
+      );
+    } finally {
+      process.env = originalEnv;
+      warnSpy.mockRestore();
+    }
+  });
 });
