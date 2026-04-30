@@ -82,11 +82,14 @@ Starter content ships from repo-owned packs:
 - `content/monsters.json`
 - `content/quests.json`
 - `content/regions/briar-march.json`
+- `content/rules/*.json`
 
 The persistent D20/MUD rules reference lives in `RULEBOOK.md`. It defines the
-target weapon encyclopedia, enhancement cap, alignment system, Holy modifier,
-critical hit rules, boss protection gates, and `consider` skill behavior used to
-guide the next combat-engine iteration.
+target weapon encyclopedia, XP table, class attack tables, enhancement cap,
+alignment system, Holy modifier, critical hit rules, boss protection gates, and
+`consider` skill behavior. Runtime rule values are loaded from `content/rules`
+JSON files and validated at boot so balance can be inspected without reading
+resolver code.
 
 The current `/play` surface renders a Phaser-backed world surface with a text-forward field HUD:
 
@@ -108,6 +111,8 @@ Combat rules are intentionally compact but now use the persistent weapon rules:
 - initiative is rolled once when the encounter opens
 - rounds advance automatically on the live socket heartbeat cadence
 - equipped weapons supply damage dice, enhancement, critical range, and modifiers
+- class attack progression uses precomputed per-level tables from the rule pack
+- durable checkpoints distinguish XP-derived `realLevel` from effect-adjusted `currentLevel`
 - attacks log the D20 roll, defense target, hit or miss, criticals, Holy damage, and boss ward blocks
 - monster alignment and boss enhancement gates are available to combat and `consider`
 - resolved encounters write XP, gold, HP changes, and any loot back into the latest durable checkpoint
@@ -234,7 +239,7 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.6.0
+pnpm live:devnet -- --expect-version=1.8.0
 ```
 
 ## Operational Notes

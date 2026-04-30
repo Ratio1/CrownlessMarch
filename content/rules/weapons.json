@@ -1,0 +1,82 @@
+[
+  {
+    "weaponType": "dagger",
+    "label": "Dagger",
+    "category": "Light",
+    "damage": "1d4",
+    "criticalRangeMin": 19,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "club",
+    "label": "Club",
+    "category": "Simple",
+    "damage": "1d6",
+    "criticalRangeMin": 20,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "quarterstaff",
+    "label": "Quarterstaff",
+    "category": "Simple",
+    "damage": "1d6",
+    "criticalRangeMin": 20,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "mace",
+    "label": "Mace",
+    "category": "Simple",
+    "damage": "1d8",
+    "criticalRangeMin": 20,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "longsword",
+    "label": "Longsword",
+    "category": "Martial",
+    "damage": "1d8",
+    "criticalRangeMin": 19,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "scimitar",
+    "label": "Scimitar",
+    "category": "Martial",
+    "damage": "1d6",
+    "criticalRangeMin": 18,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "warhammer",
+    "label": "Warhammer",
+    "category": "Martial",
+    "damage": "1d8",
+    "criticalRangeMin": 20,
+    "criticalMultiplier": 3
+  },
+  {
+    "weaponType": "bastard-sword",
+    "label": "Bastard Sword",
+    "category": "Exotic",
+    "damage": "1d10",
+    "criticalRangeMin": 19,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "katana",
+    "label": "Katana",
+    "category": "Exotic",
+    "damage": "1d10",
+    "criticalRangeMin": 19,
+    "criticalMultiplier": 2
+  },
+  {
+    "weaponType": "greatsword",
+    "label": "Greatsword",
+    "category": "Martial Two-Handed",
+    "damage": "2d6",
+    "criticalRangeMin": 19,
+    "criticalMultiplier": 2
+  }
+]

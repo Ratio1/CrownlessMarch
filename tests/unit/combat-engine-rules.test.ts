@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import type { ContentBundle } from '../../src/server/content/load-content';
+import { DEFAULT_GAME_RULES } from '../../src/shared/content/game-rules';
 import {
   advanceEncounterSnapshot,
   createEncounterSnapshot,
@@ -19,6 +20,7 @@ function makeRandom(sequence: number[]) {
 
 function makeContent(): ContentBundle {
   return {
+    rules: DEFAULT_GAME_RULES,
     classes: [
       {
         id: 'fighter',
@@ -27,6 +29,30 @@ function makeContent(): ContentBundle {
         passive: 'Steelbound Presence',
         encounterAbility: 'Shield Rush',
         utilityAbility: 'Second Wind',
+      },
+      {
+        id: 'rogue',
+        label: 'Rogue',
+        primaryAttributes: ['dexterity', 'charisma'],
+        passive: 'Shadowstep',
+        encounterAbility: 'Sly Flourish',
+        utilityAbility: 'Tumble',
+      },
+      {
+        id: 'wizard',
+        label: 'Wizard',
+        primaryAttributes: ['intelligence', 'wisdom'],
+        passive: 'Arcane Sight',
+        encounterAbility: 'Magic Missile',
+        utilityAbility: 'Cantrip',
+      },
+      {
+        id: 'cleric',
+        label: 'Cleric',
+        primaryAttributes: ['wisdom', 'charisma'],
+        passive: 'Ember Ward',
+        encounterAbility: 'Lance of Faith',
+        utilityAbility: 'Prayer',
       },
     ],
     items: [
@@ -99,6 +125,88 @@ function makeHero(weaponId: string) {
 }
 
 describe('combat engine D20 weapon rules', () => {
+  it('uses rounded class attack progression through the level cap', () => {
+    const content = makeContent();
+    const expected = {
+      fighter: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      rogue: [1, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 11],
+      wizard: [0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5],
+      cleric: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8],
+    } as const;
+
+    for (const [classId, bonuses] of Object.entries(expected)) {
+      for (let index = 0; index < bonuses.length; index += 1) {
+        const level = index + 1;
+        const hero = buildInitialCharacterSnapshot({
+          name: `${classId}-${level}`,
+          classId: classId as 'fighter' | 'rogue' | 'wizard' | 'cleric',
+          attributes: {
+            strength: 10,
+            dexterity: 10,
+            constitution: 10,
+            intelligence: 10,
+            wisdom: 10,
+            charisma: 10,
+          },
+        }) as unknown as Record<string, unknown>;
+        hero.level = level;
+
+        const encounter = createEncounterSnapshot({
+          characterId: `cid-${classId}-${level}`,
+          characterSnapshot: hero,
+          monster: content.monsters[0],
+          tileKind: 'ruin',
+          content,
+          now: new Date('2026-04-30T10:00:00.000Z'),
+          random: makeRandom([0, 0]),
+        });
+        const combatant = encounter.combatants.find((entry) => entry.kind === 'hero');
+
+        expect(combatant?.attackBonus).toBe(bonuses[index]);
+      }
+    }
+  });
+
+  it('uses current level, not real level, for class attack progression', () => {
+    const content = makeContent();
+    const hero = buildInitialCharacterSnapshot({
+      name: 'Drained Fighter',
+      classId: 'fighter',
+      attributes: {
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      },
+    }) as unknown as Record<string, unknown>;
+    hero.xp = 20500;
+    hero.realLevel = 10;
+    hero.currentLevel = 8;
+    hero.level = 8;
+    hero.levelEffects = [
+      {
+        id: 'vampire-level-drain',
+        label: 'Vampire level drain',
+        levelDelta: -2,
+      },
+    ];
+
+    const encounter = createEncounterSnapshot({
+      characterId: 'cid-drained-fighter',
+      characterSnapshot: hero,
+      monster: content.monsters[0],
+      tileKind: 'ruin',
+      content,
+      now: new Date('2026-04-30T10:00:00.000Z'),
+      random: makeRandom([0, 0]),
+    });
+    const combatant = encounter.combatants.find((entry) => entry.kind === 'hero');
+
+    expect(combatant?.attackBonus).toBe(8);
+  });
+
   it('uses weapon dice, direct critical ranges, and Holy damage against Evil targets', () => {
     const content = makeContent();
     const now = new Date('2026-04-30T10:00:00.000Z');

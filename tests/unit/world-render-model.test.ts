@@ -58,6 +58,8 @@ function createSnapshot(): GameplayShardSnapshot {
       encounterAbility: 'Shield Bash',
       utilityAbility: 'Second Wind',
       level: 1,
+      realLevel: 1,
+      currentLevel: 1,
       xp: 0,
       gold: 7,
       hitPoints: { current: 24, max: 24, bloodied: 12 },

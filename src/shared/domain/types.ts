@@ -56,6 +56,14 @@ export interface DurableCharacterSnapshot {
   name: string;
   classId: CharacterClass;
   level: number;
+  realLevel: number;
+  currentLevel: number;
+  levelEffects: {
+    id: string;
+    label?: string;
+    levelDelta: number;
+    expiresAt?: string;
+  }[];
   xp: number;
   attributes: AttributeSet;
   modifiers: CharacterModifiers;

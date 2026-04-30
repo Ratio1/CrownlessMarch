@@ -1,0 +1,8 @@
+{
+  "maxWeaponEnhancement": 5,
+  "maxBossMinimumEnhancementToHit": 3,
+  "holyDamageMultiplier": 2,
+  "criticalConfirmation": false,
+  "naturalOneAlwaysMisses": true,
+  "naturalTwentyAlwaysHits": true
+}

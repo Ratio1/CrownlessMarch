@@ -136,7 +136,10 @@ describe('r1fs character checkpoints', () => {
       snapshot: {
         name: 'First Warden',
         xp: 0,
-        level: 0,
+        level: 1,
+        realLevel: 1,
+        currentLevel: 1,
+        levelEffects: [],
         inventory: [],
         equipment: {},
         currency: 5,

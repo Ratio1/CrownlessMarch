@@ -1,0 +1,78 @@
+[
+  {
+    "id": "fighter",
+    "attackAbility": "strength",
+    "targetDefense": "ac",
+    "attackProgression": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "hitPoints": 15,
+    "healingSurges": 9,
+    "speed": 5,
+    "armorClassBonus": 2,
+    "defaultDamageDice": "1d10",
+    "actions": [
+      {
+        "id": "cleave",
+        "name": "Cleave",
+        "kind": "at-will",
+        "description": "A heavy swing that punishes a nearby foe."
+      }
+    ]
+  },
+  {
+    "id": "rogue",
+    "attackAbility": "dexterity",
+    "targetDefense": "reflex",
+    "attackProgression": [1, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 11],
+    "hitPoints": 12,
+    "healingSurges": 6,
+    "speed": 6,
+    "armorClassBonus": 0,
+    "defaultDamageDice": "1d8",
+    "actions": [
+      {
+        "id": "sly-flourish",
+        "name": "Sly Flourish",
+        "kind": "at-will",
+        "description": "A quick strike with a flourish of misdirection."
+      }
+    ]
+  },
+  {
+    "id": "wizard",
+    "attackAbility": "intelligence",
+    "targetDefense": "will",
+    "attackProgression": [0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5],
+    "hitPoints": 10,
+    "healingSurges": 6,
+    "speed": 6,
+    "armorClassBonus": 0,
+    "defaultDamageDice": "1d6",
+    "actions": [
+      {
+        "id": "magic-missile",
+        "name": "Magic Missile",
+        "kind": "at-will",
+        "description": "Arcane bolts that strike with unfailing force."
+      }
+    ]
+  },
+  {
+    "id": "cleric",
+    "attackAbility": "wisdom",
+    "targetDefense": "will",
+    "attackProgression": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8],
+    "hitPoints": 13,
+    "healingSurges": 7,
+    "speed": 5,
+    "armorClassBonus": 1,
+    "defaultDamageDice": "1d8",
+    "actions": [
+      {
+        "id": "lance-of-faith",
+        "name": "Lance of Faith",
+        "kind": "at-will",
+        "description": "A radiant strike that steadies an ally."
+      }
+    ]
+  }
+]

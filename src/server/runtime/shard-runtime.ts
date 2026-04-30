@@ -1,5 +1,6 @@
 import type { ContentBundle } from '../content/load-content';
 import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
+import { DEFAULT_GAME_RULES, getWeaponRule, isEvilAlignment } from '../../shared/content/game-rules';
 import { getVisionWindow } from '../../shared/domain/fog';
 import {
   addInventoryItem,
@@ -86,18 +87,6 @@ const TOWN_TILE = { x: 5, y: 5 } as const;
 const WATCHPOST_LANE_TILE = { x: 6, y: 5 } as const;
 const EMBER_SHRINE_TILE = { x: 7, y: 6 } as const;
 const SHRINE_ROAD_GROVE_TILE = { x: 7, y: 5 } as const;
-const ALIGNMENT_LABELS: Record<string, string> = {
-  LG: 'Lawful Good',
-  NG: 'Neutral Good',
-  CG: 'Chaotic Good',
-  LN: 'Lawful Neutral',
-  N: 'True Neutral',
-  CN: 'Chaotic Neutral',
-  LE: 'Lawful Evil',
-  NE: 'Neutral Evil',
-  CE: 'Chaotic Evil',
-};
-
 const TERRAIN_COMMAND_DETAILS: Record<
   GameplayTileSnapshot['kind'],
   {
@@ -160,6 +149,7 @@ const TERRAIN_COMMAND_DETAILS: Record<
 };
 
 const FALLBACK_CONTENT: ContentBundle = {
+  rules: DEFAULT_GAME_RULES,
   classes: [
     {
       id: 'fighter',
@@ -366,6 +356,14 @@ function getModifier(snapshot: Record<string, unknown>, key: 'strength' | 'dexte
 
   const value = snapshot.modifiers[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function getCurrentLevel(snapshot: Record<string, unknown>) {
+  return typeof snapshot.currentLevel === 'number'
+    ? snapshot.currentLevel
+    : typeof snapshot.level === 'number'
+      ? snapshot.level
+      : 1;
 }
 
 function matchesTargetText(target: string, id: string, label: string) {
@@ -744,7 +742,9 @@ function toCharacterCard(
     passive: classRecord?.passive ?? 'Hold the line.',
     encounterAbility: classRecord?.encounterAbility ?? 'Encounter power',
     utilityAbility: classRecord?.utilityAbility ?? 'Utility',
-    level: typeof player.snapshot.level === 'number' ? player.snapshot.level : 1,
+    level: getCurrentLevel(player.snapshot),
+    realLevel: typeof player.snapshot.realLevel === 'number' ? player.snapshot.realLevel : getCurrentLevel(player.snapshot),
+    currentLevel: getCurrentLevel(player.snapshot),
     xp: typeof player.snapshot.xp === 'number' ? player.snapshot.xp : 0,
     gold: typeof player.snapshot.gold === 'number' ? player.snapshot.gold : 0,
     hitPoints,
@@ -763,10 +763,6 @@ function toActivityEntries(snapshot: Record<string, unknown>) {
   return getActivityLog(snapshot);
 }
 
-function normalizePlayerSnapshot(character: CharacterSnapshot) {
-  return normalizeDurableProgression(character);
-}
-
 export class ShardRuntime implements ShardRuntimeLike {
   private readonly players = new Map<string, RuntimePlayerState>();
   private readonly now: () => number;
@@ -780,7 +776,7 @@ export class ShardRuntime implements ShardRuntimeLike {
   }
 
   addPlayer(character: CharacterSnapshot): ShardRuntimeUpdate {
-    const normalizedSnapshot = normalizePlayerSnapshot(character);
+    const normalizedSnapshot = normalizeDurableProgression(character, this.content.rules);
     const position = isPosition(character.position) ? clone(character.position) : clone(this.content.region.spawn);
     const nextPlayer: RuntimePlayerState = {
       cid: character.cid,
@@ -885,7 +881,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       });
 
       player.activeEncounter = advanced.encounter;
-      player.snapshot = normalizeDurableProgression(advanced.characterSnapshot);
+      player.snapshot = normalizeDurableProgression(advanced.characterSnapshot, this.content.rules);
       this.applyEncounterOutcome(player, advanced.encounter);
 
       if (advanced.resolved && !player.pendingProgression) {
@@ -954,7 +950,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     const kind: GameplayActivityEntry['kind'] = isCheckCommand
       ? 'check'
       : 'system';
-    player.snapshot = normalizeDurableProgression(appendActivityLog(player.snapshot, text, kind, nowIso));
+    player.snapshot = normalizeDurableProgression(appendActivityLog(player.snapshot, text, kind, nowIso), this.content.rules);
 
     return {
       snapshot: this.snapshotFor(characterId),
@@ -1057,9 +1053,9 @@ export class ShardRuntime implements ShardRuntimeLike {
       }
     }
 
-    const visibleMonsters = Object.values(this.getVisibleMonsters(player.snapshot, player.position, getVisionWindow(
-      typeof player.snapshot.level === 'number' ? player.snapshot.level : 1
-    ).radius));
+    const visibleMonsters = Object.values(
+      this.getVisibleMonsters(player.snapshot, player.position, getVisionWindow(getCurrentLevel(player.snapshot)).radius)
+    );
 
     for (const marker of visibleMonsters) {
       const monster = this.content.monsters.find((entry) => entry.label === marker.label) ?? null;
@@ -1086,10 +1082,14 @@ export class ShardRuntime implements ShardRuntimeLike {
     const weaponEnhancement = weapon?.bonus ?? 0;
     const damage = monster.damage.bonus === 0 ? monster.damage.dice : `${monster.damage.dice}+${monster.damage.bonus}`;
     const minimumEnhancement = monster.minimumEnhancementToHit ?? 0;
-    const alignment = ALIGNMENT_LABELS[monster.alignment] ?? monster.alignment;
-    const critical = weapon ? `, ${formatCriticalRange(weapon.criticalRangeMin, weapon.criticalMultiplier)}` : '';
+    const alignment = this.content.rules.alignments.find((entry) => entry.code === monster.alignment)?.label ?? monster.alignment;
+    const weaponRule = getWeaponRule(this.content.rules, weapon?.weaponType);
+    const weaponDamage = weapon?.damage ?? weaponRule?.damage;
+    const weaponCriticalRangeMin = weapon?.criticalRangeMin ?? weaponRule?.criticalRangeMin;
+    const weaponCriticalMultiplier = weapon?.criticalMultiplier ?? weaponRule?.criticalMultiplier;
+    const critical = weapon ? `, ${formatCriticalRange(weaponCriticalRangeMin, weaponCriticalMultiplier)}` : '';
     const holyHint =
-      weapon?.modifiers.includes('holy') && (monster.alignment === 'LE' || monster.alignment === 'NE' || monster.alignment === 'CE')
+      weapon?.modifiers.includes('holy') && isEvilAlignment(this.content.rules, monster.alignment)
         ? ' Holy damage applies.'
         : '';
     const gateHint =
@@ -1102,7 +1102,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     return `${this.characterName(player)} considers ${monster.label}: ${monster.behavior}, ${alignment}, ${monster.hitPoints} HP, ${formatSignedBonus(
       monster.attackBonus
     )} Attack, ${damage} damage. Wielding ${weaponLabel}${
-      weapon ? ` (${formatSignedBonus(weapon.bonus)}, ${weapon.damage}${critical})` : ''
+      weapon ? ` (${formatSignedBonus(weapon.bonus)}, ${weaponDamage}${critical})` : ''
     }.${gateHint}${holyHint}`;
   }
 
@@ -1137,9 +1137,7 @@ export class ShardRuntime implements ShardRuntimeLike {
   snapshotFor(characterId: string): GameplayShardSnapshot {
     const player = this.players.get(characterId);
     const fallbackPosition = clone(this.content.region.spawn);
-    const vision = getVisionWindow(
-      typeof player?.snapshot.level === 'number' ? player.snapshot.level : 1
-    );
+    const vision = getVisionWindow(player ? getCurrentLevel(player.snapshot) : 1);
     const position = player ? clone(player.position) : fallbackPosition;
     const currentTile = this.toGameplayTileSnapshot(this.getTileAt(position.x, position.y));
     const visibleTiles = this.getVisibleTiles(position, vision.radius);
@@ -1156,6 +1154,8 @@ export class ShardRuntime implements ShardRuntimeLike {
           encounterAbility: 'Shield Rush',
           utilityAbility: 'Second Wind',
           level: 1,
+          realLevel: 1,
+          currentLevel: 1,
           xp: 0,
           gold: 0,
           hitPoints: { current: 10, max: 10, bloodied: 5 },
@@ -1293,7 +1293,7 @@ export class ShardRuntime implements ShardRuntimeLike {
   }
 
   private updatePlayerSnapshot(player: RuntimePlayerState, nextSnapshot: Record<string, unknown>) {
-    player.snapshot = normalizeDurableProgression(nextSnapshot);
+    player.snapshot = normalizeDurableProgression(nextSnapshot, this.content.rules);
     player.pendingProgression = clone(player.snapshot);
   }
 

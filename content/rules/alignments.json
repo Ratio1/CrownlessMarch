@@ -1,0 +1,47 @@
+[
+  {
+    "code": "LG",
+    "label": "Lawful Good",
+    "evil": false
+  },
+  {
+    "code": "NG",
+    "label": "Neutral Good",
+    "evil": false
+  },
+  {
+    "code": "CG",
+    "label": "Chaotic Good",
+    "evil": false
+  },
+  {
+    "code": "LN",
+    "label": "Lawful Neutral",
+    "evil": false
+  },
+  {
+    "code": "N",
+    "label": "True Neutral",
+    "evil": false
+  },
+  {
+    "code": "CN",
+    "label": "Chaotic Neutral",
+    "evil": false
+  },
+  {
+    "code": "LE",
+    "label": "Lawful Evil",
+    "evil": true
+  },
+  {
+    "code": "NE",
+    "label": "Neutral Evil",
+    "evil": true
+  },
+  {
+    "code": "CE",
+    "label": "Chaotic Evil",
+    "evil": true
+  }
+]

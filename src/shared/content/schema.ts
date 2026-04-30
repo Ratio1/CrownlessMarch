@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { attributes, characterClasses } from '../domain/types';
 
 export const alignments = ['LG', 'NG', 'CG', 'LN', 'N', 'CN', 'LE', 'NE', 'CE'] as const;
+export const defenseTypes = ['ac', 'fortitude', 'reflex', 'will'] as const;
 export const weaponTypes = [
   'dagger',
   'club',
@@ -15,6 +16,139 @@ export const weaponTypes = [
   'greatsword',
 ] as const;
 export const weaponModifiers = ['holy'] as const;
+
+export const characterActionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(['at-will', 'encounter', 'daily', 'utility']),
+  description: z.string(),
+});
+
+export const progressionRulesSchema = z
+  .object({
+    maxLevel: z.number().int().positive(),
+    xpLevelTable: z.array(z.number().int().min(0)).min(1),
+    targetXpPerHour: z.number().positive(),
+  })
+  .superRefine((rules, context) => {
+    if (rules.xpLevelTable.length !== rules.maxLevel) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['xpLevelTable'],
+        message: 'XP level table must contain one entry per level',
+      });
+    }
+
+    for (let index = 1; index < rules.xpLevelTable.length; index += 1) {
+      if (rules.xpLevelTable[index] <= rules.xpLevelTable[index - 1]) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['xpLevelTable', index],
+          message: 'XP level table must strictly increase after level 1',
+        });
+      }
+    }
+  });
+
+export const classRuleSchema = z
+  .object({
+    id: z.enum(characterClasses),
+    attackAbility: z.enum(attributes),
+    targetDefense: z.enum(defenseTypes),
+    attackProgression: z.array(z.number().int().min(0)),
+    hitPoints: z.number().int().positive(),
+    healingSurges: z.number().int().nonnegative(),
+    speed: z.number().int().positive(),
+    armorClassBonus: z.number().int().nonnegative(),
+    defaultDamageDice: z.string(),
+    actions: z.array(characterActionSchema).min(1),
+  })
+  .superRefine((rule, context) => {
+    if (rule.attackProgression.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['attackProgression'],
+        message: 'class attack progression must contain at least one level',
+      });
+    }
+  });
+
+export const weaponRuleSchema = z.object({
+  weaponType: z.enum(weaponTypes),
+  label: z.string(),
+  category: z.string(),
+  damage: z.string(),
+  criticalRangeMin: z.number().int().min(18).max(20),
+  criticalMultiplier: z.union([z.literal(2), z.literal(3)]),
+});
+
+export const combatRulesSchema = z.object({
+  maxWeaponEnhancement: z.number().int().min(0),
+  maxBossMinimumEnhancementToHit: z.number().int().min(0),
+  holyDamageMultiplier: z.number().int().min(1),
+  criticalConfirmation: z.boolean(),
+  naturalOneAlwaysMisses: z.boolean(),
+  naturalTwentyAlwaysHits: z.boolean(),
+});
+
+export const alignmentRuleSchema = z.object({
+  code: z.enum(alignments),
+  label: z.string(),
+  evil: z.boolean(),
+});
+
+export const gameRulesSchema = z
+  .object({
+    progression: progressionRulesSchema,
+    classes: z.array(classRuleSchema),
+    weapons: z.array(weaponRuleSchema),
+    combat: combatRulesSchema,
+    alignments: z.array(alignmentRuleSchema),
+  })
+  .superRefine((rules, context) => {
+    const classIds = new Set(rules.classes.map((entry) => entry.id));
+    for (const classId of characterClasses) {
+      if (!classIds.has(classId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['classes'],
+          message: `missing class rules for ${classId}`,
+        });
+      }
+    }
+
+    for (const classRule of rules.classes) {
+      if (classRule.attackProgression.length !== rules.progression.maxLevel) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['classes', classRule.id, 'attackProgression'],
+          message: 'class attack progression must contain one entry per level',
+        });
+      }
+    }
+
+    const weaponIds = new Set(rules.weapons.map((entry) => entry.weaponType));
+    for (const weaponType of weaponTypes) {
+      if (!weaponIds.has(weaponType)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['weapons'],
+          message: `missing weapon rules for ${weaponType}`,
+        });
+      }
+    }
+
+    const alignmentCodes = new Set(rules.alignments.map((entry) => entry.code));
+    for (const alignment of alignments) {
+      if (!alignmentCodes.has(alignment)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['alignments'],
+          message: `missing alignment rules for ${alignment}`,
+        });
+      }
+    }
+  });
 
 export const classSchema = z.object({
   id: z.enum(characterClasses),
@@ -43,7 +177,7 @@ export const itemSchema = z
       return;
     }
 
-    for (const field of ['weaponType', 'damage', 'criticalRangeMin', 'criticalMultiplier'] as const) {
+    for (const field of ['weaponType'] as const) {
       if (item[field] === undefined) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -111,7 +245,14 @@ export const regionSchema = z.object({
 
 export type ClassRecord = z.infer<typeof classSchema>;
 export type AlignmentCode = (typeof alignments)[number];
+export type DefenseCode = (typeof defenseTypes)[number];
 export type ItemRecord = z.infer<typeof itemSchema>;
 export type MonsterRecord = z.infer<typeof monsterSchema>;
 export type QuestRecord = z.infer<typeof questSchema>;
 export type RegionRecord = z.infer<typeof regionSchema>;
+export type ProgressionRules = z.infer<typeof progressionRulesSchema>;
+export type ClassRuleRecord = z.infer<typeof classRuleSchema>;
+export type WeaponRuleRecord = z.infer<typeof weaponRuleSchema>;
+export type CombatRules = z.infer<typeof combatRulesSchema>;
+export type AlignmentRuleRecord = z.infer<typeof alignmentRuleSchema>;
+export type GameRules = z.infer<typeof gameRulesSchema>;

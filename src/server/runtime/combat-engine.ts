@@ -1,5 +1,6 @@
 import type { ContentBundle } from '../content/load-content';
 import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
+import { getClassRule, getWeaponRule, isEvilAlignment } from '../../shared/content/game-rules';
 import type { CombatLogEntry, DefenseType, EncounterCombatant, EncounterSnapshot } from '../../shared/domain/combat';
 import {
   addInventoryItem,
@@ -89,30 +90,6 @@ function toDefenseMap(value: unknown) {
   };
 }
 
-function toHeroTargetDefense(classId: CharacterClass): DefenseType {
-  switch (classId) {
-    case 'wizard':
-      return 'reflex';
-    case 'cleric':
-      return 'will';
-    default:
-      return 'ac';
-  }
-}
-
-function toHeroDamageDice(classId: CharacterClass) {
-  switch (classId) {
-    case 'rogue':
-      return '1d8';
-    case 'wizard':
-      return '1d6';
-    case 'cleric':
-      return '1d8';
-    default:
-      return '1d10';
-  }
-}
-
 interface WeaponRules {
   label: string;
   enhancement: number;
@@ -122,11 +99,13 @@ interface WeaponRules {
   modifiers: string[];
 }
 
-function defaultWeaponRules(classId: CharacterClass): WeaponRules {
+function defaultWeaponRules(classId: CharacterClass, content: ContentBundle): WeaponRules {
+  const classRule = getClassRule(content.rules, classId);
+
   return {
     label: 'Unarmed strike',
     enhancement: 0,
-    damageDice: toHeroDamageDice(classId),
+    damageDice: classRule.defaultDamageDice,
     criticalRangeMin: 20,
     criticalMultiplier: 2,
     modifiers: [],
@@ -154,54 +133,52 @@ function getEquippedWeaponRules(
   snapshot: Record<string, unknown>,
   content: ContentBundle
 ): WeaponRules {
-  const fallback = defaultWeaponRules(classId);
+  const fallback = defaultWeaponRules(classId, content);
   const weapon = getEquippedWeapon(snapshot, content);
 
   if (!weapon) {
     return fallback;
   }
+  const weaponRule = getWeaponRule(content.rules, weapon.weaponType);
 
   return {
     label: weapon.label,
     enhancement: weapon.bonus,
-    damageDice: weapon.damage ?? fallback.damageDice,
-    criticalRangeMin: weapon.criticalRangeMin ?? fallback.criticalRangeMin,
-    criticalMultiplier: weapon.criticalMultiplier ?? fallback.criticalMultiplier,
+    damageDice: weapon.damage ?? weaponRule?.damage ?? fallback.damageDice,
+    criticalRangeMin: weapon.criticalRangeMin ?? weaponRule?.criticalRangeMin ?? fallback.criticalRangeMin,
+    criticalMultiplier: weapon.criticalMultiplier ?? weaponRule?.criticalMultiplier ?? fallback.criticalMultiplier,
     modifiers: weapon.modifiers ?? [],
   };
 }
 
+function currentLevelForSnapshot(snapshot: Record<string, unknown>) {
+  return typeof snapshot.currentLevel === 'number'
+    ? snapshot.currentLevel
+    : typeof snapshot.level === 'number'
+      ? snapshot.level
+      : 1;
+}
+
+function classAttackProgression(classId: CharacterClass, level: number, content: ContentBundle) {
+  const classRule = getClassRule(content.rules, classId);
+  const index = Math.max(0, Math.min(content.rules.progression.maxLevel - 1, Math.floor(level) - 1));
+  return classRule.attackProgression[index] ?? 0;
+}
+
 function toHeroAttackBonus(classId: CharacterClass, snapshot: Record<string, unknown>, content: ContentBundle) {
   const modifiers = snapshot.modifiers as Record<string, number> | undefined;
-  const level = typeof snapshot.level === 'number' ? snapshot.level : 1;
+  const level = currentLevelForSnapshot(snapshot);
   const weaponBonus = getEquippedWeaponRules(classId, snapshot, content).enhancement;
-
-  switch (classId) {
-    case 'rogue':
-      return Math.floor(level / 2) + (modifiers?.dexterity ?? 0) + weaponBonus + 3;
-    case 'wizard':
-      return Math.floor(level / 2) + (modifiers?.intelligence ?? 0) + weaponBonus + 3;
-    case 'cleric':
-      return Math.floor(level / 2) + (modifiers?.wisdom ?? 0) + weaponBonus + 2;
-    default:
-      return Math.floor(level / 2) + (modifiers?.strength ?? 0) + weaponBonus + 3;
-  }
+  const classRule = getClassRule(content.rules, classId);
+  const progressionBonus = classAttackProgression(classId, level, content);
+  return progressionBonus + (modifiers?.[classRule.attackAbility] ?? 0) + weaponBonus;
 }
 
 function toHeroDamageBonus(classId: CharacterClass, snapshot: Record<string, unknown>, content: ContentBundle) {
   const modifiers = snapshot.modifiers as Record<string, number> | undefined;
   const weaponBonus = getEquippedWeaponRules(classId, snapshot, content).enhancement;
-
-  switch (classId) {
-    case 'rogue':
-      return (modifiers?.dexterity ?? 0) + weaponBonus;
-    case 'wizard':
-      return (modifiers?.intelligence ?? 0) + weaponBonus;
-    case 'cleric':
-      return (modifiers?.wisdom ?? 0) + weaponBonus;
-    default:
-      return (modifiers?.strength ?? 0) + weaponBonus;
-  }
+  const classRule = getClassRule(content.rules, classId);
+  return (modifiers?.[classRule.attackAbility] ?? 0) + weaponBonus;
 }
 
 function buildHeroCombatant(
@@ -210,6 +187,7 @@ function buildHeroCombatant(
   content: ContentBundle
 ): EncounterCombatant {
   const classId = toCharacterClass(characterSnapshot.classId);
+  const classRule = getClassRule(content.rules, classId);
   const weapon = getEquippedWeaponRules(classId, characterSnapshot, content);
   const hitPoints =
     characterSnapshot.hitPoints && typeof characterSnapshot.hitPoints === 'object' && !Array.isArray(characterSnapshot.hitPoints)
@@ -230,7 +208,7 @@ function buildHeroCombatant(
     attackBonus: toHeroAttackBonus(classId, characterSnapshot, content),
     damageDice: weapon.damageDice,
     damageBonus: toHeroDamageBonus(classId, characterSnapshot, content),
-    targetDefense: toHeroTargetDefense(classId),
+    targetDefense: classRule.targetDefense,
     weaponLabel: weapon.label,
     weaponEnhancement: weapon.enhancement,
     criticalRangeMin: weapon.criticalRangeMin,
@@ -316,22 +294,21 @@ function encounterPowerName(classId: CharacterClass, content: ContentBundle) {
   return content.classes.find((entry) => entry.id === classId)?.encounterAbility ?? 'encounter power';
 }
 
-function isEvilAlignment(alignment: string | undefined) {
-  return alignment === 'LE' || alignment === 'NE' || alignment === 'CE';
-}
-
 function performAttack(input: {
   attacker: EncounterCombatant;
   target: EncounterCombatant;
   round: number;
   random: RandomSource;
+  content: ContentBundle;
   powerBonus?: { attack: number; damage: number; label: string };
 }) {
   const roll = rollDie(20, input.random);
   const attackBonus = input.attacker.attackBonus + (input.powerBonus?.attack ?? 0);
   const total = roll + attackBonus;
   const defenseValue = input.target.defenses[input.attacker.targetDefense];
-  const hit = roll !== 1 && (roll === 20 || total >= defenseValue);
+  const naturalOneMisses = input.content.rules.combat.naturalOneAlwaysMisses && roll === 1;
+  const naturalTwentyHits = input.content.rules.combat.naturalTwentyAlwaysHits && roll === 20;
+  const hit = !naturalOneMisses && (naturalTwentyHits || total >= defenseValue);
   const logs: CombatLogEntry[] = [];
 
   queueLog(
@@ -374,7 +351,7 @@ function performAttack(input: {
   const criticalRangeMin = input.attacker.criticalRangeMin ?? 20;
   const criticalMultiplier = input.attacker.criticalMultiplier ?? 2;
   const critical = roll >= criticalRangeMin;
-  const holy = (input.attacker.weaponModifiers ?? []).includes('holy') && isEvilAlignment(input.target.alignment);
+  const holy = (input.attacker.weaponModifiers ?? []).includes('holy') && isEvilAlignment(input.content.rules, input.target.alignment);
   let damage = baseDamage;
   const damageNotes: string[] = [];
 
@@ -384,8 +361,8 @@ function performAttack(input: {
   }
 
   if (holy) {
-    damage *= 2;
-    damageNotes.push('x2 Holy vs Evil');
+    damage *= input.content.rules.combat.holyDamageMultiplier;
+    damageNotes.push(`x${input.content.rules.combat.holyDamageMultiplier} Holy vs Evil`);
   }
 
   const nextTarget: EncounterCombatant = {
@@ -434,7 +411,7 @@ function hasInventoryItem(snapshot: Record<string, unknown>, itemId: string) {
 
 export function createEncounterSnapshot(input: EncounterSeedInput): EncounterSnapshot {
   const random = input.random ?? Math.random;
-  const characterSnapshot = normalizeDurableProgression(input.characterSnapshot);
+  const characterSnapshot = normalizeDurableProgression(input.characterSnapshot, input.content.rules);
   const hero = buildHeroCombatant(input.characterId, characterSnapshot, input.content);
   const monster = buildMonsterCombatant(input.monster);
   const initiativeOrder = rollInitiativeOrder([hero, monster], random);
@@ -471,7 +448,7 @@ function processRound(
   random: RandomSource
 ) {
   let nextEncounter = clone(encounter);
-  let nextSnapshot = normalizeDurableProgression(characterSnapshot);
+  let nextSnapshot = normalizeDurableProgression(characterSnapshot, content.rules);
   const round = nextEncounter.round;
   const logs = [...nextEncounter.logs];
   const queuedOverrides = [...nextEncounter.queuedOverrides];
@@ -536,6 +513,7 @@ function processRound(
           target: currentMonster,
           round,
           random,
+          content,
           powerBonus: useEncounterPower ? { attack: 2, damage: 4, label: powerLabel } : undefined,
         });
         const nextHero = {
@@ -597,6 +575,7 @@ function processRound(
       target: currentHeroAfterTurn,
       round,
       random,
+      content,
     });
     nextEncounter.combatants = nextEncounter.combatants.map((entry) =>
       entry.id === currentHeroAfterTurn.id ? retaliation.target : entry
@@ -638,7 +617,7 @@ function processRound(
 export function advanceEncounterSnapshot(input: AdvanceEncounterInput): EncounterAdvanceResult {
   const random = input.random ?? Math.random;
   let encounter = clone(input.encounter);
-  let characterSnapshot = normalizeDurableProgression(input.characterSnapshot);
+  let characterSnapshot = normalizeDurableProgression(input.characterSnapshot, input.content.rules);
 
   if (encounter.status !== 'active') {
     return {

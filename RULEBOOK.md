@@ -5,12 +5,14 @@ game engine. It is written for both players and implementers: player-facing
 rules describe what should be visible in play, while implementation notes define
 the data contracts and resolver behavior the engine should enforce.
 
-Status: canonical rules for Thornwrithe weapon and combat iteration. As of
-Thornwrithe `1.6.0`, the runtime implements item-driven weapon dice, `+5`
-enhancement validation, weapon critical ranges, monster alignment, Holy damage
-against Evil, boss-only enhancement gates, and the `consider` MUD skill. The
-remaining equipment commands, item comparison surfaces, broader loot placement,
-and expanded HUD graphics are next.
+Status: canonical rules for Thornwrithe weapon, combat, and progression. As of
+Thornwrithe `1.8.0`, the runtime implements JSON-backed rule packs,
+item-driven weapon dice, `+5` enhancement validation, weapon critical ranges,
+monster alignment, Holy damage against Evil, boss-only enhancement gates, the
+`consider` MUD skill, XP-based real level progression capped at level 15, and
+effect-adjusted current level for level drain. The remaining equipment commands,
+item comparison surfaces, broader loot placement, and expanded HUD graphics are
+next.
 
 ## Design Pillars
 
@@ -27,8 +29,9 @@ and expanded HUD graphics are next.
 
 ## Current Implementation Snapshot
 
-| Rule Area | Thornwrithe 1.6.0 Behavior | Target Rulebook Behavior |
+| Rule Area | Thornwrithe 1.8.0 Behavior | Target Rulebook Behavior |
 | --- | --- | --- |
+| Rule data | XP, class attack tables, class bases, weapon table, combat constants, and alignments load from `content/rules/*.json`. | Inspectable JSON rule packs, TypeScript resolver code. |
 | Weapon damage | Equipped weapon type supplies damage dice, with class fallback when unarmed. | Equipped weapon type supplies damage dice. |
 | Weapon bonuses | Item `bonus` validates from `+0` to `+5`. | Weapon enhancement is capped at `+5`. |
 | Critical hits | Weapon-specific critical ranges and multipliers resolve on the attack roll. | Weapon-specific critical ranges and multipliers. |
@@ -36,6 +39,23 @@ and expanded HUD graphics are next.
 | Holy modifier | Holy weapons deal `2x` post-critical damage against Evil targets. | Holy weapons deal `2x` damage against Evil targets. |
 | Boss protection | Only boss mobs may require `+1` to `+3` enhancement to hit. | Only boss mobs may require `+1` to `+3` enhancement to hit. |
 | `consider` skill | Implemented as a MUD command with threat, alignment, damage, and gate hints. | MUD-style threat appraisal command and skill check. |
+| Level progression | XP advances `realLevel` from the canonical table, `currentLevel` applies level effects, and the cap is 15. | Level 15 is the current cap. |
+
+## Rule Data Files
+
+Rules that designers and operators need to inspect live in JSON under
+`content/rules`:
+
+| File | Owns |
+| --- | --- |
+| `progression.json` | `maxLevel`, XP table, and target XP/hour. |
+| `classes.json` | Per-level class attack tables, attack ability, target defense, HP, speed, surges, base AC bonus, default unarmed damage, and actions. |
+| `weapons.json` | Canonical weapon type table: damage dice, critical range, multiplier, category, and label. |
+| `combat.json` | Enhancement caps, boss gate cap, Holy multiplier, critical confirmation mode, and natural 1/20 behavior. |
+| `alignments.json` | Alignment labels and whether an alignment counts as Evil. |
+
+TypeScript owns rule resolution: dice rolling, attack comparison, damage order,
+checkpoint normalization, and persistence behavior. JSON owns the tunable data.
 
 ## Dice And Notation
 
@@ -95,6 +115,105 @@ Field checks should use the same format:
 
 ```text
 Scout check: d20 + Wisdom vs DC 14
+```
+
+## Character Level Progression
+
+`realLevel` is derived from total XP. Thornwrithe's current level cap is level
+15. Once a character reaches level 15, additional XP may remain on the
+character, but no real level above 15 is granted until the cap is deliberately
+raised.
+
+`currentLevel` is the effective level after temporary effects. Vampire level
+drain, curses, blessings, zone effects, and similar mechanics modify
+`currentLevel` without reducing XP or `realLevel`.
+
+XP table:
+
+| Level | Total XP Needed | XP From Previous | Cumulative Hours @ 3,000 XP/hour |
+| ---: | ---: | ---: | ---: |
+| 1 | 0 | 0 | 0.0 |
+| 2 | 1,000 | 1,000 | 0.3 |
+| 3 | 2,250 | 1,250 | 0.8 |
+| 4 | 3,750 | 1,500 | 1.3 |
+| 5 | 5,500 | 1,750 | 1.8 |
+| 6 | 7,500 | 2,000 | 2.5 |
+| 7 | 10,000 | 2,500 | 3.3 |
+| 8 | 13,000 | 3,000 | 4.3 |
+| 9 | 16,500 | 3,500 | 5.5 |
+| 10 | 20,500 | 4,000 | 6.8 |
+| 11 | 26,000 | 5,500 | 8.7 |
+| 12 | 32,000 | 6,000 | 10.7 |
+| 13 | 39,000 | 7,000 | 13.0 |
+| 14 | 47,000 | 8,000 | 15.7 |
+| 15 | 57,000 | 10,000 | 19.0 |
+
+Pacing notes:
+
+- `3,000 XP/hour` is the current target planning rate for repeatable adventure
+  play, not a guarantee from the first starter quest chain.
+- At `2,000 XP/hour`, level 15 takes about 28.5 hours.
+- At `3,000 XP/hour`, level 15 takes about 19.0 hours.
+- At `4,000 XP/hour`, level 15 takes about 14.3 hours.
+- The online automated quest runner is not a player pacing benchmark because it
+  moves optimally, ignores reading time, and repeats fresh-character routes.
+
+## Class Attack Progression
+
+The current hero attack formula is:
+
+```text
+d20 + class attack progression + attack ability modifier + weapon enhancement
+```
+
+Class attack progression is the class's level-based accuracy before ability and
+weapon bonuses. The engine reads explicit per-level class tables from
+`content/rules/classes.json`; the earlier multipliers were design notes used to
+precalculate this table, not runtime formulas.
+
+Combat indexes this table by `currentLevel`, not `realLevel`. A level 10 fighter
+under `-2` vampire level drain attacks as level 8 until the effect is removed.
+
+Attack ability:
+
+| Class | Attack Ability | Target Defense |
+| --- | --- | --- |
+| Fighter | Strength | `AC` |
+| Rogue | Dexterity | `Reflex` |
+| Wizard | Intelligence | `Will` |
+| Cleric | Wisdom | `Will` |
+
+Class attack progression table:
+
+| Level | Fighter | Rogue | Wizard | Cleric |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | +1 | +1 | +0 | +1 |
+| 2 | +2 | +1 | +1 | +1 |
+| 3 | +3 | +2 | +1 | +2 |
+| 4 | +4 | +3 | +1 | +2 |
+| 5 | +5 | +4 | +2 | +3 |
+| 6 | +6 | +4 | +2 | +3 |
+| 7 | +7 | +5 | +2 | +4 |
+| 8 | +8 | +6 | +2 | +4 |
+| 9 | +9 | +6 | +3 | +5 |
+| 10 | +10 | +7 | +3 | +5 |
+| 11 | +11 | +8 | +3 | +6 |
+| 12 | +12 | +8 | +4 | +6 |
+| 13 | +13 | +9 | +4 | +7 |
+| 14 | +14 | +10 | +4 | +7 |
+| 15 | +15 | +11 | +5 | +8 |
+
+Example:
+
+```text
+Level 10 Fighter, Strength +3, +2 Longsword:
+Attack bonus = +10 class attack progression + 3 Strength + 2 weapon = +15.
+```
+
+```text
+Level 10 Fighter with -2 vampire level drain, Strength +3, +2 Longsword:
+currentLevel = 8
+Attack bonus = +8 class attack progression + 3 Strength + 2 weapon = +13.
 ```
 
 ## Alignment
@@ -579,7 +698,7 @@ Recommended visual cues:
 The DOM HUD should continue to carry the text-heavy rules, while Phaser owns the
 playfield, token motion, target flashes, and short-lived effects.
 
-## Best Next Gameplay Additions After 1.6.0
+## Best Next Gameplay Additions After 1.8.0
 
 1. Add equipment commands and item comparison so weapon choice becomes visible
    and changeable during play.
@@ -631,7 +750,23 @@ Phase 4: content and balance. Started in `1.6.0`.
 - Keep the first-session path free of hard enhancement gates until the player
   can reasonably obtain the required weapon.
 
-Phase 5: UX and graphics.
+Phase 5: level progression. Implemented in `1.7.0`.
+
+- Add the level 1-15 XP table.
+- Derive level from total XP when XP is awarded or checkpoints are normalized.
+- Cap explicit or loaded level values at level 15.
+- Document class attack progression through the current cap.
+
+Phase 6: JSON-backed rules and effective levels. Implemented in `1.8.0`.
+
+- Move XP progression, class attack tables, class base stats, weapon type
+  defaults, combat constants, and alignment labels into `content/rules/*.json`.
+- Use precomputed per-level attack tables instead of runtime multipliers.
+- Distinguish XP-derived `realLevel` from effect-adjusted `currentLevel`.
+- Use `currentLevel` for combat attack progression and vision.
+- Hydrate weapon item damage and critical fields from canonical weapon rules.
+
+Phase 7: UX and graphics.
 
 - Add weapon and target rule chips to the HUD.
 - Add critical and Holy effects to the Phaser playfield.

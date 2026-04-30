@@ -79,6 +79,8 @@ export interface GameplayCharacterCard {
   encounterAbility: string;
   utilityAbility: string;
   level: number;
+  realLevel: number;
+  currentLevel: number;
   xp: number;
   gold: number;
   hitPoints: CharacterHitPoints;
