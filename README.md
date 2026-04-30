@@ -83,6 +83,11 @@ Starter content ships from repo-owned packs:
 - `content/quests.json`
 - `content/regions/briar-march.json`
 
+The persistent D20/MUD rules reference lives in `RULEBOOK.md`. It defines the
+target weapon encyclopedia, enhancement cap, alignment system, Holy modifier,
+critical hit rules, boss protection gates, and `consider` skill behavior used to
+guide the next combat-engine iteration.
+
 The current `/play` surface renders a Phaser-backed world surface with a text-forward field HUD:
 
 - the center playfield is a Phaser canvas for the visible fog window
