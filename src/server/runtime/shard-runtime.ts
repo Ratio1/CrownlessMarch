@@ -1,4 +1,5 @@
 import type { ContentBundle } from '../content/load-content';
+import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
 import { getVisionWindow } from '../../shared/domain/fog';
 import {
   addInventoryItem,
@@ -85,6 +86,17 @@ const TOWN_TILE = { x: 5, y: 5 } as const;
 const WATCHPOST_LANE_TILE = { x: 6, y: 5 } as const;
 const EMBER_SHRINE_TILE = { x: 7, y: 6 } as const;
 const SHRINE_ROAD_GROVE_TILE = { x: 7, y: 5 } as const;
+const ALIGNMENT_LABELS: Record<string, string> = {
+  LG: 'Lawful Good',
+  NG: 'Neutral Good',
+  CG: 'Chaotic Good',
+  LN: 'Lawful Neutral',
+  N: 'True Neutral',
+  CN: 'Chaotic Neutral',
+  LE: 'Lawful Evil',
+  NE: 'Neutral Evil',
+  CE: 'Chaotic Evil',
+};
 
 const TERRAIN_COMMAND_DETAILS: Record<
   GameplayTileSnapshot['kind'],
@@ -169,6 +181,9 @@ const FALLBACK_CONTENT: ContentBundle = {
       attackBonus: 4,
       damage: { dice: '1d6', bonus: 2 },
       behavior: 'skirmisher',
+      alignment: 'CE',
+      minimumEnhancementToHit: 0,
+      vulnerabilities: [],
     },
     {
       id: 'sap-wolf',
@@ -179,6 +194,9 @@ const FALLBACK_CONTENT: ContentBundle = {
       attackBonus: 5,
       damage: { dice: '1d8', bonus: 3 },
       behavior: 'skirmisher',
+      alignment: 'N',
+      minimumEnhancementToHit: 0,
+      vulnerabilities: [],
     },
   ],
   quests: [],
@@ -348,6 +366,26 @@ function getModifier(snapshot: Record<string, unknown>, key: 'strength' | 'dexte
 
   const value = snapshot.modifiers[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function matchesTargetText(target: string, id: string, label: string) {
+  if (!target) {
+    return true;
+  }
+
+  const normalizedId = id.toLowerCase().replace(/-/g, ' ');
+  const normalizedLabel = label.toLowerCase();
+
+  return normalizedId.includes(target) || normalizedLabel.includes(target) || target.includes(normalizedLabel);
+}
+
+function formatSignedBonus(value: number) {
+  return value >= 0 ? `+${value}` : String(value);
+}
+
+function formatCriticalRange(minimum: number | undefined, multiplier: number | undefined) {
+  const range = minimum && minimum < 20 ? `${minimum}-20` : '20';
+  return `${range}/x${multiplier ?? 2}`;
 }
 
 function directionFromCommand(command: string): Direction | null {
@@ -907,7 +945,13 @@ export class ShardRuntime implements ShardRuntimeLike {
 
     const nowIso = new Date(this.now()).toISOString();
     const text = this.resolveMudCommandText(player, normalizedCommand);
-    const kind: GameplayActivityEntry['kind'] = text.startsWith(`${this.characterName(player)} rolls `)
+    const isCheckCommand =
+      text.startsWith(`${this.characterName(player)} rolls `) ||
+      normalizedCommand === 'consider' ||
+      normalizedCommand.startsWith('consider ') ||
+      normalizedCommand === 'con' ||
+      normalizedCommand.startsWith('con ');
+    const kind: GameplayActivityEntry['kind'] = isCheckCommand
       ? 'check'
       : 'system';
     player.snapshot = normalizeDurableProgression(appendActivityLog(player.snapshot, text, kind, nowIso));
@@ -988,9 +1032,83 @@ export class ShardRuntime implements ShardRuntimeLike {
     }. ${success ? terrain.success : terrain.failure}`;
   }
 
+  private getEquippedWeapon(player: RuntimePlayerState): ItemRecord | null {
+    const equipment =
+      player.snapshot.equipment && typeof player.snapshot.equipment === 'object' && !Array.isArray(player.snapshot.equipment)
+        ? (player.snapshot.equipment as Record<string, unknown>)
+        : {};
+    const equippedIds = Object.values(equipment).filter((value): value is string => typeof value === 'string');
+
+    for (const itemId of equippedIds) {
+      const item = this.content.items.find((entry) => entry.id === itemId);
+      if (item?.slot === 'weapon') {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  private findConsiderTarget(player: RuntimePlayerState, target: string): MonsterRecord | null {
+    if (player.activeEncounter?.monsterId) {
+      const activeMonster = this.content.monsters.find((entry) => entry.id === player.activeEncounter?.monsterId) ?? null;
+      if (activeMonster && matchesTargetText(target, activeMonster.id, activeMonster.label)) {
+        return activeMonster;
+      }
+    }
+
+    const visibleMonsters = Object.values(this.getVisibleMonsters(player.snapshot, player.position, getVisionWindow(
+      typeof player.snapshot.level === 'number' ? player.snapshot.level : 1
+    ).radius));
+
+    for (const marker of visibleMonsters) {
+      const monster = this.content.monsters.find((entry) => entry.label === marker.label) ?? null;
+      if (monster && matchesTargetText(target, monster.id, monster.label)) {
+        return monster;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveConsider(player: RuntimePlayerState, command: string) {
+    const target = command.replace(/^(consider|con)\s*/, '').trim();
+    const monster = this.findConsiderTarget(player, target);
+
+    if (!monster) {
+      return target
+        ? `You consider ${target}, but no clear threat answers from the visible field.`
+        : 'You consider the field, but no immediate threat stands out.';
+    }
+
+    const weapon = this.getEquippedWeapon(player);
+    const weaponLabel = weapon?.label ?? 'unarmed strike';
+    const weaponEnhancement = weapon?.bonus ?? 0;
+    const damage = monster.damage.bonus === 0 ? monster.damage.dice : `${monster.damage.dice}+${monster.damage.bonus}`;
+    const minimumEnhancement = monster.minimumEnhancementToHit ?? 0;
+    const alignment = ALIGNMENT_LABELS[monster.alignment] ?? monster.alignment;
+    const critical = weapon ? `, ${formatCriticalRange(weapon.criticalRangeMin, weapon.criticalMultiplier)}` : '';
+    const holyHint =
+      weapon?.modifiers.includes('holy') && (monster.alignment === 'LE' || monster.alignment === 'NE' || monster.alignment === 'CE')
+        ? ' Holy damage applies.'
+        : '';
+    const gateHint =
+      minimumEnhancement > 0 && weaponEnhancement < minimumEnhancement
+        ? ` Your ${formatSignedBonus(weaponEnhancement)} ${weaponLabel} cannot pierce its ward; it requires a +${minimumEnhancement} weapon.`
+        : minimumEnhancement > 0
+          ? ` Your ${formatSignedBonus(weaponEnhancement)} ${weaponLabel} can pierce its +${minimumEnhancement} ward.`
+          : ` Your ${weaponLabel} can affect it.`;
+
+    return `${this.characterName(player)} considers ${monster.label}: ${monster.behavior}, ${alignment}, ${monster.hitPoints} HP, ${formatSignedBonus(
+      monster.attackBonus
+    )} Attack, ${damage} damage. Wielding ${weaponLabel}${
+      weapon ? ` (${formatSignedBonus(weapon.bonus)}, ${weapon.damage}${critical})` : ''
+    }.${gateHint}${holyHint}`;
+  }
+
   private resolveMudCommandText(player: RuntimePlayerState, command: string) {
     if (!command || command === 'help' || command === '?') {
-      return 'Commands: look, examine <thing>, search, scout, pray, north, south, east, west, potion, power, retreat.';
+      return 'Commands: look, consider <target>, examine <thing>, search, scout, pray, north, south, east, west, potion, power, retreat.';
     }
 
     if (command === 'look' || command === 'l') {
@@ -1001,6 +1119,10 @@ export class ShardRuntime implements ShardRuntimeLike {
       return this.describeExamine(player, command);
     }
 
+    if (command === 'consider' || command.startsWith('consider ') || command === 'con' || command.startsWith('con ')) {
+      return this.resolveConsider(player, command);
+    }
+
     if (command === 'search' || command.startsWith('search ') || command === 'scout' || command.startsWith('scout ') || command === 'pray' || command.startsWith('pray ')) {
       return this.resolveFieldCheck(player, command);
     }
@@ -1009,7 +1131,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       return 'That override only matters while an encounter is active.';
     }
 
-    return `Unknown command "${command}". Try look, examine, search, scout, pray, north, south, east, west, potion, power, or retreat.`;
+    return `Unknown command "${command}". Try look, consider, examine, search, scout, pray, north, south, east, west, potion, power, or retreat.`;
   }
 
   snapshotFor(characterId: string): GameplayShardSnapshot {

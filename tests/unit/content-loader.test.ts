@@ -14,5 +14,25 @@ describe('content loader', () => {
     );
     expect(bundle.quests.map((entry) => entry.id)).toContain('survey-the-briar-edge');
     expect(bundle.items.map((entry) => entry.id)).toContain('health-potion');
+    expect(bundle.items.map((entry) => entry.weaponType)).toEqual(
+      expect.arrayContaining(['bastard-sword', 'katana', 'greatsword', 'warhammer', 'scimitar'])
+    );
+    expect(bundle.items.every((entry) => entry.bonus <= 5)).toBe(true);
+    expect(bundle.items.find((entry) => entry.id === 'holy-avenger')).toMatchObject({
+      bonus: 5,
+      weaponType: 'greatsword',
+      damage: '2d6',
+      criticalRangeMin: 19,
+      criticalMultiplier: 2,
+      modifiers: ['holy'],
+    });
+    expect(bundle.monsters.find((entry) => entry.id === 'vampire-lord')).toMatchObject({
+      behavior: 'boss',
+      alignment: 'LE',
+      minimumEnhancementToHit: 3,
+      hitPoints: 100,
+      attackBonus: 20,
+      damage: { dice: '3d6' },
+    });
   });
 });

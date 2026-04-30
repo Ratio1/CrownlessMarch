@@ -5,12 +5,12 @@ game engine. It is written for both players and implementers: player-facing
 rules describe what should be visible in play, while implementation notes define
 the data contracts and resolver behavior the engine should enforce.
 
-Status: canonical target rules for the next weapon and combat iteration. As of
-Thornwrithe `1.5.1`, the live runtime has a simplified combat model with class
-damage dice, item attack bonuses, MUD-style logs, terrain checks, and basic field
-commands. The weapon-specific damage dice, critical ranges, alignment,
-enhancement gates, holy modifier, and `consider` skill described here are the
-next rule set to implement.
+Status: canonical rules for Thornwrithe weapon and combat iteration. As of
+Thornwrithe `1.6.0`, the runtime implements item-driven weapon dice, `+5`
+enhancement validation, weapon critical ranges, monster alignment, Holy damage
+against Evil, boss-only enhancement gates, and the `consider` MUD skill. The
+remaining equipment commands, item comparison surfaces, broader loot placement,
+and expanded HUD graphics are next.
 
 ## Design Pillars
 
@@ -27,15 +27,15 @@ next rule set to implement.
 
 ## Current Implementation Snapshot
 
-| Rule Area | Thornwrithe 1.5.1 Behavior | Target Rulebook Behavior |
+| Rule Area | Thornwrithe 1.6.0 Behavior | Target Rulebook Behavior |
 | --- | --- | --- |
-| Weapon damage | Hero damage dice come from class defaults. | Equipped weapon type supplies damage dice. |
-| Weapon bonuses | Item `bonus` can validate up to `+9`. | Weapon enhancement is capped at `+5`. |
-| Critical hits | Not implemented. | Weapon-specific critical ranges and multipliers. |
-| Alignment | Not implemented. | D20-style nine-alignment system. |
-| Holy modifier | Not implemented. | Holy weapons deal `2x` damage against Evil targets. |
-| Boss protection | Not implemented as an enhancement gate. | Only boss mobs may require `+1` to `+3` enhancement to hit. |
-| `consider` skill | Not implemented. | MUD-style threat appraisal command and skill check. |
+| Weapon damage | Equipped weapon type supplies damage dice, with class fallback when unarmed. | Equipped weapon type supplies damage dice. |
+| Weapon bonuses | Item `bonus` validates from `+0` to `+5`. | Weapon enhancement is capped at `+5`. |
+| Critical hits | Weapon-specific critical ranges and multipliers resolve on the attack roll. | Weapon-specific critical ranges and multipliers. |
+| Alignment | Monsters support the D20 nine-alignment grid. | D20-style nine-alignment system. |
+| Holy modifier | Holy weapons deal `2x` post-critical damage against Evil targets. | Holy weapons deal `2x` damage against Evil targets. |
+| Boss protection | Only boss mobs may require `+1` to `+3` enhancement to hit. | Only boss mobs may require `+1` to `+3` enhancement to hit. |
+| `consider` skill | Implemented as a MUD command with threat, alignment, damage, and gate hints. | MUD-style threat appraisal command and skill check. |
 
 ## Dice And Notation
 
@@ -579,24 +579,25 @@ Recommended visual cues:
 The DOM HUD should continue to carry the text-heavy rules, while Phaser owns the
 playfield, token motion, target flashes, and short-lived effects.
 
-## Best Next Gameplay Additions
+## Best Next Gameplay Additions After 1.6.0
 
-1. Implement item-driven weapon damage using the weapon table in this document.
-2. Cap weapon enhancement at `+5` in schema validation and content.
-3. Add critical range and multiplier handling to the combat resolver.
-4. Add alignment to monsters, player-facing inspection, and combat logs.
-5. Add Holy as a weapon modifier with `2x` damage against Evil targets.
-6. Add boss-only minimum enhancement protection with `+1`, `+2`, and `+3`
-   requirements.
-7. Add `consider` as a MUD command and skill check, including enhancement gate
-   warnings.
-8. Add equipment commands and item comparison so weapon choice becomes visible.
-9. Add Appraise and Lore checks to reveal item and monster rule data.
-10. Add graphics cues for critical hits, Holy damage, and boss wards.
+1. Add equipment commands and item comparison so weapon choice becomes visible
+   and changeable during play.
+2. Add Appraise and Lore checks to reveal item and monster rule data outside
+   immediate combat.
+3. Add weapon and target rule chips to the HUD for enhancement, critical range,
+   alignment, Holy, and boss wards.
+4. Add Phaser effects for critical hits, Holy damage, and boss ward rejection.
+5. Add progression-safe loot placement for scimitar, katana, bastard sword,
+   warhammer, greatsword, and The Holy Avenger.
+6. Add one `+1` boss, one `+2` boss, and one `+3` capstone boss only after the
+   matching weapon progression exists.
+7. Persist known monster facts or recently discovered protection hints where
+   useful.
 
 ## Implementation Roadmap
 
-Phase 1: content schema and static validation.
+Phase 1: content schema and static validation. Implemented in `1.6.0`.
 
 - Add weapon fields to item schema.
 - Add monster `rank`, `alignment`, and optional boss protection fields.
@@ -604,7 +605,7 @@ Phase 1: content schema and static validation.
 - Reject non-boss enhancement gates.
 - Add unit tests for valid and invalid content records.
 
-Phase 2: combat resolver.
+Phase 2: combat resolver. Implemented in `1.6.0`.
 
 - Replace class-only hero damage dice with equipped weapon damage.
 - Add weapon enhancement to attack and damage from the weapon record.
@@ -613,19 +614,20 @@ Phase 2: combat resolver.
 - Add boss enhancement protection before damage and critical resolution.
 - Extend combat log entries with critical, Holy, and protection details.
 
-Phase 3: MUD commands and skills.
+Phase 3: MUD commands and skills. Started in `1.6.0`.
 
-- Add `consider <target>`.
+- `consider <target>` is implemented.
 - Add `inventory`, `equipment`, `wield`, `appraise`, and `compare` command
   support as the equipment system matures.
 - Persist known monster facts or recently discovered protection hints where
   useful.
 
-Phase 4: content and balance.
+Phase 4: content and balance. Started in `1.6.0`.
 
-- Add baseline weapons across the `1d4` to `2d6` band.
-- Add at least one Holy weapon chain, ending in The Holy Avenger.
-- Add one `+1` boss, one `+2` boss, and one `+3` capstone boss.
+- Baseline weapons across the `1d4` to `2d6` band are present in content.
+- The Holy Avenger is present as a `+5 Holy Greatsword` artifact.
+- The Vampire Lord is present as a `+3` enhancement-gated boss reference.
+- Add one `+1` boss and one `+2` boss before making the Vampire Lord reachable.
 - Keep the first-session path free of hard enhancement gates until the player
   can reasonably obtain the required weapon.
 

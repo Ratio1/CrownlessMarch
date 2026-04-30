@@ -15,7 +15,8 @@
       "dice": "1d4",
       "bonus": 0
     },
-    "behavior": "skirmisher"
+    "behavior": "skirmisher",
+    "alignment": "CE"
   },
   {
     "id": "sap-wolf",
@@ -33,7 +34,8 @@
       "dice": "1d4",
       "bonus": 1
     },
-    "behavior": "skirmisher"
+    "behavior": "skirmisher",
+    "alignment": "N"
   },
   {
     "id": "root-troll",
@@ -51,6 +53,28 @@
       "dice": "2d8",
       "bonus": 4
     },
-    "behavior": "bruiser"
+    "behavior": "bruiser",
+    "alignment": "CE"
+  },
+  {
+    "id": "vampire-lord",
+    "label": "Vampire Lord",
+    "level": 9,
+    "defenses": {
+      "ac": 25,
+      "fortitude": 20,
+      "reflex": 23,
+      "will": 24
+    },
+    "hitPoints": 100,
+    "attackBonus": 20,
+    "damage": {
+      "dice": "3d6",
+      "bonus": 0
+    },
+    "behavior": "boss",
+    "alignment": "LE",
+    "minimumEnhancementToHit": 3,
+    "vulnerabilities": ["holy"]
   }
 ]

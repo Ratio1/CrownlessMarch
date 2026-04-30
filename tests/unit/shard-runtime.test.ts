@@ -748,4 +748,45 @@ describe('shard runtime', () => {
       text: 'Mire rolls 15 + 2 = 17 vs DC 14 to search Watchpost Ruin: success. You find old claw tracks, loose stones, and the safest line through the ruin.',
     });
   });
+
+  it('answers consider commands with monster alignment, threat, and weapon gate hints', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({
+      content,
+      random: makeRandom([0.99, 0.0]),
+      now: () => Date.parse('2026-04-30T09:30:00.000Z'),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-command-consider',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Mossblade',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+        inventory: ['rusted-sword'],
+        equipment: { weapon: 'rusted-sword' },
+      }),
+    });
+
+    runtime.movePlayer('cid-command-consider', 'east');
+    const update = runtime.commandPlayer('cid-command-consider', 'consider goblin');
+
+    expect(update.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'check',
+      text: expect.stringContaining('Briar Goblin'),
+    });
+    expect(update.snapshot.activityLog.at(-1)?.text).toContain('Chaotic Evil');
+    expect(update.snapshot.activityLog.at(-1)?.text).toContain('12 HP');
+    expect(update.snapshot.activityLog.at(-1)?.text).toContain('+2 Attack');
+    expect(update.snapshot.activityLog.at(-1)?.text).toContain('1d4 damage');
+    expect(update.snapshot.activityLog.at(-1)?.text).toContain('Rusted Sword');
+  });
 });

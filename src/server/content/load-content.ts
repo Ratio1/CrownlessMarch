@@ -23,7 +23,7 @@ export interface ContentBundle {
 }
 
 export async function loadContentBundle(rootDir: string): Promise<ContentBundle> {
-  const readJson = async <T>(relativePath: string, schema: z.ZodType<T>) => {
+  const readJson = async <Schema extends z.ZodTypeAny>(relativePath: string, schema: Schema): Promise<z.infer<Schema>> => {
     const raw = await readFile(path.join(rootDir, relativePath), 'utf8');
     return schema.parse(JSON.parse(raw));
   };

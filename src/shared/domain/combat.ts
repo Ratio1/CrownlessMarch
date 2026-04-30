@@ -20,6 +20,13 @@ export interface EncounterCombatant {
   damageDice: string;
   damageBonus: number;
   targetDefense: DefenseType;
+  weaponLabel?: string;
+  weaponEnhancement?: number;
+  criticalRangeMin?: number;
+  criticalMultiplier?: number;
+  weaponModifiers?: string[];
+  alignment?: string;
+  minimumEnhancementToHit?: number;
   defenses: {
     ac: number;
     fortitude: number;

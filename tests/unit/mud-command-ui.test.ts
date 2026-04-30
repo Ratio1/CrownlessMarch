@@ -13,7 +13,7 @@ describe('MUD command UI wiring', () => {
 
     expect(commandPanel).toContain('Field Command');
     expect(commandPanel).toContain('onCommand');
-    expect(commandPanel).toContain('placeholder="look / search / pray / north"');
+    expect(commandPanel).toContain('placeholder="look / consider / search / north"');
     expect(gameShell).toContain('<CommandPanel disabled={!canCommand} onCommand={sendCommand} />');
     expect(hook).toContain("type: 'command'");
   });

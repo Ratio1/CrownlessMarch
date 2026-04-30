@@ -98,7 +98,7 @@ The current `/play` surface renders a Phaser-backed world surface with a text-fo
 - the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
 - the fixed release badge links to `/e` so operators can confirm the exact live build from the UI
 
-Combat rules are intentionally simplified:
+Combat rules are intentionally compact but now use the persistent weapon rules:
 
 - stepping onto hostile tiles starts combat
 - stepping onto `shrine`, `ruin`, and `town` tiles now triggers automatic world interactions
@@ -107,7 +107,9 @@ Combat rules are intentionally simplified:
 - `town` heals the PC and turns in any quest already marked ready
 - initiative is rolled once when the encounter opens
 - rounds advance automatically on the live socket heartbeat cadence
-- attacks log the D20 roll, defense target, hit or miss, and damage
+- equipped weapons supply damage dice, enhancement, critical range, and modifiers
+- attacks log the D20 roll, defense target, hit or miss, criticals, Holy damage, and boss ward blocks
+- monster alignment and boss enhancement gates are available to combat and `consider`
 - resolved encounters write XP, gold, HP changes, and any loot back into the latest durable checkpoint
 
 ## Session Rules
@@ -232,7 +234,7 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.5.1
+pnpm live:devnet -- --expect-version=1.6.0
 ```
 
 ## Operational Notes

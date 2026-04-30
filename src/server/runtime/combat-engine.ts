@@ -1,5 +1,5 @@
 import type { ContentBundle } from '../content/load-content';
-import type { MonsterRecord } from '../../shared/content/schema';
+import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
 import type { CombatLogEntry, DefenseType, EncounterCombatant, EncounterSnapshot } from '../../shared/domain/combat';
 import {
   addInventoryItem,
@@ -113,10 +113,68 @@ function toHeroDamageDice(classId: CharacterClass) {
   }
 }
 
+interface WeaponRules {
+  label: string;
+  enhancement: number;
+  damageDice: string;
+  criticalRangeMin: number;
+  criticalMultiplier: number;
+  modifiers: string[];
+}
+
+function defaultWeaponRules(classId: CharacterClass): WeaponRules {
+  return {
+    label: 'Unarmed strike',
+    enhancement: 0,
+    damageDice: toHeroDamageDice(classId),
+    criticalRangeMin: 20,
+    criticalMultiplier: 2,
+    modifiers: [],
+  };
+}
+
+function getEquippedWeapon(snapshot: Record<string, unknown>, content: ContentBundle): ItemRecord | null {
+  const equipment = snapshot.equipment && typeof snapshot.equipment === 'object' && !Array.isArray(snapshot.equipment)
+    ? (snapshot.equipment as Record<string, unknown>)
+    : {};
+  const equippedIds = Object.values(equipment).filter((value): value is string => typeof value === 'string');
+
+  for (const itemId of equippedIds) {
+    const item = content.items.find((entry) => entry.id === itemId);
+    if (item?.slot === 'weapon') {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+function getEquippedWeaponRules(
+  classId: CharacterClass,
+  snapshot: Record<string, unknown>,
+  content: ContentBundle
+): WeaponRules {
+  const fallback = defaultWeaponRules(classId);
+  const weapon = getEquippedWeapon(snapshot, content);
+
+  if (!weapon) {
+    return fallback;
+  }
+
+  return {
+    label: weapon.label,
+    enhancement: weapon.bonus,
+    damageDice: weapon.damage ?? fallback.damageDice,
+    criticalRangeMin: weapon.criticalRangeMin ?? fallback.criticalRangeMin,
+    criticalMultiplier: weapon.criticalMultiplier ?? fallback.criticalMultiplier,
+    modifiers: weapon.modifiers ?? [],
+  };
+}
+
 function toHeroAttackBonus(classId: CharacterClass, snapshot: Record<string, unknown>, content: ContentBundle) {
   const modifiers = snapshot.modifiers as Record<string, number> | undefined;
   const level = typeof snapshot.level === 'number' ? snapshot.level : 1;
-  const weaponBonus = getEquippedItemBonus(snapshot, content);
+  const weaponBonus = getEquippedWeaponRules(classId, snapshot, content).enhancement;
 
   switch (classId) {
     case 'rogue':
@@ -132,7 +190,7 @@ function toHeroAttackBonus(classId: CharacterClass, snapshot: Record<string, unk
 
 function toHeroDamageBonus(classId: CharacterClass, snapshot: Record<string, unknown>, content: ContentBundle) {
   const modifiers = snapshot.modifiers as Record<string, number> | undefined;
-  const weaponBonus = getEquippedItemBonus(snapshot, content);
+  const weaponBonus = getEquippedWeaponRules(classId, snapshot, content).enhancement;
 
   switch (classId) {
     case 'rogue':
@@ -146,28 +204,13 @@ function toHeroDamageBonus(classId: CharacterClass, snapshot: Record<string, unk
   }
 }
 
-function getEquippedItemBonus(snapshot: Record<string, unknown>, content: ContentBundle) {
-  const equipment = snapshot.equipment && typeof snapshot.equipment === 'object' && !Array.isArray(snapshot.equipment)
-    ? (snapshot.equipment as Record<string, unknown>)
-    : {};
-  const equippedIds = Object.values(equipment).filter((value): value is string => typeof value === 'string');
-
-  for (const itemId of equippedIds) {
-    const item = content.items.find((entry) => entry.id === itemId);
-    if (item) {
-      return item.bonus;
-    }
-  }
-
-  return 0;
-}
-
 function buildHeroCombatant(
   characterId: string,
   characterSnapshot: Record<string, unknown>,
   content: ContentBundle
 ): EncounterCombatant {
   const classId = toCharacterClass(characterSnapshot.classId);
+  const weapon = getEquippedWeaponRules(classId, characterSnapshot, content);
   const hitPoints =
     characterSnapshot.hitPoints && typeof characterSnapshot.hitPoints === 'object' && !Array.isArray(characterSnapshot.hitPoints)
       ? (characterSnapshot.hitPoints as Record<string, unknown>)
@@ -185,9 +228,14 @@ function buildHeroCombatant(
     currentHp: typeof hitPoints.current === 'number' ? hitPoints.current : 10,
     maxHp: typeof hitPoints.max === 'number' ? hitPoints.max : 10,
     attackBonus: toHeroAttackBonus(classId, characterSnapshot, content),
-    damageDice: toHeroDamageDice(classId),
+    damageDice: weapon.damageDice,
     damageBonus: toHeroDamageBonus(classId, characterSnapshot, content),
     targetDefense: toHeroTargetDefense(classId),
+    weaponLabel: weapon.label,
+    weaponEnhancement: weapon.enhancement,
+    criticalRangeMin: weapon.criticalRangeMin,
+    criticalMultiplier: weapon.criticalMultiplier,
+    weaponModifiers: weapon.modifiers,
     defenses,
   };
 }
@@ -204,6 +252,8 @@ function buildMonsterCombatant(monster: MonsterRecord): EncounterCombatant {
     damageDice: monster.damage.dice,
     damageBonus: monster.damage.bonus,
     targetDefense: 'ac',
+    alignment: monster.alignment,
+    minimumEnhancementToHit: monster.minimumEnhancementToHit,
     defenses: monster.defenses,
   };
 }
@@ -266,6 +316,10 @@ function encounterPowerName(classId: CharacterClass, content: ContentBundle) {
   return content.classes.find((entry) => entry.id === classId)?.encounterAbility ?? 'encounter power';
 }
 
+function isEvilAlignment(alignment: string | undefined) {
+  return alignment === 'LE' || alignment === 'NE' || alignment === 'CE';
+}
+
 function performAttack(input: {
   attacker: EncounterCombatant;
   target: EncounterCombatant;
@@ -277,7 +331,7 @@ function performAttack(input: {
   const attackBonus = input.attacker.attackBonus + (input.powerBonus?.attack ?? 0);
   const total = roll + attackBonus;
   const defenseValue = input.target.defenses[input.attacker.targetDefense];
-  const hit = total >= defenseValue;
+  const hit = roll !== 1 && (roll === 20 || total >= defenseValue);
   const logs: CombatLogEntry[] = [];
 
   queueLog(
@@ -296,7 +350,44 @@ function performAttack(input: {
     };
   }
 
-  const damage = rollDice(input.attacker.damageDice, input.random) + input.attacker.damageBonus + (input.powerBonus?.damage ?? 0);
+  const minimumEnhancement = input.target.minimumEnhancementToHit ?? 0;
+  const weaponEnhancement = input.attacker.weaponEnhancement ?? 0;
+
+  if (minimumEnhancement > weaponEnhancement) {
+    const weaponLabel = input.attacker.weaponLabel ?? 'weapon';
+    queueLog(
+      logs,
+      input.round,
+      `${input.attacker.name}'s ${weaponLabel} strikes ${input.target.name}, but the ward rejects it; ${input.target.name} requires a +${minimumEnhancement} weapon.`,
+      'effect'
+    );
+
+    return {
+      damage: 0,
+      logs,
+      target: input.target,
+    };
+  }
+
+  const baseDamage =
+    rollDice(input.attacker.damageDice, input.random) + input.attacker.damageBonus + (input.powerBonus?.damage ?? 0);
+  const criticalRangeMin = input.attacker.criticalRangeMin ?? 20;
+  const criticalMultiplier = input.attacker.criticalMultiplier ?? 2;
+  const critical = roll >= criticalRangeMin;
+  const holy = (input.attacker.weaponModifiers ?? []).includes('holy') && isEvilAlignment(input.target.alignment);
+  let damage = baseDamage;
+  const damageNotes: string[] = [];
+
+  if (critical) {
+    damage *= criticalMultiplier;
+    damageNotes.push(`x${criticalMultiplier} critical`);
+  }
+
+  if (holy) {
+    damage *= 2;
+    damageNotes.push('x2 Holy vs Evil');
+  }
+
   const nextTarget: EncounterCombatant = {
     ...input.target,
     currentHp: Math.max(0, input.target.currentHp - damage),
@@ -305,7 +396,9 @@ function performAttack(input: {
   queueLog(
     logs,
     input.round,
-    `${input.attacker.name} hits ${input.target.name} for ${damage} damage.`,
+    `${input.attacker.name} hits ${input.target.name} for ${damage} damage${
+      damageNotes.length > 0 ? ` (${damageNotes.join(', ')})` : ''
+    }.`,
     'effect'
   );
 

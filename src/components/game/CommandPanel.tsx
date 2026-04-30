@@ -35,7 +35,7 @@ export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
             id="mud-command"
             name="command"
             onChange={(event) => setCommand(event.target.value)}
-            placeholder="look / search / pray / north"
+            placeholder="look / consider / search / north"
             type="text"
             value={command}
           />
