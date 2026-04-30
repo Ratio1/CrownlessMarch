@@ -332,6 +332,14 @@ class LiveShardSession {
     return this.waitForState(() => this.stateVersion > previousVersion, timeoutMs);
   }
 
+  async waitForStateAfter(
+    previousVersion: number,
+    predicate: (state: GameplayShardSnapshot | null) => boolean,
+    timeoutMs: number
+  ) {
+    return this.waitForState((state) => this.stateVersion > previousVersion && predicate(state), timeoutMs);
+  }
+
   async close() {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -373,6 +381,18 @@ function nextStepDirection(current: { x: number; y: number }, target: { x: numbe
 
 function activeQuestLabel(snapshot: GameplayShardSnapshot | null) {
   return snapshot?.character.quests[0]?.label ?? null;
+}
+
+function questSignature(snapshot: GameplayShardSnapshot | null) {
+  return snapshot?.character.quests
+    .map((quest) => `${quest.id}:${quest.status}:${quest.progress}`)
+    .join('|') || 'none';
+}
+
+function focusSignature(snapshot: GameplayShardSnapshot | null) {
+  return snapshot?.objectiveFocus
+    ? `${snapshot.objectiveFocus.label}:${snapshot.objectiveFocus.stateLabel}@${snapshot.objectiveFocus.target.x},${snapshot.objectiveFocus.target.y}`
+    : 'none';
 }
 
 function heroCombatant(snapshot: GameplayShardSnapshot | null) {
@@ -423,6 +443,60 @@ function secureQuestCompleted(snapshot: GameplayShardSnapshot | null) {
   );
 }
 
+function describeSnapshotPosition(snapshot: GameplayShardSnapshot | null) {
+  if (!snapshot) {
+    return 'no-state';
+  }
+
+  return [
+    `pos=${snapshot.position.x},${snapshot.position.y}`,
+    `tile=${snapshot.currentTile.kind}`,
+    `focus=${focusSignature(snapshot)}`,
+    `quest=${questSignature(snapshot)}`,
+    `encounter=${encounterStateSummary(snapshot)}`,
+  ].join(' ');
+}
+
+function hasMoveEffect(before: GameplayShardSnapshot, after: GameplayShardSnapshot | null) {
+  if (!after) {
+    return false;
+  }
+
+  if (after.position.x !== before.position.x || after.position.y !== before.position.y) {
+    return true;
+  }
+
+  if (after.encounter?.status === 'active' && after.encounter.id !== before.encounter?.id) {
+    return true;
+  }
+
+  if (secureQuestCompleted(after) !== secureQuestCompleted(before)) {
+    return true;
+  }
+
+  if (questSignature(after) !== questSignature(before)) {
+    return true;
+  }
+
+  return focusSignature(after) !== focusSignature(before);
+}
+
+async function waitForMoveResult(
+  session: LiveShardSession,
+  before: GameplayShardSnapshot,
+  previousVersion: number,
+  direction: GameplayDirection,
+  timeoutMs: number
+) {
+  try {
+    return await session.waitForStateAfter(previousVersion, (state) => hasMoveEffect(before, state), timeoutMs);
+  } catch (error) {
+    throw new Error(
+      `Timed out waiting for ${direction} move from ${describeSnapshotPosition(before)}; latest ${describeSnapshotPosition(session.latestState)}`
+    );
+  }
+}
+
 async function waitForEncounterResolution(session: LiveShardSession, snapshot: GameplayShardSnapshot) {
   const encounterId = snapshot.encounter?.id ?? null;
   const encounterRound = snapshot.encounter?.round ?? null;
@@ -469,20 +543,16 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
       continue;
     }
 
-    const questSignature = snapshot.character.quests
-      .map((quest) => `${quest.id}:${quest.status}:${quest.progress}`)
-      .join('|') || 'none';
-    if (questSignature !== lastQuestSignature) {
-      lastQuestSignature = questSignature;
-      logStage(`quest state -> ${questSignature}`);
+    const currentQuestSignature = questSignature(snapshot);
+    if (currentQuestSignature !== lastQuestSignature) {
+      lastQuestSignature = currentQuestSignature;
+      logStage(`quest state -> ${currentQuestSignature}`);
     }
 
-    const focusSignature = snapshot.objectiveFocus
-      ? `${snapshot.objectiveFocus.label}:${snapshot.objectiveFocus.stateLabel}@${snapshot.objectiveFocus.target.x},${snapshot.objectiveFocus.target.y}`
-      : 'none';
-    if (focusSignature !== lastFocusSignature) {
-      lastFocusSignature = focusSignature;
-      logStage(`focus -> ${focusSignature} from ${snapshot.position.x},${snapshot.position.y}`);
+    const currentFocusSignature = focusSignature(snapshot);
+    if (currentFocusSignature !== lastFocusSignature) {
+      lastFocusSignature = currentFocusSignature;
+      logStage(`focus -> ${currentFocusSignature} from ${snapshot.position.x},${snapshot.position.y}`);
     }
 
     const encounterSignature = snapshot.encounter
@@ -537,10 +607,10 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
         activeQuest === 'Burn the First Nest' &&
         snapshot.currentTile.kind === 'roots'
       ) {
-        record('burn-reset-west');
         const previousVersion = session.stateVersion;
+        record(`burn-reset-west:from=${snapshot.position.x},${snapshot.position.y}`);
         session.sendMove('west');
-        await session.waitForStateAdvance(previousVersion, 15_000);
+        await waitForMoveResult(session, snapshot, previousVersion, 'west', 15_000);
         continue;
       }
 
@@ -549,10 +619,10 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
         snapshot.currentTile.kind === 'forest' &&
         focus.stateLabel === 'Break the grove wolf'
       ) {
-        record('secure-reset-south');
         const previousVersion = session.stateVersion;
+        record(`secure-reset-south:from=${snapshot.position.x},${snapshot.position.y}`);
         session.sendMove('south');
-        await session.waitForStateAdvance(previousVersion, 15_000);
+        await waitForMoveResult(session, snapshot, previousVersion, 'south', 15_000);
         continue;
       }
 
@@ -562,10 +632,10 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
       continue;
     }
 
-    record(`move:${direction}:${focus.label}:${focus.stateLabel}`);
     const previousVersion = session.stateVersion;
+    record(`move:${direction}:${focus.label}:${focus.stateLabel}:from=${snapshot.position.x},${snapshot.position.y}:target=${focus.target.x},${focus.target.y}`);
     session.sendMove(direction);
-    await session.waitForStateAdvance(previousVersion, 15_000);
+    await waitForMoveResult(session, snapshot, previousVersion, direction, 15_000);
   }
 
   if (!session.latestState) {

@@ -183,7 +183,7 @@ Proxy note:
 
 `pnpm test`, `pnpm lint`, and `pnpm typecheck` are the local verification commands used in this repo.
 
-`pnpm live:devnet` runs the public devnet quest runner in `tests/live/devnet-quest-runner.ts`. It waits for `/e`, registers a fresh account through Resend, verifies the email link, creates a character, attaches over `/ws`, and drives the live quest chain through `Secure the Shrine Road`. The runner fails if the route exceeds its defeat budget, which defaults to one defeat and can be changed with `--max-defeats`.
+`pnpm live:devnet` runs the public devnet quest runner in `tests/live/devnet-quest-runner.ts`. It waits for `/e`, registers a fresh account through Resend, verifies the email link, creates a character, attaches over `/ws`, and drives the live quest chain through `Secure the Shrine Road`. Movement waits for a concrete player-visible state change, and the runner fails if the route exceeds its defeat budget, which defaults to one defeat and can be changed with `--max-defeats`.
 
 `GET /e` returns the current Thornwrithe version contract as JSON and mirrors it in headers:
 
@@ -239,7 +239,7 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.8.6
+pnpm live:devnet -- --expect-version=1.8.7
 ```
 
 ## Operational Notes
