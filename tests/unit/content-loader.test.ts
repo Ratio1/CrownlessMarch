@@ -97,5 +97,10 @@ describe('content loader', () => {
       attackBonus: 20,
       damage: { dice: '3d6' },
     });
+    expect(bundle.monsters.find((entry) => entry.id === 'sap-wolf')).toMatchObject({
+      behavior: 'skirmisher',
+      defenses: { ac: 13, fortitude: 12, reflex: 13, will: 11 },
+      hitPoints: 14,
+    });
   });
 });

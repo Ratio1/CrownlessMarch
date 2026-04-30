@@ -23,9 +23,9 @@
     "label": "Sap Wolf",
     "level": 2,
     "defenses": {
-      "ac": 15,
-      "fortitude": 13,
-      "reflex": 14,
+      "ac": 13,
+      "fortitude": 12,
+      "reflex": 13,
       "will": 11
     },
     "hitPoints": 14,

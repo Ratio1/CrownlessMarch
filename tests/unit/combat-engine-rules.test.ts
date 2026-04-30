@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import type { ContentBundle } from '../../src/server/content/load-content';
+import { loadContentBundle } from '../../src/server/content/load-content';
 import { DEFAULT_GAME_RULES } from '../../src/shared/content/game-rules';
 import {
   advanceEncounterSnapshot,
@@ -262,5 +263,50 @@ describe('combat engine D20 weapon rules', () => {
 
     expect(vampire?.currentHp).toBe(100);
     expect(logText).toContain('requires a +3 weapon');
+  });
+
+  it('keeps starter Sap Wolf fights readable on an average fighter attack', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const sapWolf = content.monsters.find((entry) => entry.id === 'sap-wolf');
+    expect(sapWolf).toBeDefined();
+
+    const now = new Date('2026-04-30T11:00:00.000Z');
+    const hero = buildInitialCharacterSnapshot({
+      name: 'Warden',
+      classId: 'fighter',
+      attributes: {
+        strength: 15,
+        dexterity: 14,
+        constitution: 11,
+        intelligence: 10,
+        wisdom: 9,
+        charisma: 8,
+      },
+      inventory: ['rusted-sword'],
+      equipment: { weapon: 'rusted-sword' },
+    }) as unknown as Record<string, unknown>;
+    const encounter = createEncounterSnapshot({
+      characterId: 'cid-sap-wolf-readability',
+      characterSnapshot: hero,
+      monster: sapWolf!,
+      tileKind: 'forest',
+      content,
+      now,
+      random: makeRandom([0.9, 0]),
+    });
+
+    const advanced = advanceEncounterSnapshot({
+      encounter,
+      characterSnapshot: hero,
+      content,
+      now: new Date(now.getTime() + 3_000),
+      random: makeRandom([0.45, 0.5, 0]),
+    });
+    const wolf = advanced.encounter.combatants.find((entry) => entry.kind === 'monster');
+    const logText = advanced.encounter.logs.map((entry) => entry.text).join('\n');
+
+    expect(wolf?.currentHp).toBe(7);
+    expect(logText).toContain('Sap Wolf has 7/14 HP remaining');
+    expect(logText).toContain('Sap Wolf is bloodied.');
   });
 });

@@ -369,15 +369,24 @@ function performAttack(input: {
     ...input.target,
     currentHp: Math.max(0, input.target.currentHp - damage),
   };
+  const bloodiedThreshold = Math.max(1, Math.floor(input.target.maxHp / 2));
+  const bloodied =
+    nextTarget.currentHp > 0 &&
+    input.target.currentHp > bloodiedThreshold &&
+    nextTarget.currentHp <= bloodiedThreshold;
 
   queueLog(
     logs,
     input.round,
     `${input.attacker.name} hits ${input.target.name} for ${damage} damage${
       damageNotes.length > 0 ? ` (${damageNotes.join(', ')})` : ''
-    }.`,
+    }. ${nextTarget.name} has ${nextTarget.currentHp}/${nextTarget.maxHp} HP remaining.`,
     'effect'
   );
+
+  if (bloodied) {
+    queueLog(logs, input.round, `${nextTarget.name} is bloodied.`, 'effect');
+  }
 
   return {
     damage,
