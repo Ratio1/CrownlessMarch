@@ -143,7 +143,7 @@ Required settings:
 - `ATTACH_TOKEN_SECRET`: short-lived attach-token signing secret
 - `THORNWRITHE_GAME_ID`: shared game id for the deployment
 - `THORNWRITHE_NODE_ID`: node identifier written into presence leases
-- `THORNWRITHE_LEASE_GRACE_MS`: lease timeout for stale sockets
+- `THORNWRITHE_LEASE_GRACE_MS`: lease timeout for stale sockets, defaults to `60000`
 - `ADMIN_USER`: primary admin username for `/admin`
 - `ADMIN_PASS`: primary admin password for `/admin`
 - `RESEND_TOKEN`: API token used to send verification links
@@ -239,7 +239,7 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.8.0
+pnpm live:devnet -- --expect-version=1.8.1
 ```
 
 ## Operational Notes

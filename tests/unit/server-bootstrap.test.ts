@@ -136,8 +136,14 @@ describe('server bootstrap', () => {
 
       await mod.createServer();
 
+      const { createSessionHost } = await import('../../src/server/runtime/connection-manager');
       expect(hsync).toHaveBeenCalledTimes(1);
       expect(bindWebSocketServer).toHaveBeenCalledTimes(1);
+      expect(createSessionHost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          heartbeatGraceMs: 60_000,
+        })
+      );
       expect(hsync.mock.invocationCallOrder[0]).toBeLessThan(bindWebSocketServer.mock.invocationCallOrder[0]);
     } finally {
       process.env = originalEnv;

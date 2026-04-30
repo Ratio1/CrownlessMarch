@@ -42,7 +42,7 @@ function resolveGameplayPath() {
 }
 
 function getHeartbeatGraceMs() {
-  return Number(process.env.THORNWRITHE_LEASE_GRACE_MS ?? '15000');
+  return Number(process.env.THORNWRITHE_LEASE_GRACE_MS ?? '60000');
 }
 
 function getShardWorldInstanceId() {

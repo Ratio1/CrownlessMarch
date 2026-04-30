@@ -1,7 +1,7 @@
 {
   "name": "@ratio1/thornwrithe",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.8.1",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20.17.0"
