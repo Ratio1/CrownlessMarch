@@ -16,6 +16,7 @@ export interface SessionHostDependencies {
   nodeId: string;
   shardWorldInstanceId: string;
   heartbeatGraceMs: number;
+  leaseRefreshIntervalMs?: number;
   shardRuntime?: ShardRuntimeLike;
   verifyAttachToken(token: string): Promise<AttachTokenPayload>;
   readPresenceLease(accountId: string): Promise<PresenceLease | null>;
@@ -37,6 +38,7 @@ interface ActiveSession {
   connectionId: string;
   socket: WebSocket;
   heartbeatTimer: NodeJS.Timeout | null;
+  nextLeaseRefreshAt: number;
   ended: boolean;
 }
 
@@ -55,6 +57,9 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   const shardRuntime = dependencies.shardRuntime ?? new ShardRuntime();
   const now = dependencies.now ?? Date.now;
   const createConnectionId = dependencies.createConnectionId ?? (() => crypto.randomUUID());
+  const leaseRefreshIntervalMs =
+    dependencies.leaseRefreshIntervalMs ??
+    Math.max(1, Math.min(20_000, Math.floor(dependencies.heartbeatGraceMs / 3)));
 
   function send(socket: WebSocket, message: OutboundMessage) {
     if (socket.readyState === WebSocket.OPEN) {
@@ -204,6 +209,11 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       return false;
     }
 
+    if (now() < session.nextLeaseRefreshAt) {
+      armExpiryTimer(session);
+      return true;
+    }
+
     const ownership = await getOwnershipStatus(session);
 
     if (session.ended) {
@@ -248,6 +258,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       return false;
     }
 
+    session.nextLeaseRefreshAt = now() + leaseRefreshIntervalMs;
     armExpiryTimer(session);
     return true;
   }
@@ -342,6 +353,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           connectionId,
           socket,
           heartbeatTimer: null,
+          nextLeaseRefreshAt: now() + leaseRefreshIntervalMs,
           ended: false,
         });
 
@@ -360,6 +372,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           connectionId,
           socket,
           heartbeatTimer: null,
+          nextLeaseRefreshAt: now() + leaseRefreshIntervalMs,
           ended: false,
         });
 
@@ -382,6 +395,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           connectionId,
           socket,
           heartbeatTimer: null,
+          nextLeaseRefreshAt: now() + leaseRefreshIntervalMs,
           ended: false,
         };
 
@@ -418,17 +432,6 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       return;
     }
 
-    const ownership = await getOwnershipStatus(session);
-
-    if (session.ended) {
-      return;
-    }
-
-    if (ownership.status !== 'current') {
-      endSession(session, ownership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
-      return;
-    }
-
     if (message.type === 'heartbeat') {
       const refreshed = await refreshHeartbeat(session);
       if (!refreshed || session.ended) {
@@ -438,6 +441,17 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       const runtimeUpdate = shardRuntime.tickPlayer(session.characterId);
       const nextState = await maybePersistProgression(session, runtimeUpdate);
       await emitRuntimeState(socket, session, nextState);
+      return;
+    }
+
+    const ownership = await getOwnershipStatus(session);
+
+    if (session.ended) {
+      return;
+    }
+
+    if (ownership.status !== 'current') {
+      endSession(session, ownership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
       return;
     }
 

@@ -99,6 +99,7 @@ function createHarness(options: {
   deferHeartbeatWrite?: boolean;
   deferClear?: boolean;
   failLoad?: boolean;
+  leaseRefreshIntervalMs?: number;
   rejectClear?: boolean;
 } = {}) {
   const events: string[] = [];
@@ -150,6 +151,7 @@ function createHarness(options: {
     nodeId: 'node-a',
     shardWorldInstanceId: 'shard-a',
     heartbeatGraceMs: 1_000,
+    leaseRefreshIntervalMs: options.leaseRefreshIntervalMs,
     shardRuntime,
     now: () => Date.now(),
     createConnectionId: () => {
@@ -495,15 +497,40 @@ describe('websocket session host', () => {
     expect(harness.runtimeSnapshot('cid-1').characters).toEqual({});
   });
 
-  it('refreshes the active lease under the account id on heartbeat', async () => {
+  it('throttles heartbeat lease writes inside the refresh interval', async () => {
     harness = createHarness();
     const url = await harness.listen();
     const socket = await openSocket(url);
     harness.trackSocket(socket);
     const token = await issueToken('cid-1');
 
+    const attached = waitForSocketMessage(socket, 'attached');
+    const initialState = waitForSocketMessage(socket, 'state');
     socket.send(encode({ type: 'attach', attachToken: token }));
-    await waitForSocketMessage(socket, 'attached');
+    await attached;
+    await initialState;
+
+    const writesBeforeHeartbeat = harness.events.filter((event) => event === 'write:account-1:conn-1').length;
+    const stateAfterHeartbeat = waitForSocketMessage(socket, 'state');
+    socket.send(encode({ type: 'heartbeat' }));
+    await stateAfterHeartbeat;
+
+    expect(harness.events.filter((event) => event === 'write:account-1:conn-1')).toHaveLength(writesBeforeHeartbeat);
+    expect(harness.runtimeEvents.filter((event) => event === 'tick:cid-1')).toHaveLength(1);
+
+    socket.close();
+  });
+
+  it('refreshes the active lease under the account id after the refresh interval', async () => {
+    harness = createHarness({ leaseRefreshIntervalMs: 0 });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    const attached = waitForSocketMessage(socket, 'attached');
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await attached;
 
     const beforeHeartbeat = harness.readLease('account-1');
     expect(beforeHeartbeat).not.toBeNull();
@@ -571,7 +598,7 @@ describe('websocket session host', () => {
   });
 
   it('clears the ended session lease even if a heartbeat write resolves after logout', async () => {
-    harness = createHarness({ deferHeartbeatWrite: true, rejectClear: true });
+    harness = createHarness({ deferHeartbeatWrite: true, leaseRefreshIntervalMs: 0, rejectClear: true });
     const url = await harness.listen();
     const socket = await openSocket(url);
     harness.trackSocket(socket);
