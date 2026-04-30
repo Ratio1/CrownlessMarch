@@ -270,7 +270,7 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
   async function maybePersistProgression(
     session: ActiveSession,
     update: { snapshot: StateOutboundMessage['state']; progressionToPersist?: Record<string, unknown> }
-  ) {
+  ): Promise<StateOutboundMessage['state']> {
     if (!dependencies.persistProgression || !update.progressionToPersist) {
       return update.snapshot;
     }
@@ -440,7 +440,9 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
       const runtimeUpdate = shardRuntime.tickPlayer(session.characterId);
       const nextState = await maybePersistProgression(session, runtimeUpdate);
-      await emitRuntimeState(socket, session, nextState);
+      if (nextState.encounter || runtimeUpdate.progressionToPersist) {
+        await emitRuntimeState(socket, session, nextState);
+      }
       return;
     }
 

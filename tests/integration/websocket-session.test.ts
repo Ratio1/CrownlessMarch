@@ -67,6 +67,28 @@ function waitForSocketMessage(socket: WebSocket, expectedType: string) {
   });
 }
 
+function expectNoSocketMessage(socket: WebSocket, rejectedType: string, durationMs = 100) {
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off('message', onMessage);
+      resolve();
+    }, durationMs);
+
+    const onMessage = (data: WebSocket.RawData) => {
+      const message = parseMessage(data);
+      if (message.type !== rejectedType) {
+        return;
+      }
+
+      clearTimeout(timeout);
+      socket.off('message', onMessage);
+      reject(new Error(`Unexpected ${rejectedType} message`));
+    };
+
+    socket.on('message', onMessage);
+  });
+}
+
 async function waitForClose(socket: WebSocket) {
   await once(socket, 'close');
 }
@@ -530,9 +552,8 @@ describe('websocket session host', () => {
     await initialState;
 
     const writesBeforeHeartbeat = harness.events.filter((event) => event === 'write:account-1:conn-1').length;
-    const stateAfterHeartbeat = waitForSocketMessage(socket, 'state');
     socket.send(encode({ type: 'heartbeat' }));
-    await stateAfterHeartbeat;
+    await expectNoSocketMessage(socket, 'state');
 
     expect(harness.events.filter((event) => event === 'write:account-1:conn-1')).toHaveLength(writesBeforeHeartbeat);
     expect(harness.runtimeEvents.filter((event) => event === 'tick:cid-1')).toHaveLength(1);

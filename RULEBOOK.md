@@ -6,7 +6,7 @@ rules describe what should be visible in play, while implementation notes define
 the data contracts and resolver behavior the engine should enforce.
 
 Status: canonical rules for Thornwrithe weapon, combat, and progression. As of
-Thornwrithe `1.8.4`, the runtime implements JSON-backed rule packs,
+Thornwrithe `1.8.5`, the runtime implements JSON-backed rule packs,
 item-driven weapon dice, `+5` enhancement validation, weapon critical ranges,
 monster alignment, Holy damage against Evil, boss-only enhancement gates, the
 `consider` MUD skill, XP-based real level progression capped at level 15, and
@@ -29,7 +29,7 @@ next.
 
 ## Current Implementation Snapshot
 
-| Rule Area | Thornwrithe 1.8.4 Behavior | Target Rulebook Behavior |
+| Rule Area | Thornwrithe 1.8.5 Behavior | Target Rulebook Behavior |
 | --- | --- | --- |
 | Rule data | XP, class attack tables, class bases, weapon table, combat constants, and alignments load from `content/rules/*.json`. | Inspectable JSON rule packs, TypeScript resolver code. |
 | Weapon damage | Equipped weapon type supplies damage dice, with class fallback when unarmed. | Equipped weapon type supplies damage dice. |

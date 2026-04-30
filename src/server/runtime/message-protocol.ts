@@ -1,4 +1,5 @@
 import type { RawData } from 'ws';
+import type { GameplayShardSnapshot } from '../../shared/gameplay';
 
 export interface AttachInboundMessage {
   type: 'attach';
@@ -44,7 +45,7 @@ export interface AttachedOutboundMessage {
 
 export interface StateOutboundMessage {
   type: 'state';
-  state: unknown;
+  state: GameplayShardSnapshot;
 }
 
 export interface TakenOverOutboundMessage {
