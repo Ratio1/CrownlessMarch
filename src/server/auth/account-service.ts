@@ -36,6 +36,13 @@ interface ThornwritheAccountMetadata {
   characterName?: string;
 }
 
+interface LegacyThornwritheAccountMetadata {
+  email: string;
+  characterId?: string;
+  latestCharacterCid?: string;
+  characterName?: string;
+}
+
 export interface AccountRecord {
   accountId: string;
   email: string;
@@ -148,6 +155,42 @@ function isSharedAccountMetadata(value: unknown): value is ThornwritheAccountMet
   );
 }
 
+function normalizeSharedAccountMetadata(email: string, value: unknown): ThornwritheAccountMetadata | null {
+  if (isSharedAccountMetadata(value)) {
+    return value;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Partial<LegacyThornwritheAccountMetadata>;
+
+  if (typeof record.email !== 'string') {
+    return null;
+  }
+
+  const latestCharacterCid =
+    typeof record.latestCharacterCid === 'string'
+      ? record.latestCharacterCid
+      : typeof record.characterId === 'string'
+        ? record.characterId
+        : undefined;
+  const characterName = typeof record.characterName === 'string' ? record.characterName : undefined;
+
+  if (!latestCharacterCid && !characterName) {
+    return null;
+  }
+
+  return {
+    accountId: email,
+    email: normalizeEmail(record.email),
+    emailVerified: true,
+    latestCharacterCid,
+    characterName,
+  };
+}
+
 function buildAccountRecord(input: {
   accountId: string;
   email: string;
@@ -221,18 +264,20 @@ async function resolveSharedRosterEntry(
 }
 
 async function mapSharedUser(email: string, user: PublicUser<unknown> | null): Promise<AuthenticatedAccount | null> {
-  if (!user || !isSharedAccountMetadata(user.metadata)) {
+  const metadata = user ? normalizeSharedAccountMetadata(email, user.metadata) : null;
+
+  if (!user || !metadata) {
     return null;
   }
 
-  const rosterEntry = await resolveSharedRosterEntry(email, user.metadata);
+  const rosterEntry = await resolveSharedRosterEntry(email, metadata);
 
   return buildAccountRecord({
     accountId: email,
     email,
-    emailVerified: user.metadata.emailVerified,
-    characterId: rosterEntry?.latestCharacterCid ?? user.metadata.latestCharacterCid ?? null,
-    characterName: rosterEntry?.characterName ?? user.metadata.characterName ?? null,
+    emailVerified: metadata.emailVerified,
+    characterId: rosterEntry?.latestCharacterCid ?? metadata.latestCharacterCid ?? null,
+    characterName: rosterEntry?.characterName ?? metadata.characterName ?? null,
   });
 }
 

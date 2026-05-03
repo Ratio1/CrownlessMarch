@@ -144,6 +144,52 @@ describe('account service', () => {
     });
   });
 
+  it('authenticates legacy shared auth metadata and backfills the durable roster', async () => {
+    const cstore = await import('../../src/server/auth/cstore');
+    const roster = await import('../../src/server/platform/cstore-roster');
+    const accountService = await import('../../src/server/auth/account-service');
+
+    (cstore.isSharedAuthConfigured as jest.Mock).mockReturnValue(true);
+    (cstore.getAuthClient as jest.Mock).mockReturnValue({
+      simple: {
+        authenticate: jest.fn().mockResolvedValue({
+          username: 'ignored',
+          role: 'user',
+          metadata: {
+            email: 'legacy@test.invalid',
+            characterId: 'cid-legacy',
+            characterName: 'Legacy Warden',
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          type: 'simple',
+        }),
+      },
+    });
+    (roster.readRosterEntry as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      accountService.authenticateAccount({
+        email: 'Legacy@Test.Invalid',
+        password: 'hunter234',
+      }),
+    ).resolves.toMatchObject({
+      accountId: 'legacy@test.invalid',
+      characterId: 'cid-legacy',
+      characterName: 'Legacy Warden',
+      emailVerified: true,
+    });
+
+    expect(roster.writeRosterEntry).toHaveBeenCalledWith(
+      'legacy@test.invalid',
+      expect.objectContaining({
+        accountId: 'legacy@test.invalid',
+        latestCharacterCid: 'cid-legacy',
+        characterName: 'Legacy Warden',
+      })
+    );
+  });
+
   it('creates the first character checkpoint and seeds the roster', async () => {
     const cstore = await import('../../src/server/auth/cstore');
     const verification = await import('../../src/server/auth/email-verification');
