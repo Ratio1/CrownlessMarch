@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title>Thornwrithe</title>
+  <desc>Gold rune over a dark green field for the Thornwrithe live shard.</desc>
+  <rect width="64" height="64" rx="14" fill="#0b1713"/>
+  <path d="M12 45c7-18 18-28 40-31-9 8-14 17-16 28-7-4-15-3-24 3Z" fill="#294a33"/>
+  <path d="M18 47c7-8 17-13 30-16" fill="none" stroke="#93b66d" stroke-width="4" stroke-linecap="round"/>
+  <path d="M26 17h12l-3 10h8L29 49l3-15h-9l3-17Z" fill="#f7c978"/>
+  <path d="M23 51c8-6 15-8 24-6" fill="none" stroke="#c49b58" stroke-width="3" stroke-linecap="round"/>
+</svg>
