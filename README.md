@@ -185,6 +185,8 @@ Proxy note:
 
 `pnpm live:devnet` runs the public devnet quest runner in `tests/live/devnet-quest-runner.ts`. It waits for `/e`, registers a fresh account through Resend, verifies the email link, creates a character, attaches over `/ws`, and drives the live quest chain through `Secure the Shrine Road`. Movement waits for a concrete player-visible state change, and the runner fails if the route exceeds its defeat budget, which defaults to one defeat and can be changed with `--max-defeats`.
 
+`pnpm live:browser` runs the public devnet browser smoke runner in `tests/live/devnet-browser-smoke.ts`. It waits for `/e`, registers a fresh account through Resend, opens `/play` in Chromium through `playwright-core`, verifies that the Phaser canvas and WebSocket-attached HUD render, clicks North from town, and fails unless the March Feed shows the styled `MOVE` entry. Set `THORNWRITHE_BROWSER_EXECUTABLE` when Chromium is not installed in a standard system or Playwright cache path.
+
 `GET /e` returns the current Thornwrithe version contract as JSON and mirrors it in headers:
 
 - `x-thornwrithe-version`
@@ -239,7 +241,8 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.8.7
+pnpm live:devnet -- --expect-version=1.9.1
+pnpm live:browser -- --expect-version=1.9.1
 ```
 
 ## Operational Notes
