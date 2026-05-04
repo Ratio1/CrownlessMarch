@@ -67,7 +67,7 @@ export interface GameplayObjectiveFocus {
 export interface GameplayActivityEntry {
   id: string;
   text: string;
-  kind: 'system' | 'quest' | 'reward' | 'check';
+  kind: 'system' | 'quest' | 'reward' | 'check' | 'move';
 }
 
 export interface GameplayCharacterCard {

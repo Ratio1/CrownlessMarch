@@ -164,6 +164,71 @@ describe('shard runtime', () => {
     expect(Object.values(update.snapshot.monsters).some((monster) => monster.label === 'Briar Goblin')).toBe(true);
   });
 
+  it('logs successful movement with terrain and coordinates in the march feed', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({
+      content,
+      now: () => Date.parse('2026-05-04T07:00:00.000Z'),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-move-log',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Aelis',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+      }),
+    });
+
+    const update = runtime.movePlayer('cid-move-log', 'east');
+
+    expect(update.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'move',
+      text: 'Aelis moves east into Briar Roots (6,5).',
+    });
+  });
+
+  it('logs blocked movement without changing position', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({
+      content,
+      now: () => Date.parse('2026-05-04T07:05:00.000Z'),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-move-blocked',
+      position: { x: 0, y: 0 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Mire',
+        classId: 'cleric',
+        attributes: {
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 12,
+          wisdom: 15,
+          charisma: 13,
+        },
+      }),
+    });
+
+    const update = runtime.movePlayer('cid-move-blocked', 'west');
+
+    expect(update.snapshot.position).toEqual({ x: 0, y: 0 });
+    expect(update.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'move',
+      text: 'Mire cannot move west; the mapped shard ends there.',
+    });
+  });
+
   it('turns in a ready survey quest at town and activates the goblin cull', async () => {
     const content = await loadContentBundle(process.cwd());
     const runtime = new ShardRuntime({ content });

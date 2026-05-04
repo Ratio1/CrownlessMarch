@@ -1263,6 +1263,11 @@ select {
   background: rgba(78, 56, 112, 0.16);
 }
 
+.combat-log__entry--move {
+  border-color: rgba(123, 171, 210, 0.2);
+  background: rgba(31, 73, 91, 0.16);
+}
+
 .combat-log__entry--effect,
 .combat-log__entry--system {
   border-color: rgba(130, 164, 118, 0.18);

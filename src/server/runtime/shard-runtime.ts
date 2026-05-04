@@ -314,7 +314,11 @@ function getActivityLog(snapshot: Record<string, unknown>): GameplayActivityEntr
           isRecord(entry) &&
           typeof entry.id === 'string' &&
           typeof entry.text === 'string' &&
-          (entry.kind === 'system' || entry.kind === 'quest' || entry.kind === 'reward' || entry.kind === 'check')
+          (entry.kind === 'system' ||
+            entry.kind === 'quest' ||
+            entry.kind === 'reward' ||
+            entry.kind === 'check' ||
+            entry.kind === 'move')
         );
       })
     : [];
@@ -343,6 +347,10 @@ function appendActivityLog(
 
 function normalizeCommand(command: string) {
   return command.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function terrainLabel(kind: GameplayTileSnapshot['kind']) {
+  return TERRAIN_COMMAND_DETAILS[kind]?.label ?? kind;
 }
 
 function rollD20(random: () => number) {
@@ -823,8 +831,20 @@ export class ShardRuntime implements ShardRuntimeLike {
       x: player.position.x + delta.x,
       y: player.position.y + delta.y,
     };
+    const nowIso = new Date(this.now()).toISOString();
+    const characterName = this.characterName(player);
 
     if (!this.isWithinBounds(nextPosition)) {
+      player.snapshot = normalizeDurableProgression(
+        appendActivityLog(
+          player.snapshot,
+          `${characterName} cannot move ${direction}; the mapped shard ends there.`,
+          'move',
+          nowIso,
+        ),
+        this.content.rules,
+      );
+
       return {
         snapshot: this.snapshotFor(characterId),
       };
@@ -832,12 +852,31 @@ export class ShardRuntime implements ShardRuntimeLike {
 
     const tile = this.getTileAt(nextPosition.x, nextPosition.y);
     if (tile.blocked) {
+      player.snapshot = normalizeDurableProgression(
+        appendActivityLog(
+          player.snapshot,
+          `${terrainLabel(tile.kind)} blocks the way ${direction}.`,
+          'move',
+          nowIso,
+        ),
+        this.content.rules,
+      );
+
       return {
         snapshot: this.snapshotFor(characterId),
       };
     }
 
     player.position = nextPosition;
+    player.snapshot = normalizeDurableProgression(
+      appendActivityLog(
+        player.snapshot,
+        `${characterName} moves ${direction} into ${terrainLabel(tile.kind)} (${nextPosition.x},${nextPosition.y}).`,
+        'move',
+        nowIso,
+      ),
+      this.content.rules,
+    );
     this.applyTileInteractions(player, tile, 'move');
 
     const monsterId = resolveHostileMonsterId(player.snapshot, tile);
