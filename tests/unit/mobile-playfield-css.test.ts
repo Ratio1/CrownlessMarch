@@ -47,4 +47,10 @@ describe('mobile playfield CSS', () => {
     expect(mobileCss).toMatch(/\.world-canvas__marquee\s*\{[^}]*top:\s*16px;/s);
     expect(mobileCss).toMatch(/\.world-canvas__marquee\s*\{[^}]*width:\s*calc\(100% - 24px\);/s);
   });
+
+  it('keeps the mobile hero panel below the absolute shard marquee', () => {
+    const mobileCss = extractMediaBlock(readGlobalCss(), '@media (max-width: 720px)');
+
+    expect(mobileCss).toMatch(/\.world-canvas__hero\s*\{[^}]*margin-top:\s*108px;/s);
+  });
 });

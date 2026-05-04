@@ -2,8 +2,10 @@ import * as http from 'node:http';
 import { once } from 'node:events';
 import WebSocket, { WebSocketServer } from 'ws';
 import { issueAttachToken, verifyAttachToken } from '../../src/server/auth/attach-token';
+import { loadContentBundle, type ContentBundle } from '../../src/server/content/load-content';
 import { createSessionHost } from '../../src/server/runtime/connection-manager';
 import { ShardRuntime, type ShardRuntimeLike } from '../../src/server/runtime/shard-runtime';
+import { buildInitialCharacterSnapshot } from '../../src/shared/domain/progression';
 import type { PresenceLease } from '../../src/shared/domain/types';
 
 jest.setTimeout(10_000);
@@ -117,12 +119,15 @@ async function waitForEventCount(events: string[], eventName: string, expectedCo
 }
 
 function createHarness(options: {
+  content?: ContentBundle;
   deferLoad?: boolean;
   deferHeartbeatWrite?: boolean;
+  deferProgressionPersist?: boolean;
   deferReadAt?: number[];
   deferClear?: boolean;
   failLoad?: boolean;
   leaseRefreshIntervalMs?: number;
+  recordSnapshot?: Record<string, unknown>;
   rejectClear?: boolean;
 } = {}) {
   const events: string[] = [];
@@ -133,11 +138,12 @@ function createHarness(options: {
   const loadRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   const readRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   const writeRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
+  const persistRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   const clearRequests: Array<ReturnType<typeof createDeferred<void>>> = [];
   let nextConnectionNumber = 0;
   let readCount = 0;
   let writeCount = 0;
-  const baseRuntime = new ShardRuntime();
+  const baseRuntime = new ShardRuntime({ content: options.content });
   const shardRuntime = {
     addPlayer(character: Parameters<ShardRuntime['addPlayer']>[0]) {
       runtimeEvents.push(`add:${character.cid}`);
@@ -255,11 +261,30 @@ function createHarness(options: {
         snapshot: current.snapshot,
       };
     },
+    persistProgression: async ({ accountId, connectionId, progression }) => {
+      events.push(`persist_started:${accountId}:${connectionId}`);
+      if (options.deferProgressionPersist) {
+        const request = createDeferred<void>();
+        persistRequests.push(request);
+        await request.promise;
+      }
+
+      events.push(`persist:${accountId}:${connectionId}`);
+      records.set('cid-1', {
+        persist_revision: 2,
+        snapshot: progression,
+      });
+      return {
+        cid: 'cid-1',
+        persist_revision: 2,
+        snapshot: progression,
+      };
+    },
   });
 
   records.set('cid-1', {
     persist_revision: 1,
-    snapshot: {
+    snapshot: options.recordSnapshot ?? {
       name: 'Warden',
       position: { x: 3, y: 7 },
     },
@@ -308,6 +333,14 @@ function createHarness(options: {
       const request = writeRequests[index];
       if (!request) {
         throw new Error(`Missing deferred heartbeat write at index ${index}`);
+      }
+
+      request.resolve();
+    },
+    releaseProgressionPersist(index: number = 0) {
+      const request = persistRequests[index];
+      if (!request) {
+        throw new Error(`Missing deferred persist at index ${index}`);
       }
 
       request.resolve();
@@ -557,6 +590,76 @@ describe('websocket session host', () => {
 
     expect(harness.events.filter((event) => event === 'write:account-1:conn-1')).toHaveLength(writesBeforeHeartbeat);
     expect(harness.runtimeEvents.filter((event) => event === 'tick:cid-1')).toHaveLength(1);
+
+    socket.close();
+  });
+
+  it('sends quest turn-in movement state before slow progression persistence completes', async () => {
+    const content = await loadContentBundle(process.cwd());
+    harness = createHarness({
+      content,
+      deferProgressionPersist: true,
+      recordSnapshot: {
+        ...buildInitialCharacterSnapshot({
+          name: 'Warden',
+          classId: 'fighter',
+          attributes: {
+            strength: 15,
+            dexterity: 13,
+            constitution: 12,
+            intelligence: 10,
+            wisdom: 10,
+            charisma: 8,
+          },
+          currency: 12,
+          activeQuestIds: ['burn-the-first-nest'],
+        }),
+        position: { x: 6, y: 5 },
+        quest_progress: {
+          'burn-the-first-nest': {
+            status: 'ready_to_turn_in',
+            goblinsDefeated: 2,
+            target: 2,
+          },
+        },
+      },
+    });
+    const url = await harness.listen();
+    const socket = await openSocket(url);
+    harness.trackSocket(socket);
+    const token = await issueToken('cid-1');
+
+    const attached = waitForSocketMessage(socket, 'attached');
+    const initialState = waitForSocketMessage(socket, 'state');
+    socket.send(encode({ type: 'attach', attachToken: token }));
+    await attached;
+    await initialState;
+
+    const movedState = waitForSocketMessage(socket, 'state');
+    socket.send(encode({ type: 'move', direction: 'west' }));
+    await waitForEventCount(harness.events, 'persist_started:account-1:conn-1', 1);
+
+    expect((await movedState).state).toMatchObject({
+      position: {
+        x: 5,
+        y: 5,
+      },
+      currentTile: {
+        kind: 'town',
+      },
+      character: {
+        quests: [
+          expect.objectContaining({
+            id: 'secure-the-shrine-road',
+            status: 'active',
+          }),
+        ],
+      },
+    });
+    expect(harness.runtimeEvents.filter((event) => event === 'persisted:cid-1:cid-1')).toHaveLength(0);
+
+    harness.releaseProgressionPersist();
+    await waitForEventCount(harness.runtimeEvents, 'persisted:cid-1:cid-1', 1);
 
     socket.close();
   });

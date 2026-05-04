@@ -296,6 +296,27 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
     }
   }
 
+  async function persistProgressionAfterState(
+    socket: WebSocket,
+    session: ActiveSession,
+    update: { snapshot: StateOutboundMessage['state']; progressionToPersist?: Record<string, unknown> }
+  ) {
+    if (!update.progressionToPersist) {
+      return;
+    }
+
+    const previousCid = update.snapshot.character.cid;
+    const confirmedState = await maybePersistProgression(session, update);
+
+    if (session.ended) {
+      return;
+    }
+
+    if (confirmedState.character.cid !== previousCid) {
+      await emitRuntimeState(socket, session, confirmedState);
+    }
+  }
+
   async function onMessage(
     sessionRef: { current: ActiveSession | null; pending: PendingAttach | null },
     socket: WebSocket,
@@ -439,10 +460,10 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
       }
 
       const runtimeUpdate = shardRuntime.tickPlayer(session.characterId);
-      const nextState = await maybePersistProgression(session, runtimeUpdate);
-      if (nextState.encounter || runtimeUpdate.progressionToPersist) {
-        await emitRuntimeState(socket, session, nextState);
+      if (runtimeUpdate.snapshot.encounter || runtimeUpdate.progressionToPersist) {
+        await emitRuntimeState(socket, session, runtimeUpdate.snapshot);
       }
+      await persistProgressionAfterState(socket, session, runtimeUpdate);
       return;
     }
 
@@ -459,22 +480,22 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
 
     if (message.type === 'move') {
       const runtimeUpdate = shardRuntime.movePlayer(session.characterId, message.direction);
-      const nextState = await maybePersistProgression(session, runtimeUpdate);
-      await emitRuntimeState(socket, session, nextState);
+      await emitRuntimeState(socket, session, runtimeUpdate.snapshot);
+      await persistProgressionAfterState(socket, session, runtimeUpdate);
       return;
     }
 
     if (message.type === 'override') {
       const runtimeUpdate = shardRuntime.queueOverride(session.characterId, message.command);
-      const nextState = await maybePersistProgression(session, runtimeUpdate);
-      await emitRuntimeState(socket, session, nextState);
+      await emitRuntimeState(socket, session, runtimeUpdate.snapshot);
+      await persistProgressionAfterState(socket, session, runtimeUpdate);
       return;
     }
 
     if (message.type === 'command') {
       const runtimeUpdate = shardRuntime.commandPlayer(session.characterId, message.command);
-      const nextState = await maybePersistProgression(session, runtimeUpdate);
-      await emitRuntimeState(socket, session, nextState);
+      await emitRuntimeState(socket, session, runtimeUpdate.snapshot);
+      await persistProgressionAfterState(socket, session, runtimeUpdate);
       return;
     }
 

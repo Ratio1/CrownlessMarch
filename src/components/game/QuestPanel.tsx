@@ -14,21 +14,26 @@ export function QuestPanel({ snapshot }: QuestPanelProps) {
       {quests.length === 0 ? <p className="muted">No active shard quests. Follow the safest road you can find.</p> : null}
       {quests.length > 0 ? (
         <div className="quest-stack">
-          {quests.map((quest) => (
-            <article className="quest-card" key={quest.id}>
-              <div className="quest-card__header">
-                <strong>{quest.label}</strong>
-                <span className="status-pill">
-                  {quest.status === 'ready_to_turn_in' ? 'Ready To Turn In' : 'Active'}
-                </span>
-              </div>
-              <p>{quest.progress}</p>
-              <div className="play-chip-row">
-                <span className="status-pill">Reward {quest.rewardXp} XP</span>
-              </div>
-              <p className="muted">{quest.objective}</p>
-            </article>
-          ))}
+          {quests.map((quest) => {
+            const ready = quest.status === 'ready_to_turn_in';
+
+            return (
+              <article className={`quest-card${ready ? ' quest-card--ready' : ''}`} key={quest.id}>
+                <div className="quest-card__header">
+                  <strong>{quest.label}</strong>
+                  <span className={`status-pill${ready ? ' status-pill--ready' : ''}`}>
+                    {ready ? 'Ready To Turn In' : 'Active'}
+                  </span>
+                </div>
+                <p>{quest.progress}</p>
+                <div className="play-chip-row">
+                  <span className="status-pill">Reward {quest.rewardXp} XP</span>
+                  {ready ? <span className="status-pill status-pill--objective">Return to town</span> : null}
+                </div>
+                <p className="muted">{quest.objective}</p>
+              </article>
+            );
+          })}
         </div>
       ) : null}
       {completedQuests.length > 0 ? (
