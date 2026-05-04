@@ -16,6 +16,7 @@ describe('live browser smoke runner wiring', () => {
     expect(packageJson.scripts?.['live:browser']).toBe('tsx tests/live/devnet-browser-smoke.ts');
     expect(packageJson.devDependencies).toHaveProperty('playwright-core');
     expect(script).toContain('RESEND_TOKEN or RESEND_API_KEY is required for the live browser smoke runner');
+    expect(script).toContain('const NETWORK_TIMEOUT_MS = 45_000;');
     expect(script).toContain('waitForHealth');
     expect(script).toContain('resolveBrowserExecutable');
     expect(script).toContain('moves north into Road Lane (5,4)');

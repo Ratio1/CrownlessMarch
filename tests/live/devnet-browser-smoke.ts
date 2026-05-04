@@ -18,7 +18,7 @@ interface HealthInfo {
   commit: string | null;
 }
 
-const NETWORK_TIMEOUT_MS = 20_000;
+const NETWORK_TIMEOUT_MS = 45_000;
 const DEFAULT_VIEWPORT: BrowserContextOptions['viewport'] = { width: 1440, height: 1000 };
 
 function sleep(ms: number) {
