@@ -1,7 +1,7 @@
 {
   "name": "@ratio1/thornwrithe",
   "private": true,
-  "version": "1.9.3",
+  "version": "1.9.4",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20.17.0"
@@ -14,8 +14,11 @@
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "regression:local": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "live:devnet": "tsx tests/live/devnet-quest-runner.ts",
-    "live:browser": "tsx tests/live/devnet-browser-smoke.ts"
+    "live:browser": "tsx tests/live/devnet-browser-smoke.ts",
+    "regression:live": "tsx tests/live/run-regression-ladder.ts",
+    "regression:agent": "tsx tests/live/write-agent-regression-brief.ts"
   },
   "dependencies": {
     "@ratio1/cstore-auth-ts": "^0.6.1",

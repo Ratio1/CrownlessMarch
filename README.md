@@ -241,9 +241,23 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.9.3
-pnpm live:browser -- --expect-version=1.9.3
+pnpm live:devnet -- --expect-version=1.9.4
+pnpm live:browser -- --expect-version=1.9.4
+pnpm live:browser -- --expect-version=1.9.4 --profile=all --report-path=test-results/live/browser-smoke-report.json
 ```
+
+Thornwrithe now has a four-level regression ladder:
+
+```bash
+pnpm regression:local
+pnpm regression:live -- --expect-version=1.9.4
+pnpm regression:agent -- --evidence-json=test-results/live/browser-smoke-report.json
+```
+
+`regression:local` runs lint, typecheck, Jest, and a production build. `regression:live`
+runs the quest regression, then desktop and mobile browser smoke profiles, then writes
+an agent-review brief from the browser evidence. `regression:agent` can regenerate
+that review brief for an agent or human reviewer without rerunning the live smoke.
 
 ## Operational Notes
 

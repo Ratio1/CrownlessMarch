@@ -11,6 +11,8 @@ interface BrowserSmokeOptions {
   resendToken: string;
   screenshotDir: string;
   browserExecutable: string;
+  profileNames: BrowserProfileName[];
+  reportPath: string | null;
 }
 
 interface HealthInfo {
@@ -18,8 +20,31 @@ interface HealthInfo {
   commit: string | null;
 }
 
+type BrowserProfileName = 'desktop' | 'mobile';
+
+interface BrowserProfile {
+  name: BrowserProfileName;
+  contextOptions: BrowserContextOptions;
+}
+
 const NETWORK_TIMEOUT_MS = 45_000;
-const DEFAULT_VIEWPORT: BrowserContextOptions['viewport'] = { width: 1440, height: 1000 };
+const BROWSER_PROFILES: Record<BrowserProfileName, BrowserProfile> = {
+  desktop: {
+    name: 'desktop',
+    contextOptions: {
+      viewport: { width: 1440, height: 1000 },
+    },
+  },
+  mobile: {
+    name: 'mobile',
+    contextOptions: {
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      hasTouch: true,
+      isMobile: true,
+    },
+  },
+};
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,7 +135,26 @@ function parseOptions(): BrowserSmokeOptions {
     resendToken,
     screenshotDir: readFlag('--screenshot-dir') ?? process.env.THORNWRITHE_SCREENSHOT_DIR ?? 'test-results/live',
     browserExecutable: resolveBrowserExecutable(),
+    profileNames: parseProfileNames(readFlag('--profile') ?? process.env.THORNWRITHE_BROWSER_PROFILE ?? 'desktop'),
+    reportPath: readFlag('--report-path') ?? process.env.THORNWRITHE_BROWSER_REPORT ?? null,
   };
+}
+
+function parseProfileNames(rawValue: string): BrowserProfileName[] {
+  const names =
+    rawValue === 'all'
+      ? Object.keys(BROWSER_PROFILES)
+      : rawValue
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+
+  const invalid = names.find((name) => !(name in BROWSER_PROFILES));
+  if (invalid) {
+    throw new Error(`Unknown browser smoke profile "${invalid}". Use desktop, mobile, or all.`);
+  }
+
+  return Array.from(new Set(names)) as BrowserProfileName[];
 }
 
 async function fetchWithTimeout(input: string, init?: RequestInit) {
@@ -276,13 +320,17 @@ async function createVerifiedCharacter(options: BrowserSmokeOptions) {
   };
 }
 
-async function runBrowserSmoke(options: BrowserSmokeOptions, character: Awaited<ReturnType<typeof createVerifiedCharacter>>) {
+async function runBrowserSmoke(
+  options: BrowserSmokeOptions,
+  character: Awaited<ReturnType<typeof createVerifiedCharacter>>,
+  profile: BrowserProfile
+) {
   const browser = await chromium.launch({
     headless: true,
     executablePath: options.browserExecutable,
   });
-  const context = await browser.newContext({ viewport: DEFAULT_VIEWPORT });
-  const screenshotName = `devnet-browser-smoke-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+  const context = await browser.newContext(profile.contextOptions);
+  const screenshotName = `devnet-browser-smoke-${profile.name}-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
   const screenshotPath = path.resolve(options.screenshotDir, screenshotName);
   const consoleErrors: string[] = [];
   const attachStatuses: number[] = [];
@@ -333,11 +381,17 @@ async function runBrowserSmoke(options: BrowserSmokeOptions, character: Awaited<
     });
 
     const diagnostics = await page.evaluate((moveText) => {
+      const hasBox = (selector: string) => {
+        const element = document.querySelector(selector);
+        const rect = element?.getBoundingClientRect();
+        return Boolean(rect && rect.width > 0 && rect.height > 0);
+      };
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
         node.textContent?.includes(moveText)
       );
       const canvas = document.querySelector('.world-canvas__host canvas');
       const canvasRect = canvas?.getBoundingClientRect();
+      const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
 
       return {
         connected: document.body.innerText.includes('Connected to live shard.'),
@@ -350,6 +404,9 @@ async function runBrowserSmoke(options: BrowserSmokeOptions, character: Awaited<
         moveText,
         moveEntryText: moveEntry?.textContent ?? null,
         moveEntryStyled: Boolean(moveEntry),
+        horizontalOverflowPx,
+        movementPadVisible: hasBox('[aria-label="Movement controls"]'),
+        commandInputVisible: hasBox('#mud-command'),
         canvas: {
           width: canvas instanceof HTMLCanvasElement ? canvas.width : 0,
           height: canvas instanceof HTMLCanvasElement ? canvas.height : 0,
@@ -363,9 +420,18 @@ async function runBrowserSmoke(options: BrowserSmokeOptions, character: Awaited<
       throw new Error(`Movement feed entry was not styled as MOVE: ${expectedMoveText}`);
     }
 
+    if (diagnostics.horizontalOverflowPx > 2) {
+      throw new Error(`${profile.name} profile has ${diagnostics.horizontalOverflowPx}px of horizontal overflow`);
+    }
+
+    if (!diagnostics.movementPadVisible || !diagnostics.commandInputVisible) {
+      throw new Error(`${profile.name} profile did not render the command and movement controls`);
+    }
+
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
     return {
+      profileName: profile.name,
       attachStatuses,
       websocketSeen,
       consoleErrors,
@@ -382,24 +448,40 @@ async function main() {
   const options = parseOptions();
   logStage(`waiting for live /e at ${options.baseUrl}${options.expectVersion ? ` (${options.expectVersion})` : ''}`);
   const live = await waitForHealth(options.baseUrl, options.expectVersion, options.pollTimeoutMs);
-  const character = await createVerifiedCharacter(options);
+  const profiles = [];
 
-  logStage('opening browser and checking live playfield');
-  const browserResult = await runBrowserSmoke(options, character);
+  for (const profileName of options.profileNames) {
+    const profile = BROWSER_PROFILES[profileName];
+    const character = await createVerifiedCharacter(options);
+
+    logStage(`opening ${profile.name} browser and checking live playfield`);
+    const browserResult = await runBrowserSmoke(options, character, profile);
+    profiles.push({
+      email: character.email,
+      verificationEmailId: character.verificationEmailId,
+      verificationLastEvent: character.verificationLastEvent,
+      characterName: character.characterName,
+      ...browserResult,
+    });
+  }
+
+  const report = {
+    baseUrl: options.baseUrl,
+    version: live.version,
+    commit: live.commit,
+    browserExecutable: options.browserExecutable,
+    profiles,
+  };
+
+  if (options.reportPath) {
+    const reportPath = path.resolve(options.reportPath);
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  }
 
   console.log(
     JSON.stringify(
-      {
-        baseUrl: options.baseUrl,
-        version: live.version,
-        commit: live.commit,
-        email: character.email,
-        verificationEmailId: character.verificationEmailId,
-        verificationLastEvent: character.verificationLastEvent,
-        characterName: character.characterName,
-        browserExecutable: options.browserExecutable,
-        ...browserResult,
-      },
+      report,
       null,
       2
     )
