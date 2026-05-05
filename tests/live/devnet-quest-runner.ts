@@ -37,6 +37,7 @@ interface HealthInfo {
 }
 
 const NETWORK_TIMEOUT_MS = 20_000;
+const MOVE_RESULT_TIMEOUT_MS = 45_000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -610,7 +611,7 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
         const previousVersion = session.stateVersion;
         record(`burn-reset-west:from=${snapshot.position.x},${snapshot.position.y}`);
         session.sendMove('west');
-        await waitForMoveResult(session, snapshot, previousVersion, 'west', 15_000);
+        await waitForMoveResult(session, snapshot, previousVersion, 'west', MOVE_RESULT_TIMEOUT_MS);
         continue;
       }
 
@@ -622,7 +623,7 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
         const previousVersion = session.stateVersion;
         record(`secure-reset-south:from=${snapshot.position.x},${snapshot.position.y}`);
         session.sendMove('south');
-        await waitForMoveResult(session, snapshot, previousVersion, 'south', 15_000);
+        await waitForMoveResult(session, snapshot, previousVersion, 'south', MOVE_RESULT_TIMEOUT_MS);
         continue;
       }
 
@@ -635,7 +636,7 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
     const previousVersion = session.stateVersion;
     record(`move:${direction}:${focus.label}:${focus.stateLabel}:from=${snapshot.position.x},${snapshot.position.y}:target=${focus.target.x},${focus.target.y}`);
     session.sendMove(direction);
-    await waitForMoveResult(session, snapshot, previousVersion, direction, 15_000);
+    await waitForMoveResult(session, snapshot, previousVersion, direction, MOVE_RESULT_TIMEOUT_MS);
   }
 
   if (!session.latestState) {
