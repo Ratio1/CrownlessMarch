@@ -381,16 +381,15 @@ async function runBrowserSmoke(
     });
 
     const diagnostics = await page.evaluate((moveText) => {
-      const hasBox = (selector: string) => {
-        const element = document.querySelector(selector);
-        const rect = element?.getBoundingClientRect();
-        return Boolean(rect && rect.width > 0 && rect.height > 0);
-      };
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
         node.textContent?.includes(moveText)
       );
       const canvas = document.querySelector('.world-canvas__host canvas');
       const canvasRect = canvas?.getBoundingClientRect();
+      const movementPad = document.querySelector('[aria-label="Movement controls"]');
+      const movementPadRect = movementPad?.getBoundingClientRect();
+      const commandInput = document.querySelector('#mud-command');
+      const commandInputRect = commandInput?.getBoundingClientRect();
       const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
 
       return {
@@ -405,8 +404,8 @@ async function runBrowserSmoke(
         moveEntryText: moveEntry?.textContent ?? null,
         moveEntryStyled: Boolean(moveEntry),
         horizontalOverflowPx,
-        movementPadVisible: hasBox('[aria-label="Movement controls"]'),
-        commandInputVisible: hasBox('#mud-command'),
+        movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
+        commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
         canvas: {
           width: canvas instanceof HTMLCanvasElement ? canvas.width : 0,
           height: canvas instanceof HTMLCanvasElement ? canvas.height : 0,

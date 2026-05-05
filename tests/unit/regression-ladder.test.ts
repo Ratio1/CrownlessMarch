@@ -25,6 +25,7 @@ describe('regression ladder wiring', () => {
     expect(browserSmoke).toContain("readFlag('--report-path')");
     expect(browserSmoke).toContain('horizontalOverflowPx');
     expect(browserSmoke).toContain('movementPadVisible');
+    expect(browserSmoke).not.toContain('const hasBox =');
 
     expect(liveLadder).toContain('live:devnet');
     expect(liveLadder).toContain('live:browser');
