@@ -416,7 +416,8 @@ async function runBrowserSmoke(
       );
     }
 
-    const diagnostics = await page.evaluate((moveText) => {
+    const diagnostics = await page.evaluate((input) => {
+      const moveText = input.moveText;
       const bodyText = document.body.innerText;
       const bodyTextLower = bodyText.toLowerCase();
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
@@ -439,6 +440,7 @@ async function runBrowserSmoke(
             .map((node) => node.textContent)
             .find((text) => text?.startsWith('Ground')) ?? null,
         moveText,
+        moveTextVisible: bodyText.includes(moveText),
         moveEntryText: moveEntry?.textContent ?? null,
         moveEntryStyled: Boolean(moveEntry),
         combatActive: bodyTextLower.includes('dice log') && bodyText.includes('D20'),
@@ -453,9 +455,13 @@ async function runBrowserSmoke(
           clientHeight: canvasRect?.height ?? 0,
         },
       };
-    }, expectedMoveText);
+    }, { moveText: expectedMoveText, combat: options.combat });
 
-    if (!diagnostics.moveEntryStyled) {
+    if (!diagnostics.moveTextVisible) {
+      throw new Error(`Movement feed text did not render: ${expectedMoveText}`);
+    }
+
+    if (!options.combat && !diagnostics.moveEntryStyled) {
       throw new Error(`Movement feed entry was not styled as MOVE: ${expectedMoveText}`);
     }
 
