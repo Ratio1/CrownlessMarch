@@ -405,6 +405,33 @@ export function createSessionHost(dependencies: SessionHostDependencies) {
           return;
         }
 
+        const checkpointLease: PresenceLease = {
+          ...postLoadOwnership.lease,
+          current_character_cid: checkpoint.cid,
+          persist_revision: checkpoint.persist_revision,
+          last_persisted_at: postLoadOwnership.lease.last_persisted_at ?? null,
+        };
+
+        await dependencies.writePresenceLease(attachPayload.accountId, checkpointLease);
+
+        const postRevisionOwnership = await getOwnershipStatus({
+          accountId: attachPayload.accountId,
+          characterId: attachPayload.characterId,
+          connectionId,
+          socket,
+          heartbeatTimer: null,
+          nextLeaseRefreshAt: now() + leaseRefreshIntervalMs,
+          ended: false,
+        });
+
+        if (postRevisionOwnership.status !== 'current') {
+          clearPendingLeaseSafely(pendingAttach);
+          sessionRef.pending = null;
+          send(socket, postRevisionOwnership.status === 'taken_over' ? { type: 'taken_over' } : { type: 'session_expired' });
+          socket.close();
+          return;
+        }
+
         const character = {
           ...checkpoint.snapshot,
           cid: attachPayload.characterId,

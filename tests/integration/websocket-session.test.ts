@@ -206,7 +206,7 @@ function createHarness(options: {
     },
     writePresenceLease: async (characterId, lease) => {
       writeCount += 1;
-      if (options.deferHeartbeatWrite && writeCount === 2) {
+      if (options.deferHeartbeatWrite && writeCount === 3) {
         events.push(`write_started:${characterId}:${lease.connection_id}`);
         const request = createDeferred<void>();
         writeRequests.push(request);
@@ -458,6 +458,7 @@ describe('websocket session host', () => {
     expect(harness.events.indexOf('write:account-1:conn-1')).toBeLessThan(harness.events.indexOf('load:cid-1'));
     expect(harness.readLease('account-1')).toMatchObject({
       current_character_cid: 'cid-1',
+      persist_revision: 1,
     });
 
     socket.close();
@@ -678,9 +679,10 @@ describe('websocket session host', () => {
     const beforeHeartbeat = harness.readLease('account-1');
     expect(beforeHeartbeat).not.toBeNull();
 
+    const writesBeforeHeartbeat = harness.events.filter((event) => event === 'write:account-1:conn-1').length;
     socket.send(encode({ type: 'heartbeat' }));
 
-    await waitForEventCount(harness.events, 'write:account-1:conn-1', 2);
+    await waitForEventCount(harness.events, 'write:account-1:conn-1', writesBeforeHeartbeat + 1);
 
     const afterHeartbeat = harness.readLease('account-1');
     expect(afterHeartbeat).toMatchObject({
@@ -694,7 +696,7 @@ describe('websocket session host', () => {
   });
 
   it('serializes heartbeat handling so a slow lease read cannot start duplicate refreshes', async () => {
-    harness = createHarness({ deferReadAt: [4], leaseRefreshIntervalMs: 0 });
+    harness = createHarness({ deferReadAt: [5], leaseRefreshIntervalMs: 0 });
     const url = await harness.listen();
     const socket = await openSocket(url);
     harness.trackSocket(socket);
@@ -707,13 +709,13 @@ describe('websocket session host', () => {
     await initialState;
 
     socket.send(encode({ type: 'heartbeat' }));
-    await waitForEventCount(harness.events, 'read_started:4:account-1', 1);
+    await waitForEventCount(harness.events, 'read_started:5:account-1', 1);
 
     socket.send(encode({ type: 'heartbeat' }));
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(harness.events.filter((event) => event.startsWith('read_started:'))).toEqual([
-      'read_started:4:account-1',
+      'read_started:5:account-1',
     ]);
     expect(harness.runtimeEvents.filter((event) => event === 'tick:cid-1')).toHaveLength(0);
 
