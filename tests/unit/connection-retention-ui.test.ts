@@ -13,4 +13,13 @@ describe('gameplay socket reconnect retention', () => {
     expect(hookSource).toContain('setSnapshot(null);');
     expect(hookSource).toContain('setShardWorldInstanceId(null);');
   });
+
+  it('allows reset flows to request graceful socket logout before reattaching', () => {
+    const hookSource = readSource('src/client/useGameplaySocket.ts');
+
+    expect(hookSource).toContain('thornwrithe:graceful-disconnect');
+    expect(hookSource).toContain("socket.send(JSON.stringify({ type: 'logout' }))");
+    expect(hookSource).toContain('window.addEventListener');
+    expect(hookSource).toContain('window.removeEventListener');
+  });
 });

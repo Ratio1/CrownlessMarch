@@ -9,6 +9,8 @@ interface CharacterResetPanelProps {
   snapshot: GameplayShardSnapshot | null;
 }
 
+const GRACEFUL_DISCONNECT_EVENT = 'thornwrithe:graceful-disconnect';
+
 function formatLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -72,6 +74,8 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
         return;
       }
 
+      window.dispatchEvent(new Event(GRACEFUL_DISCONNECT_EVENT));
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
       window.location.assign('/play');
     } catch {
       setError('Failed to reset character.');

@@ -38,6 +38,7 @@ type GameplayInboundMessage =
 const ATTACH_ENDPOINT = '/api/auth/attach';
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const RECONNECT_DELAY_MS = 1_500;
+const GRACEFUL_DISCONNECT_EVENT = 'thornwrithe:graceful-disconnect';
 
 function resolveGameplaySocketUrl(gameplayPath: string) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -115,6 +116,19 @@ export function useGameplaySocket(gameplayPath: string) {
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.close();
       }
+    };
+
+    const requestGracefulDisconnect = () => {
+      const socket = socketRef.current;
+
+      clearReconnectTimer();
+      clearHeartbeatTimer();
+
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      socket.send(JSON.stringify({ type: 'logout' }));
     };
 
     const scheduleReconnect = (reason: string) => {
@@ -275,11 +289,13 @@ export function useGameplaySocket(gameplayPath: string) {
       }
     };
 
+    window.addEventListener(GRACEFUL_DISCONNECT_EVENT, requestGracefulDisconnect);
     void connect(false);
 
     return () => {
       active = false;
       attemptRef.current += 1;
+      window.removeEventListener(GRACEFUL_DISCONNECT_EVENT, requestGracefulDisconnect);
       clearReconnectTimer();
       clearHeartbeatTimer();
       closeSocket();
