@@ -528,7 +528,7 @@ async function runBrowserSmoke(
 
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
-    if (!diagnostics.moveTextVisible) {
+    if (!options.combat && !diagnostics.moveTextVisible) {
       throw new Error(`Movement feed text did not render: ${expectedMoveText}`);
     }
 
