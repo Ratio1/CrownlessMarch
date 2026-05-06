@@ -1,6 +1,12 @@
 import type PhaserType from 'phaser';
 import type { GameplayShardSnapshot } from '@/shared/gameplay';
 import { buildWorldRenderModel, shortMarkerLabel } from '@/components/game/world-render-model';
+import {
+  ACTOR_SPRITES,
+  characterSpriteKey,
+  monsterSpriteKey,
+  type ActorSpriteSpec,
+} from './sprite-catalog';
 
 export interface ThornwritheGameBridge {
   render(snapshot: GameplayShardSnapshot): void;
@@ -12,15 +18,10 @@ const MIN_WIDTH = 480;
 const MIN_HEIGHT = 420;
 const BOARD_PADDING = 34;
 const TILE_GAP = 10;
-const CLASS_RENDER_COLORS: Record<string, { fill: number; edge: number }> = {
-  fighter: { fill: 0xf7d889, edge: 0x31210f },
-  ranger: { fill: 0xa8d7a1, edge: 0x143122 },
-  wizard: { fill: 0x9fc0ff, edge: 0x16263f },
-  cleric: { fill: 0xd8c0ff, edge: 0x2a1d3f },
-};
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
 type CellMap = Map<string, WorldRenderCell>;
+type RuntimeGameObject = PhaserType.GameObjects.GameObject;
 
 export async function createGame(container: HTMLElement): Promise<ThornwritheGameBridge> {
   if (typeof window === 'undefined' || process.env.NODE_ENV === 'test') {
@@ -33,7 +34,7 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
 
   let activeScene: PhaserType.Scene | null = null;
   let activeGraphics: PhaserType.GameObjects.Graphics | null = null;
-  let activeLabels: PhaserType.GameObjects.Text[] = [];
+  let activeLabels: RuntimeGameObject[] = [];
   let pendingSnapshot: GameplayShardSnapshot | null = null;
 
   const scene = {
@@ -41,6 +42,7 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
     create(this: PhaserType.Scene) {
       activeScene = this;
       activeGraphics = this.add.graphics();
+      ensureActorSpriteTextures(this);
 
       if (pendingSnapshot) {
         drawSnapshot(this, activeGraphics, activeLabels, pendingSnapshot);
@@ -110,7 +112,7 @@ function blendHexColor(colorA: number, colorB: number, weight: number) {
   return (red << 16) + (green << 8) + blue;
 }
 
-function clearLabels(labels: PhaserType.GameObjects.Text[]) {
+function clearLabels(labels: RuntimeGameObject[]) {
   for (const label of labels) {
     label.destroy();
   }
@@ -144,7 +146,7 @@ function tileCenter(
 function drawSnapshot(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
-  labels: PhaserType.GameObjects.Text[],
+  labels: RuntimeGameObject[],
   snapshot: GameplayShardSnapshot
 ) {
   const model = buildWorldRenderModel(snapshot);
@@ -200,6 +202,177 @@ function drawSnapshot(
     shardMarker.setOrigin(1, 0);
     shardMarker.setAlpha(0.9);
     labels.push(shardMarker);
+  }
+}
+
+function ensureActorSpriteTextures(scene: PhaserType.Scene) {
+  for (const spec of Object.values(ACTOR_SPRITES)) {
+    if (scene.textures.exists(spec.key)) {
+      continue;
+    }
+
+    const spriteGraphics = scene.add.graphics();
+    drawActorSpriteTexture(spriteGraphics, spec);
+    spriteGraphics.generateTexture(spec.key, spec.frame.width, spec.frame.height);
+    spriteGraphics.destroy();
+  }
+}
+
+function drawActorSpriteTexture(graphics: PhaserType.GameObjects.Graphics, spec: ActorSpriteSpec) {
+  const { fill, edge, detail, accent } = spec.palette;
+
+  graphics.clear();
+  graphics.fillStyle(0x000000, 0.22);
+  graphics.fillEllipse(32, 58, 34, 10);
+
+  switch (spec.kind) {
+    case 'fighter':
+      graphics.fillStyle(fill, 1);
+      graphics.fillRoundedRect(23, 23, 18, 31, 6);
+      graphics.fillStyle(edge, 1);
+      graphics.fillRoundedRect(20, 29, 14, 19, 5);
+      graphics.lineStyle(2, accent, 0.9);
+      graphics.strokeRoundedRect(21, 30, 12, 17, 5);
+      graphics.lineStyle(4, detail, 0.92);
+      graphics.beginPath();
+      graphics.moveTo(41, 50);
+      graphics.lineTo(50, 22);
+      graphics.strokePath();
+      graphics.fillStyle(accent, 0.95);
+      graphics.fillCircle(32, 18, 8);
+      graphics.fillStyle(edge, 1);
+      graphics.fillRect(25, 20, 14, 3);
+      break;
+    case 'rogue':
+      graphics.fillStyle(fill, 1);
+      graphics.fillTriangle(32, 15, 48, 53, 16, 53);
+      graphics.fillStyle(edge, 1);
+      graphics.fillTriangle(32, 18, 40, 32, 24, 32);
+      graphics.fillStyle(detail, 0.92);
+      graphics.fillRoundedRect(26, 32, 12, 20, 5);
+      graphics.lineStyle(3, accent, 0.9);
+      graphics.beginPath();
+      graphics.moveTo(42, 47);
+      graphics.lineTo(51, 35);
+      graphics.strokePath();
+      graphics.fillStyle(accent, 0.85);
+      graphics.fillCircle(29, 27, 2);
+      graphics.fillCircle(35, 27, 2);
+      break;
+    case 'wizard':
+      graphics.fillStyle(fill, 1);
+      graphics.fillTriangle(32, 14, 48, 54, 16, 54);
+      graphics.fillStyle(detail, 0.88);
+      graphics.fillRoundedRect(24, 28, 16, 24, 6);
+      graphics.lineStyle(3, edge, 1);
+      graphics.strokeTriangle(32, 14, 48, 54, 16, 54);
+      graphics.lineStyle(3, accent, 0.9);
+      graphics.beginPath();
+      graphics.moveTo(47, 53);
+      graphics.lineTo(47, 19);
+      graphics.strokePath();
+      graphics.fillStyle(accent, 0.96);
+      graphics.fillCircle(47, 17, 5);
+      graphics.fillStyle(0xffffff, 0.52);
+      graphics.fillCircle(49, 15, 2);
+      break;
+    case 'cleric':
+      graphics.fillStyle(fill, 1);
+      graphics.fillRoundedRect(21, 22, 22, 32, 7);
+      graphics.fillStyle(detail, 0.86);
+      graphics.fillRoundedRect(26, 25, 12, 27, 5);
+      graphics.fillStyle(accent, 0.95);
+      graphics.fillRect(30, 29, 4, 17);
+      graphics.fillRect(25, 35, 14, 4);
+      graphics.lineStyle(2, edge, 1);
+      graphics.strokeRoundedRect(21, 22, 22, 32, 7);
+      graphics.fillStyle(accent, 0.9);
+      graphics.fillCircle(32, 17, 7);
+      break;
+    case 'ally':
+      graphics.fillStyle(fill, 0.92);
+      graphics.fillRoundedRect(22, 24, 20, 30, 7);
+      graphics.fillStyle(detail, 0.9);
+      graphics.fillTriangle(32, 18, 45, 42, 19, 42);
+      graphics.lineStyle(2, edge, 0.92);
+      graphics.strokeRoundedRect(22, 24, 20, 30, 7);
+      graphics.fillStyle(accent, 0.82);
+      graphics.fillCircle(32, 21, 5);
+      break;
+    case 'goblin':
+      graphics.fillStyle(fill, 1);
+      graphics.fillTriangle(32, 16, 48, 51, 16, 51);
+      graphics.fillStyle(edge, 1);
+      graphics.fillTriangle(22, 24, 8, 17, 18, 33);
+      graphics.fillTriangle(42, 24, 56, 17, 46, 33);
+      graphics.fillStyle(detail, 0.95);
+      graphics.fillRoundedRect(24, 31, 16, 21, 5);
+      graphics.fillStyle(accent, 0.92);
+      graphics.fillCircle(28, 27, 2);
+      graphics.fillCircle(36, 27, 2);
+      graphics.lineStyle(3, edge, 0.98);
+      graphics.beginPath();
+      graphics.moveTo(42, 50);
+      graphics.lineTo(50, 30);
+      graphics.strokePath();
+      break;
+    case 'wolf':
+      graphics.fillStyle(fill, 1);
+      graphics.fillRoundedRect(16, 35, 30, 15, 7);
+      graphics.fillTriangle(39, 35, 54, 28, 49, 45);
+      graphics.fillTriangle(17, 37, 8, 29, 12, 47);
+      graphics.fillStyle(edge, 1);
+      graphics.fillTriangle(45, 30, 49, 18, 52, 32);
+      graphics.fillTriangle(35, 32, 39, 20, 43, 34);
+      graphics.fillStyle(accent, 0.94);
+      graphics.fillCircle(48, 35, 2);
+      graphics.fillStyle(detail, 0.95);
+      graphics.fillRect(20, 48, 4, 8);
+      graphics.fillRect(38, 48, 4, 8);
+      break;
+    case 'troll':
+      graphics.fillStyle(fill, 1);
+      graphics.fillRoundedRect(19, 18, 26, 38, 9);
+      graphics.fillStyle(detail, 0.9);
+      graphics.fillTriangle(24, 25, 13, 13, 24, 36);
+      graphics.fillTriangle(40, 25, 51, 13, 40, 36);
+      graphics.lineStyle(4, edge, 1);
+      graphics.strokeRoundedRect(19, 18, 26, 38, 9);
+      graphics.lineStyle(3, detail, 0.86);
+      graphics.beginPath();
+      graphics.moveTo(24, 51);
+      graphics.lineTo(15, 57);
+      graphics.moveTo(40, 51);
+      graphics.lineTo(49, 57);
+      graphics.strokePath();
+      graphics.fillStyle(accent, 0.9);
+      graphics.fillCircle(28, 31, 2);
+      graphics.fillCircle(36, 31, 2);
+      break;
+    case 'vampire':
+      graphics.fillStyle(edge, 1);
+      graphics.fillTriangle(32, 15, 52, 56, 12, 56);
+      graphics.fillStyle(fill, 1);
+      graphics.fillRoundedRect(23, 24, 18, 30, 5);
+      graphics.fillStyle(detail, 0.9);
+      graphics.fillTriangle(32, 28, 42, 54, 22, 54);
+      graphics.fillStyle(accent, 0.96);
+      graphics.fillCircle(32, 18, 6);
+      graphics.fillStyle(detail, 0.95);
+      graphics.fillCircle(29, 18, 1.5);
+      graphics.fillCircle(35, 18, 1.5);
+      break;
+    case 'generic':
+      graphics.fillStyle(fill, 1);
+      graphics.fillRoundedRect(20, 22, 24, 32, 8);
+      graphics.fillStyle(detail, 0.88);
+      graphics.fillTriangle(32, 16, 47, 37, 17, 37);
+      graphics.lineStyle(3, edge, 1);
+      graphics.strokeRoundedRect(20, 22, 24, 32, 8);
+      graphics.fillStyle(accent, 0.9);
+      graphics.fillCircle(28, 30, 2);
+      graphics.fillCircle(36, 30, 2);
+      break;
   }
 }
 
@@ -564,7 +737,7 @@ function drawTerrainDetail(
 function drawOccupants(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
-  labels: PhaserType.GameObjects.Text[],
+  labels: RuntimeGameObject[],
   snapshot: GameplayShardSnapshot,
   cell: WorldRenderCell,
   x: number,
@@ -578,58 +751,43 @@ function drawOccupants(
     const hero = cell.characterRole === 'hero';
     const centerX = x + tileSize * positions[offsetIndex];
     const centerY = y + tileSize * 0.62;
-    const classColors = CLASS_RENDER_COLORS[cell.character.classId ?? snapshot.character.classId] ?? CLASS_RENDER_COLORS.fighter;
-    const fill = hero ? classColors.fill : blendHexColor(classColors.fill, 0x213528, 0.42);
-    const edge = hero ? classColors.edge : 0x15241b;
 
-    drawCharacterToken(scene, graphics, labels, snapshot, cell, centerX, centerY, hero, fill, edge);
+    drawCharacterToken(scene, graphics, labels, snapshot, cell, centerX, centerY, tileSize, hero);
     offsetIndex += 1;
   }
 
   if (cell.monster) {
     const centerX = x + tileSize * positions[offsetIndex];
     const centerY = y + tileSize * 0.62;
-    drawMonsterToken(scene, graphics, labels, cell, centerX, centerY);
+    drawMonsterToken(scene, graphics, labels, cell, centerX, centerY, tileSize);
   }
 }
 
 function drawCharacterToken(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
-  labels: PhaserType.GameObjects.Text[],
+  labels: RuntimeGameObject[],
   snapshot: GameplayShardSnapshot,
   cell: WorldRenderCell,
   centerX: number,
   centerY: number,
-  hero: boolean,
-  fill: number,
-  edge: number
+  tileSize: number,
+  hero: boolean
 ) {
-  const width = hero ? 14 : 12;
-  const height = hero ? 18 : 15;
+  const spriteKey = characterSpriteKey(cell.character?.classId ?? snapshot.character.classId, hero);
+  const spec = ACTOR_SPRITES[spriteKey];
+  const spriteScale = (hero ? tileSize * 0.62 : tileSize * 0.54) / spec.frame.height;
+  const spriteBaseY = centerY + tileSize * 0.26;
 
   graphics.fillStyle(0x000000, 0.24);
-  graphics.fillEllipse(centerX, centerY + 14, hero ? 28 : 24, hero ? 10 : 8);
+  graphics.fillEllipse(centerX, spriteBaseY + 2, hero ? 32 : 26, hero ? 11 : 8);
 
-  graphics.fillStyle(fill, 1);
-  graphics.beginPath();
-  graphics.moveTo(centerX, centerY - height);
-  graphics.lineTo(centerX + width, centerY - 6);
-  graphics.lineTo(centerX + width - 2, centerY + 8);
-  graphics.lineTo(centerX, centerY + height);
-  graphics.lineTo(centerX - width + 2, centerY + 8);
-  graphics.lineTo(centerX - width, centerY - 6);
-  graphics.closePath();
-  graphics.fillPath();
-
-  graphics.lineStyle(hero ? 3 : 2, edge, 1);
-  graphics.strokePath();
-
-  graphics.lineStyle(2, blendHexColor(fill, 0xffffff, 0.28), 0.42);
-  graphics.beginPath();
-  graphics.moveTo(centerX, centerY - height + 4);
-  graphics.lineTo(centerX, centerY + height - 5);
-  graphics.strokePath();
+  const actorSprite = scene.add.sprite(centerX, spriteBaseY, spriteKey);
+  actorSprite.setOrigin(spec.anchor.x, spec.anchor.y);
+  actorSprite.setScale(spriteScale);
+  actorSprite.setAlpha(hero ? 1 : 0.88);
+  actorSprite.setDepth(hero ? 14 : 12);
+  labels.push(actorSprite);
 
   if (hero) {
     graphics.lineStyle(2, 0xf7d889, 0.42);
@@ -663,10 +821,11 @@ function drawCharacterToken(
 function drawMonsterToken(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
-  labels: PhaserType.GameObjects.Text[],
+  labels: RuntimeGameObject[],
   cell: WorldRenderCell,
   centerX: number,
-  centerY: number
+  centerY: number,
+  tileSize: number
 ) {
   const monster = cell.monster;
 
@@ -674,18 +833,19 @@ function drawMonsterToken(
     return;
   }
 
-  const wolf = /wolf/i.test(monster.label);
   const activeThreat = cell.monsterRole === 'active-threat';
-  const fill = wolf ? 0x8a584e : 0xc96d46;
-  const edge = wolf ? 0x24110d : 0x32150d;
-  const accent = wolf ? 0xf0d2b0 : 0xf5c58f;
-  const bodyScale = activeThreat ? 1.1 : 1;
-  const bodyHeight = 18 * bodyScale;
-  const bodyWidth = 14 * bodyScale;
+  const spriteKey = monsterSpriteKey(monster.label);
+  const spec = ACTOR_SPRITES[spriteKey];
+  const spriteScale = (activeThreat ? tileSize * 0.66 : tileSize * 0.58) / spec.frame.height;
+  const spriteBaseY = centerY + tileSize * 0.26;
 
   graphics.fillStyle(0x000000, 0.26);
-  graphics.fillEllipse(centerX, centerY + 14, activeThreat ? 34 : 28, activeThreat ? 12 : 10);
-  graphics.lineStyle(activeThreat ? 3 : 2, activeThreat ? 0xffc77b : blendHexColor(fill, 0xffd4a2, 0.18), activeThreat ? 0.56 : 0.3);
+  graphics.fillEllipse(centerX, spriteBaseY + 2, activeThreat ? 38 : 30, activeThreat ? 12 : 9);
+  graphics.lineStyle(
+    activeThreat ? 3 : 2,
+    activeThreat ? 0xffc77b : blendHexColor(spec.palette.fill, 0xffd4a2, 0.18),
+    activeThreat ? 0.56 : 0.3
+  );
   graphics.strokeCircle(centerX, centerY, activeThreat ? 22 : 18);
 
   if (activeThreat) {
@@ -693,43 +853,13 @@ function drawMonsterToken(
     graphics.strokeCircle(centerX, centerY, 27);
   }
 
-  graphics.fillStyle(fill, 1);
-  graphics.beginPath();
-  if (wolf) {
-    graphics.moveTo(centerX, centerY - bodyHeight);
-    graphics.lineTo(centerX + bodyWidth, centerY - 4);
-    graphics.lineTo(centerX + 10 * bodyScale, centerY + 14 * bodyScale);
-    graphics.lineTo(centerX, centerY + bodyHeight);
-    graphics.lineTo(centerX - 10 * bodyScale, centerY + 14 * bodyScale);
-    graphics.lineTo(centerX - bodyWidth, centerY - 4);
-  } else {
-    graphics.moveTo(centerX, centerY - 17 * bodyScale);
-    graphics.lineTo(centerX + 13 * bodyScale, centerY - 2);
-    graphics.lineTo(centerX + 8 * bodyScale, centerY + 16 * bodyScale);
-    graphics.lineTo(centerX - 8 * bodyScale, centerY + 16 * bodyScale);
-    graphics.lineTo(centerX - 13 * bodyScale, centerY - 2);
-  }
-  graphics.closePath();
-  graphics.fillPath();
-  graphics.lineStyle(activeThreat ? 3 : 2, edge, 1);
-  graphics.strokePath();
+  const actorSprite = scene.add.sprite(centerX, spriteBaseY, spriteKey);
+  actorSprite.setOrigin(spec.anchor.x, spec.anchor.y);
+  actorSprite.setScale(spriteScale);
+  actorSprite.setDepth(activeThreat ? 15 : 13);
+  labels.push(actorSprite);
 
-  if (wolf) {
-    graphics.fillStyle(edge, 1);
-    graphics.fillTriangle(centerX - 10, centerY - 10, centerX - 4, centerY - 22, centerX + 1, centerY - 8);
-    graphics.fillTriangle(centerX + 10, centerY - 10, centerX + 4, centerY - 22, centerX - 1, centerY - 8);
-    graphics.fillStyle(accent, 0.95);
-    graphics.fillCircle(centerX - 4, centerY - 2, 2);
-    graphics.fillCircle(centerX + 4, centerY - 2, 2);
-  } else {
-    graphics.fillStyle(edge, 1);
-    graphics.fillRect(centerX + 10, centerY - 12, 2, 24);
-    graphics.fillTriangle(centerX + 12, centerY - 12, centerX + 18, centerY - 6, centerX + 12, centerY);
-    graphics.fillStyle(accent, 0.92);
-    graphics.fillCircle(centerX, centerY - 3, 3);
-  }
-
-  const markerLabel = scene.add.text(centerX, centerY + 1, shortMarkerLabel(monster.label, wolf ? 'SW' : 'BG'), {
+  const markerLabel = scene.add.text(centerX, centerY + 1, shortMarkerLabel(monster.label, spriteKey === 'mob-sap-wolf' ? 'SW' : 'BG'), {
     color: '#240f0c',
     fontFamily: 'IBM Plex Mono, monospace',
     fontSize: '10px',

@@ -12,4 +12,13 @@ describe('Phaser renderer configuration', () => {
     expect(source).toContain('type: Phaser.CANVAS');
     expect(source).not.toContain('type: Phaser.AUTO');
   });
+
+  it('renders PCs and mobs through generated Phaser sprite textures', () => {
+    const source = readSource('src/client/phaser/createGame.ts');
+
+    expect(source).toContain('ensureActorSpriteTextures');
+    expect(source).toContain('scene.add.sprite');
+    expect(source).toContain('characterSpriteKey');
+    expect(source).toContain('monsterSpriteKey');
+  });
 });
