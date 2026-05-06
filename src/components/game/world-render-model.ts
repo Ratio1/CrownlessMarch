@@ -116,7 +116,10 @@ export interface WorldRenderCell {
   isCurrent: boolean;
   isObjectiveTarget: boolean;
   character: GameplayCharacterMarker | null;
+  characterRole: 'hero' | 'ally' | null;
   monster: GameplayMonsterMarker | null;
+  monsterRole: 'active-threat' | 'visible-threat' | null;
+  threatLabel: string | null;
 }
 
 export interface WorldRenderModel {
@@ -173,6 +176,15 @@ export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRen
       if (!tile) {
         continue;
       }
+      const character = characterAt(snapshot, x, y);
+      const monster = monsterAt(snapshot, x, y);
+      const activeEncounterThreat =
+        Boolean(monster) &&
+        snapshot.encounter?.status === 'active' &&
+        snapshot.position.x === x &&
+        snapshot.position.y === y &&
+        (snapshot.encounter.monsterId === monster?.id || snapshot.encounter.monsterName === monster?.label);
+      const monsterRole = monster ? (activeEncounterThreat ? 'active-threat' : 'visible-threat') : null;
 
       cells.push({
         key: `${x}:${y}`,
@@ -182,8 +194,11 @@ export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRen
         terrain: WORLD_TERRAIN_DETAILS[tile.kind],
         isCurrent: snapshot.position.x === x && snapshot.position.y === y,
         isObjectiveTarget: snapshot.objectiveFocus?.target.x === x && snapshot.objectiveFocus?.target.y === y,
-        character: characterAt(snapshot, x, y),
-        monster: monsterAt(snapshot, x, y),
+        character,
+        characterRole: character ? (character.cid === snapshot.character.cid ? 'hero' : 'ally') : null,
+        monster,
+        monsterRole,
+        threatLabel: monster ? `LV ${monster.level}${monsterRole === 'active-threat' ? ' ACTIVE' : ''}` : null,
       });
     }
   }

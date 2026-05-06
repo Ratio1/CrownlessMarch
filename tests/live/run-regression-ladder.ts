@@ -61,6 +61,7 @@ function main() {
     '--',
     ...liveFlags,
     '--profile=all',
+    '--combat',
     `--screenshot-dir=${screenshotDir}`,
     `--report-path=${browserReportPath}`,
   ]);

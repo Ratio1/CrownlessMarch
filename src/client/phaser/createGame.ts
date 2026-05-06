@@ -342,9 +342,30 @@ function drawTile(
     graphics.strokePath();
   }
 
-  if (cell.monster && palette.glow) {
-    graphics.lineStyle(2, palette.glow, 0.24);
-    graphics.strokeRoundedRect(x + 6, y + 6, tileSize - 12, tileSize - 12, 16);
+  if (cell.monster) {
+    const glowColor = cell.monsterRole === 'active-threat' ? 0xff7658 : palette.glow;
+
+    if (glowColor) {
+      graphics.lineStyle(cell.monsterRole === 'active-threat' ? 3 : 2, glowColor, cell.monsterRole === 'active-threat' ? 0.58 : 0.24);
+      graphics.strokeRoundedRect(x + 6, y + 6, tileSize - 12, tileSize - 12, 16);
+    }
+  }
+
+  if (cell.monsterRole === 'active-threat') {
+    const alertInset = 11 + pulse * 2;
+    graphics.lineStyle(2, 0xffc77b, 0.38 + pulse * 0.16);
+    graphics.strokeRoundedRect(x + alertInset, y + alertInset, tileSize - alertInset * 2, tileSize - alertInset * 2, 12);
+    graphics.lineStyle(2, 0xff7658, 0.5);
+    graphics.beginPath();
+    graphics.moveTo(x + tileSize * 0.5, y + 10);
+    graphics.lineTo(x + tileSize * 0.5, y + 23);
+    graphics.moveTo(x + tileSize * 0.5, y + tileSize - 10);
+    graphics.lineTo(x + tileSize * 0.5, y + tileSize - 23);
+    graphics.moveTo(x + 10, y + tileSize * 0.5);
+    graphics.lineTo(x + 23, y + tileSize * 0.5);
+    graphics.moveTo(x + tileSize - 10, y + tileSize * 0.5);
+    graphics.lineTo(x + tileSize - 23, y + tileSize * 0.5);
+    graphics.strokePath();
   }
 
   if (cell.isObjectiveTarget) {
@@ -554,7 +575,7 @@ function drawOccupants(
   let offsetIndex = 0;
 
   if (cell.character) {
-    const hero = cell.character.cid === snapshot.character.cid;
+    const hero = cell.characterRole === 'hero';
     const centerX = x + tileSize * positions[offsetIndex];
     const centerY = y + tileSize * 0.62;
     const classColors = CLASS_RENDER_COLORS[cell.character.classId ?? snapshot.character.classId] ?? CLASS_RENDER_COLORS.fighter;
@@ -654,34 +675,43 @@ function drawMonsterToken(
   }
 
   const wolf = /wolf/i.test(monster.label);
+  const activeThreat = cell.monsterRole === 'active-threat';
   const fill = wolf ? 0x8a584e : 0xc96d46;
   const edge = wolf ? 0x24110d : 0x32150d;
   const accent = wolf ? 0xf0d2b0 : 0xf5c58f;
+  const bodyScale = activeThreat ? 1.1 : 1;
+  const bodyHeight = 18 * bodyScale;
+  const bodyWidth = 14 * bodyScale;
 
   graphics.fillStyle(0x000000, 0.26);
-  graphics.fillEllipse(centerX, centerY + 14, 28, 10);
-  graphics.lineStyle(2, blendHexColor(fill, 0xffd4a2, 0.18), 0.3);
-  graphics.strokeCircle(centerX, centerY, 18);
+  graphics.fillEllipse(centerX, centerY + 14, activeThreat ? 34 : 28, activeThreat ? 12 : 10);
+  graphics.lineStyle(activeThreat ? 3 : 2, activeThreat ? 0xffc77b : blendHexColor(fill, 0xffd4a2, 0.18), activeThreat ? 0.56 : 0.3);
+  graphics.strokeCircle(centerX, centerY, activeThreat ? 22 : 18);
+
+  if (activeThreat) {
+    graphics.lineStyle(2, 0xff7658, 0.62);
+    graphics.strokeCircle(centerX, centerY, 27);
+  }
 
   graphics.fillStyle(fill, 1);
   graphics.beginPath();
   if (wolf) {
-    graphics.moveTo(centerX, centerY - 18);
-    graphics.lineTo(centerX + 14, centerY - 4);
-    graphics.lineTo(centerX + 10, centerY + 14);
-    graphics.lineTo(centerX, centerY + 18);
-    graphics.lineTo(centerX - 10, centerY + 14);
-    graphics.lineTo(centerX - 14, centerY - 4);
+    graphics.moveTo(centerX, centerY - bodyHeight);
+    graphics.lineTo(centerX + bodyWidth, centerY - 4);
+    graphics.lineTo(centerX + 10 * bodyScale, centerY + 14 * bodyScale);
+    graphics.lineTo(centerX, centerY + bodyHeight);
+    graphics.lineTo(centerX - 10 * bodyScale, centerY + 14 * bodyScale);
+    graphics.lineTo(centerX - bodyWidth, centerY - 4);
   } else {
-    graphics.moveTo(centerX, centerY - 17);
-    graphics.lineTo(centerX + 13, centerY - 2);
-    graphics.lineTo(centerX + 8, centerY + 16);
-    graphics.lineTo(centerX - 8, centerY + 16);
-    graphics.lineTo(centerX - 13, centerY - 2);
+    graphics.moveTo(centerX, centerY - 17 * bodyScale);
+    graphics.lineTo(centerX + 13 * bodyScale, centerY - 2);
+    graphics.lineTo(centerX + 8 * bodyScale, centerY + 16 * bodyScale);
+    graphics.lineTo(centerX - 8 * bodyScale, centerY + 16 * bodyScale);
+    graphics.lineTo(centerX - 13 * bodyScale, centerY - 2);
   }
   graphics.closePath();
   graphics.fillPath();
-  graphics.lineStyle(2, edge, 1);
+  graphics.lineStyle(activeThreat ? 3 : 2, edge, 1);
   graphics.strokePath();
 
   if (wolf) {
@@ -708,11 +738,11 @@ function drawMonsterToken(
   markerLabel.setOrigin(0.5);
   labels.push(markerLabel);
 
-  const levelBadge = scene.add.text(centerX + 15, centerY - 17, `${monster.level}`, {
-    color: '#f7ead2',
-    backgroundColor: '#1d0d08cc',
+  const levelBadge = scene.add.text(centerX + (activeThreat ? 18 : 15), centerY - (activeThreat ? 21 : 17), activeThreat ? `LV ${monster.level}` : `${monster.level}`, {
+    color: activeThreat ? '#2a1009' : '#f7ead2',
+    backgroundColor: activeThreat ? '#ffc77bcc' : '#1d0d08cc',
     fontFamily: 'IBM Plex Mono, monospace',
-    fontSize: '9px',
+    fontSize: activeThreat ? '8px' : '9px',
     fontStyle: '700',
     padding: { x: 4, y: 2 },
   });

@@ -75,6 +75,28 @@ function rollDice(spec: string, random: RandomSource) {
   return total;
 }
 
+function rollDiceDetail(spec: string, random: RandomSource) {
+  const { count, sides } = parseDiceSpec(spec);
+  const rolls: number[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    rolls.push(rollDie(sides, random));
+  }
+
+  return {
+    total: rolls.reduce((sum, roll) => sum + roll, 0),
+    rolls,
+  };
+}
+
+function formatSigned(value: number) {
+  return value >= 0 ? `+${value}` : `${value}`;
+}
+
+function formatDamageFormula(dice: string, bonus: number) {
+  return bonus === 0 ? dice : `${dice}${formatSigned(bonus)}`;
+}
+
 function toCharacterClass(value: unknown): CharacterClass {
   return value === 'rogue' || value === 'wizard' || value === 'cleric' ? value : 'fighter';
 }
@@ -286,6 +308,10 @@ function queueLog(logs: CombatLogEntry[], round: number, text: string, kind?: Co
   logs.push({ round, text, kind });
 }
 
+function combatSourceLabel(combatant: EncounterCombatant) {
+  return combatant.weaponLabel ?? (combatant.kind === 'monster' ? `${combatant.name} strike` : 'Unarmed strike');
+}
+
 function findCombatant(encounter: EncounterSnapshot, id: string) {
   return encounter.combatants.find((entry) => entry.id === id) ?? null;
 }
@@ -310,16 +336,18 @@ function performAttack(input: {
   const naturalTwentyHits = input.content.rules.combat.naturalTwentyAlwaysHits && roll === 20;
   const hit = !naturalOneMisses && (naturalTwentyHits || total >= defenseValue);
   const logs: CombatLogEntry[] = [];
+  const defenseName = resolveDefenseName(input.attacker.targetDefense);
+  const outcome = hit ? 'HIT' : 'MISS';
 
   queueLog(
     logs,
     input.round,
-    `${input.attacker.name} rolls ${roll} + ${attackBonus} = ${total} vs ${resolveDefenseName(input.attacker.targetDefense)} ${defenseValue}.`,
+    `ATTACK ${input.attacker.name} rolls D20 ${roll} ${formatSigned(attackBonus)} = ${total} vs ${defenseName} ${defenseValue}: ${outcome}.`,
     'roll'
   );
 
   if (!hit) {
-    queueLog(logs, input.round, `${input.attacker.name} misses ${input.target.name}.`, 'effect');
+    queueLog(logs, input.round, `MISS ${input.attacker.name}'s attack slides past ${input.target.name}.`, 'effect');
     return {
       damage: 0,
       logs,
@@ -346,8 +374,9 @@ function performAttack(input: {
     };
   }
 
-  const baseDamage =
-    rollDice(input.attacker.damageDice, input.random) + input.attacker.damageBonus + (input.powerBonus?.damage ?? 0);
+  const damageBonus = input.attacker.damageBonus + (input.powerBonus?.damage ?? 0);
+  const damageRoll = rollDiceDetail(input.attacker.damageDice, input.random);
+  const baseDamage = damageRoll.total + damageBonus;
   const criticalRangeMin = input.attacker.criticalRangeMin ?? 20;
   const criticalMultiplier = input.attacker.criticalMultiplier ?? 2;
   const critical = roll >= criticalRangeMin;
@@ -378,7 +407,9 @@ function performAttack(input: {
   queueLog(
     logs,
     input.round,
-    `${input.attacker.name} hits ${input.target.name} for ${damage} damage${
+    `DAMAGE ${combatSourceLabel(input.attacker)} ${formatDamageFormula(input.attacker.damageDice, damageBonus)}${
+      damageRoll.rolls.length > 1 ? ` [${damageRoll.rolls.join('+')}]` : ''
+    } => ${damage} damage to ${input.target.name}${
       damageNotes.length > 0 ? ` (${damageNotes.join(', ')})` : ''
     }. ${nextTarget.name} has ${nextTarget.currentHp}/${nextTarget.maxHp} HP remaining.`,
     'effect'

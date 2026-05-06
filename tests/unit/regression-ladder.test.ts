@@ -26,10 +26,14 @@ describe('regression ladder wiring', () => {
     expect(browserSmoke).toContain('horizontalOverflowPx');
     expect(browserSmoke).toContain('movementPadVisible');
     expect(browserSmoke).not.toContain('const hasBox =');
+    expect(browserSmoke).toContain("readFlag('--combat')");
+    expect(browserSmoke).toContain('combatActive');
+    expect(browserSmoke).toContain('D20');
 
     expect(liveLadder).toContain('live:devnet');
     expect(liveLadder).toContain('live:browser');
     expect(liveLadder).toContain('--profile=all');
+    expect(liveLadder).toContain('--combat');
     expect(liveLadder).toContain('write-agent-regression-brief.ts');
     expect(liveLadder).toContain('RESEND_TOKEN');
     expect(liveLadder).not.toContain('console.log(process.env.RESEND_TOKEN');

@@ -309,4 +309,50 @@ describe('combat engine D20 weapon rules', () => {
     expect(logText).toContain('Sap Wolf has 7/14 HP remaining');
     expect(logText).toContain('Sap Wolf is bloodied.');
   });
+
+  it('prints tabletop D20 attack and damage expressions in the combat feed', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const briarGoblin = content.monsters.find((entry) => entry.id === 'briar-goblin');
+    expect(briarGoblin).toBeDefined();
+
+    const now = new Date('2026-04-30T11:30:00.000Z');
+    const hero = buildInitialCharacterSnapshot({
+      name: 'Warden',
+      classId: 'fighter',
+      attributes: {
+        strength: 15,
+        dexterity: 14,
+        constitution: 11,
+        intelligence: 10,
+        wisdom: 9,
+        charisma: 8,
+      },
+      inventory: ['rusted-sword'],
+      equipment: { weapon: 'rusted-sword' },
+    }) as unknown as Record<string, unknown>;
+    const encounter = createEncounterSnapshot({
+      characterId: 'cid-d20-feed',
+      characterSnapshot: hero,
+      monster: briarGoblin!,
+      tileKind: 'roots',
+      content,
+      now,
+      random: makeRandom([0.9, 0]),
+    });
+
+    const advanced = advanceEncounterSnapshot({
+      encounter,
+      characterSnapshot: hero,
+      content,
+      now: new Date(now.getTime() + 3_000),
+      random: makeRandom([0.7, 0.5, 0]),
+    });
+    const logText = advanced.encounter.logs.map((entry) => entry.text).join('\n');
+
+    expect(logText).toContain('ATTACK Warden rolls D20');
+    expect(logText).toContain('vs AC');
+    expect(logText).toMatch(/: HIT\.|: MISS\./);
+    expect(logText).toContain('Rusted Sword 1d8+');
+    expect(logText).toContain('=>');
+  });
 });

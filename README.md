@@ -241,16 +241,16 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.9.6
-pnpm live:browser -- --expect-version=1.9.6
-pnpm live:browser -- --expect-version=1.9.6 --profile=all --report-path=test-results/live/browser-smoke-report.json
+pnpm live:devnet -- --expect-version=1.10.0
+pnpm live:browser -- --expect-version=1.10.0
+pnpm live:browser -- --expect-version=1.10.0 --profile=all --combat --report-path=test-results/live/browser-smoke-report.json
 ```
 
 Thornwrithe now has a four-level regression ladder:
 
 ```bash
 pnpm regression:local
-pnpm regression:live -- --expect-version=1.9.6
+pnpm regression:live -- --expect-version=1.10.0
 pnpm regression:agent -- --evidence-json=test-results/live/browser-smoke-report.json
 ```
 

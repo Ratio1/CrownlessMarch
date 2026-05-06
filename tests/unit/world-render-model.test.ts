@@ -114,7 +114,40 @@ describe('world render model', () => {
     expect(model.cells[8]?.isObjectiveTarget).toBe(true);
     expect(model.cells[5]?.tile.blocked).toBe(true);
     expect(model.cells[2]?.monster?.label).toBe('Briar Goblin');
+    expect(model.cells[2]?.monsterRole).toBe('visible-threat');
     expect(model.cells[1]?.character?.name).toBe('Reed Warden');
+    expect(model.cells[1]?.characterRole).toBe('ally');
+    expect(model.cells[4]?.characterRole).toBe('hero');
+  });
+
+  it('marks the current encounter monster as the active threat for stronger rendering', () => {
+    const snapshot = createSnapshot();
+    snapshot.position = { x: 6, y: 4 };
+    snapshot.currentTile = { x: 6, y: 4, kind: 'roots', blocked: false };
+    snapshot.character.position = { x: 6, y: 4 };
+    snapshot.characters.hero.position = { x: 6, y: 4 };
+    snapshot.objectiveFocus = null;
+    snapshot.encounter = {
+      id: 'encounter-1',
+      status: 'active',
+      round: 2,
+      nextRoundAt: '2026-05-06T10:00:00.000Z',
+      logs: [],
+      characterId: 'hero-cid',
+      monsterId: 'briar-goblin',
+      monsterName: 'Briar Goblin',
+      combatants: [],
+      initiativeOrder: [],
+      queuedOverrides: [],
+      rewards: { xp: 40, gold: 6, lootItemIds: [] },
+    };
+
+    const model = buildWorldRenderModel(snapshot);
+    const activeThreatCell = model.cells.find((cell) => cell.monster?.label === 'Briar Goblin');
+
+    expect(activeThreatCell?.monsterRole).toBe('active-threat');
+    expect(activeThreatCell?.threatLabel).toBe('LV 1 ACTIVE');
+    expect(activeThreatCell?.characterRole).toBe('hero');
   });
 
   it('builds compact token labels from multi-word names', () => {

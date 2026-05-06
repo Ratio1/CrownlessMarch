@@ -13,6 +13,7 @@ interface BrowserSmokeOptions {
   browserExecutable: string;
   profileNames: BrowserProfileName[];
   reportPath: string | null;
+  combat: boolean;
 }
 
 interface HealthInfo {
@@ -71,6 +72,20 @@ function readFlag(name: string) {
   return null;
 }
 
+function readBooleanFlag(name: string, flagValue: string | null, envValue: string | undefined) {
+  if (process.argv.includes(name)) {
+    return true;
+  }
+
+  const rawValue = flagValue ?? envValue ?? null;
+
+  if (rawValue === null) {
+    return false;
+  }
+
+  return rawValue === '' || /^(1|true|yes|on)$/i.test(rawValue);
+}
+
 function expandHome(filePath: string) {
   return filePath.startsWith('~/') ? path.join(os.homedir(), filePath.slice(2)) : filePath;
 }
@@ -123,6 +138,7 @@ function resolveBrowserExecutable() {
 
 function parseOptions(): BrowserSmokeOptions {
   const resendToken = process.env.RESEND_TOKEN ?? process.env.RESEND_API_KEY ?? null;
+  const combatFlag = readFlag('--combat');
 
   if (!resendToken) {
     throw new Error('RESEND_TOKEN or RESEND_API_KEY is required for the live browser smoke runner');
@@ -137,6 +153,7 @@ function parseOptions(): BrowserSmokeOptions {
     browserExecutable: resolveBrowserExecutable(),
     profileNames: parseProfileNames(readFlag('--profile') ?? process.env.THORNWRITHE_BROWSER_PROFILE ?? 'desktop'),
     reportPath: readFlag('--report-path') ?? process.env.THORNWRITHE_BROWSER_REPORT ?? null,
+    combat: readBooleanFlag('--combat', combatFlag, process.env.THORNWRITHE_BROWSER_COMBAT),
   };
 }
 
@@ -374,13 +391,24 @@ async function runBrowserSmoke(
       timeout: 45_000,
     });
 
-    await page.getByRole('button', { name: 'North' }).click();
-    const expectedMoveText = `${character.characterName} moves north into Road Lane (5,4).`;
+    const moveDirection = options.combat ? 'East' : 'North';
+    const expectedMoveText = options.combat
+      ? `${character.characterName} moves east into Briar Roots (6,5).`
+      : `${character.characterName} moves north into Road Lane (5,4).`;
+
+    await page.getByRole('button', { name: moveDirection }).click();
     await page.waitForFunction((moveText) => document.body.innerText.includes(moveText), expectedMoveText, {
       timeout: 30_000,
     });
 
+    if (options.combat) {
+      await page.waitForFunction(() => document.body.innerText.includes('Dice Log') && document.body.innerText.includes('D20'), null, {
+        timeout: 45_000,
+      });
+    }
+
     const diagnostics = await page.evaluate((moveText) => {
+      const bodyText = document.body.innerText;
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
         node.textContent?.includes(moveText)
       );
@@ -393,7 +421,7 @@ async function runBrowserSmoke(
       const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
 
       return {
-        connected: document.body.innerText.includes('Connected to live shard.'),
+        connected: bodyText.includes('Connected to live shard.'),
         hasCanvas: Boolean(canvas),
         statusLine: document.querySelector('.status-line')?.textContent ?? null,
         ground:
@@ -403,6 +431,8 @@ async function runBrowserSmoke(
         moveText,
         moveEntryText: moveEntry?.textContent ?? null,
         moveEntryStyled: Boolean(moveEntry),
+        combatActive: bodyText.includes('Dice Log') && bodyText.includes('D20'),
+        d20LogVisible: bodyText.includes('D20'),
         horizontalOverflowPx,
         movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
         commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
@@ -417,6 +447,10 @@ async function runBrowserSmoke(
 
     if (!diagnostics.moveEntryStyled) {
       throw new Error(`Movement feed entry was not styled as MOVE: ${expectedMoveText}`);
+    }
+
+    if (options.combat && !diagnostics.combatActive) {
+      throw new Error(`${profile.name} profile did not render active D20 combat after moving east`);
     }
 
     if (diagnostics.horizontalOverflowPx > 2) {
