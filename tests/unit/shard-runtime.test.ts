@@ -108,14 +108,14 @@ function runLiveQuestRoute(input: {
     if (!direction) {
       const activeQuest = snapshot.character.quests[0]?.label ?? null;
 
-      if (activeQuest === 'Burn the First Nest' && snapshot.currentTile.kind === 'roots') {
+      if (activeQuest === 'Burn the First Nest' && snapshot.currentTile.kind === 'mud') {
         update = input.runtime.movePlayer(input.characterId, 'west');
         continue;
       }
 
       if (
         activeQuest === 'Secure the Shrine Road' &&
-        snapshot.currentTile.kind === 'forest' &&
+        snapshot.currentTile.kind === 'mud' &&
         focus.stateLabel === 'Break the grove wolf'
       ) {
         update = input.runtime.movePlayer(input.characterId, 'south');
@@ -160,7 +160,7 @@ describe('shard runtime', () => {
 
     expect(update.snapshot.regionId).toBe('briar-march');
     expect(update.snapshot.position).toEqual({ x: 5, y: 5 });
-    expect(update.snapshot.visibleTiles.some((tile) => tile.kind === 'roots')).toBe(true);
+    expect(update.snapshot.visibleTiles.some((tile) => tile.kind === 'mud')).toBe(true);
     expect(Object.values(update.snapshot.monsters).some((monster) => monster.label === 'Briar Goblin')).toBe(true);
   });
 
@@ -192,7 +192,7 @@ describe('shard runtime', () => {
 
     expect(update.snapshot.activityLog.at(-1)).toMatchObject({
       kind: 'move',
-      text: 'Aelis moves east into Briar Roots (6,5).',
+      text: 'Aelis moves east into Mud (6,5).',
     });
   });
 
@@ -338,12 +338,12 @@ describe('shard runtime', () => {
     ]);
   });
 
-  it('grants the ruined watchpost cache before the ruin encounter resolves', async () => {
+  it('blocks stone obstacles without starting an encounter', async () => {
     const content = await loadContentBundle(process.cwd());
     const runtime = new ShardRuntime({ content });
 
     runtime.addPlayer({
-      cid: 'cid-ruin-1',
+      cid: 'cid-stone-1',
       position: { x: 4, y: 6 },
       ...buildInitialCharacterSnapshot({
         name: 'Ashfall',
@@ -360,20 +360,15 @@ describe('shard runtime', () => {
       }),
     });
 
-    const update = runtime.movePlayer('cid-ruin-1', 'west');
+    const update = runtime.movePlayer('cid-stone-1', 'west');
 
-    expect(update.snapshot.position).toEqual({ x: 3, y: 6 });
-    expect(update.snapshot.currentTile.kind).toBe('ruin');
-    expect(update.snapshot.encounter?.status).toBe('active');
-    expect(update.snapshot.character.gold).toBe(11);
-    expect(update.snapshot.character.inventory.map((entry) => entry.id)).toContain('field-rations');
-    expect(update.progressionToPersist).toMatchObject({
-      gold: 11,
-      unlocks: expect.arrayContaining(['location:watchpost-cache']),
+    expect(update.snapshot.position).toEqual({ x: 4, y: 6 });
+    expect(update.snapshot.currentTile.kind).toBe('grass');
+    expect(update.snapshot.encounter).toBeNull();
+    expect(update.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'move',
+      text: 'Stone blocks the way west.',
     });
-    expect(
-      update.snapshot.activityLog.some((entry) => entry.text.includes('The ruined watchpost yields stale rations and 4 gold'))
-    ).toBe(true);
   });
 
   it('starts combat on hostile movement and produces a durable progression write once the fight resolves', async () => {
@@ -489,7 +484,7 @@ describe('shard runtime', () => {
     });
 
     const shrineUpdate = runtime.movePlayer('cid-secure-1', 'east');
-    expect(shrineUpdate.snapshot.currentTile.kind).toBe('shrine');
+    expect(shrineUpdate.snapshot.currentTile.kind).toBe('grass');
     expect(shrineUpdate.snapshot.character.quests).toEqual([
       expect.objectContaining({
         id: 'secure-the-shrine-road',
@@ -668,7 +663,7 @@ describe('shard runtime', () => {
 
     expect(resolved.snapshot.encounter?.status).toBe('lost');
     expect(resolved.snapshot.position).toEqual({ x: 5, y: 5 });
-    expect(resolved.snapshot.currentTile.kind).toBe('town');
+    expect(resolved.snapshot.currentTile.kind).toBe('grass');
     expect(resolved.snapshot.character.hitPoints.current).toBe(resolved.snapshot.character.hitPoints.max);
     expect(resolved.progressionToPersist).toMatchObject({
       gold: 4,
@@ -791,7 +786,7 @@ describe('shard runtime', () => {
 
     runtime.addPlayer({
       cid: 'cid-command-search',
-      position: { x: 3, y: 6 },
+      position: { x: 6, y: 5 },
       ...buildInitialCharacterSnapshot({
         name: 'Mire',
         classId: 'cleric',
@@ -806,11 +801,11 @@ describe('shard runtime', () => {
       }),
     });
 
-    const update = runtime.commandPlayer('cid-command-search', 'search ruin');
+    const update = runtime.commandPlayer('cid-command-search', 'search mud');
 
     expect(update.snapshot.activityLog.at(-1)).toMatchObject({
       kind: 'check',
-      text: 'Mire rolls 15 + 2 = 17 vs DC 14 to search Watchpost Ruin: success. You find old claw tracks, loose stones, and the safest line through the ruin.',
+      text: 'Mire rolls 15 + 2 = 17 vs DC 14 to search Watchpost Mud: success. You spot goblin scuffs, sinkholes, and the safest route through the mire.',
     });
   });
 
@@ -841,7 +836,6 @@ describe('shard runtime', () => {
       }),
     });
 
-    runtime.movePlayer('cid-command-consider', 'east');
     const update = runtime.commandPlayer('cid-command-consider', 'consider goblin');
 
     expect(update.snapshot.activityLog.at(-1)).toMatchObject({
@@ -893,12 +887,49 @@ describe('shard runtime', () => {
     const exits = runtime.commandPlayer('cid-command-utility', 'exits');
     expect(exits.snapshot.activityLog.at(-1)?.text).toBe('Exits: north, south, west, east.');
 
-    runtime.movePlayer('cid-command-utility', 'east');
     const lore = runtime.commandPlayer('cid-command-utility', 'lore goblin');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Briar Goblin lore:');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('AC 14');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Fort 12');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Ref 13');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Will 11');
+  });
+
+  it('only accepts flee as a typed command during active combat', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({
+      content,
+      random: makeRandom([0.99, 0.0]),
+      now: () => Date.parse('2026-05-06T10:30:00.000Z'),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-command-fight',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Mossblade',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+      }),
+    });
+
+    runtime.movePlayer('cid-command-fight', 'east');
+    const blocked = runtime.commandPlayer('cid-command-fight', 'look');
+    expect(blocked.snapshot.activityLog.at(-1)).toMatchObject({
+      kind: 'system',
+      text: 'Fight is on. Use flee if you want to break contact.',
+    });
+
+    const fleeing = runtime.commandPlayer('cid-command-fight', 'flee');
+    expect(fleeing.snapshot.encounter?.queuedOverrides.at(-1)).toMatchObject({
+      command: 'retreat',
+    });
   });
 });

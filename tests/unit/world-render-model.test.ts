@@ -12,19 +12,19 @@ function createSnapshot(): GameplayShardSnapshot {
     currentTile: {
       x: 5,
       y: 5,
-      kind: 'town',
+      kind: 'grass',
       blocked: false,
     },
     visibleTiles: [
-      { x: 4, y: 4, kind: 'forest', blocked: false },
-      { x: 5, y: 4, kind: 'road', blocked: false },
-      { x: 6, y: 4, kind: 'roots', blocked: false },
-      { x: 4, y: 5, kind: 'forest', blocked: false },
-      { x: 5, y: 5, kind: 'town', blocked: false },
-      { x: 6, y: 5, kind: 'ruin', blocked: true },
-      { x: 4, y: 6, kind: 'water', blocked: true },
-      { x: 5, y: 6, kind: 'road', blocked: false },
-      { x: 6, y: 6, kind: 'shrine', blocked: false },
+      { x: 4, y: 4, kind: 'forest', blocked: true },
+      { x: 5, y: 4, kind: 'grass', blocked: false },
+      { x: 6, y: 4, kind: 'mud', blocked: false },
+      { x: 4, y: 5, kind: 'forest', blocked: true },
+      { x: 5, y: 5, kind: 'grass', blocked: false },
+      { x: 6, y: 5, kind: 'stone', blocked: true },
+      { x: 4, y: 6, kind: 'stone', blocked: true },
+      { x: 5, y: 6, kind: 'grass', blocked: false },
+      { x: 6, y: 6, kind: 'grass', blocked: false },
     ],
     characters: {
       hero: {
@@ -64,6 +64,14 @@ function createSnapshot(): GameplayShardSnapshot {
       gold: 7,
       hitPoints: { current: 24, max: 24, bloodied: 12 },
       defenses: { armorClass: 15, fortitude: 13, reflex: 11, will: 12 },
+      attributes: {
+        strength: 15,
+        dexterity: 13,
+        constitution: 12,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 8,
+      },
       position: { x: 5, y: 5 },
       actions: [],
       inventory: [],
@@ -86,7 +94,7 @@ function createSnapshot(): GameplayShardSnapshot {
       detail: 'Reach the Ember Shrine east of town.',
       stateLabel: 'March to shrine',
       target: { x: 6, y: 6 },
-      terrain: 'shrine',
+      terrain: 'grass',
     },
     encounter: null,
     movementLocked: false,
@@ -107,7 +115,7 @@ describe('world render model', () => {
       rows: 3,
     });
     expect(model.activeQuest?.id).toBe('survey-the-briar-edge');
-    expect(model.currentTerrain.label).toBe('Town Hearth');
+    expect(model.currentTerrain.label).toBe('Grass');
     expect(model.cells).toHaveLength(9);
     expect(model.cells[0]?.key).toBe('4:4');
     expect(model.cells[4]?.isCurrent).toBe(true);
@@ -123,7 +131,7 @@ describe('world render model', () => {
   it('marks the current encounter monster as the active threat for stronger rendering', () => {
     const snapshot = createSnapshot();
     snapshot.position = { x: 6, y: 4 };
-    snapshot.currentTile = { x: 6, y: 4, kind: 'roots', blocked: false };
+    snapshot.currentTile = { x: 6, y: 4, kind: 'mud', blocked: false };
     snapshot.character.position = { x: 6, y: 4 };
     snapshot.characters.hero.position = { x: 6, y: 4 };
     snapshot.objectiveFocus = null;

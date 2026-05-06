@@ -645,7 +645,7 @@ describe('websocket session host', () => {
         y: 5,
       },
       currentTile: {
-        kind: 'town',
+        kind: 'grass',
       },
       character: {
         quests: [

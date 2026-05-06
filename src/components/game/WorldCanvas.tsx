@@ -26,7 +26,7 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
   const gameRef = useRef<ThornwritheGameBridge | null>(null);
   const latestSnapshotRef = useRef<GameplayShardSnapshot | null>(null);
   const encounter = snapshot?.encounter ?? null;
-  const combatHud = buildCombatHudModel(encounter);
+  const combatHud = encounter?.status === 'active' ? buildCombatHudModel(encounter) : null;
   const activeQuest = snapshot?.character.quests[0] ?? null;
   const objectiveFocus = snapshot?.objectiveFocus ?? null;
   const visibleMonsterCount = snapshot ? Object.keys(snapshot.monsters).length : 0;

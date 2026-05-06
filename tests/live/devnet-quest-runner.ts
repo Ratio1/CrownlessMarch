@@ -606,7 +606,7 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
 
       if (
         activeQuest === 'Burn the First Nest' &&
-        snapshot.currentTile.kind === 'roots'
+        snapshot.currentTile.kind === 'mud'
       ) {
         const previousVersion = session.stateVersion;
         record(`burn-reset-west:from=${snapshot.position.x},${snapshot.position.y}`);
@@ -617,7 +617,7 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
 
       if (
         activeQuest === 'Secure the Shrine Road' &&
-        snapshot.currentTile.kind === 'forest' &&
+        snapshot.currentTile.kind === 'mud' &&
         focus.stateLabel === 'Break the grove wolf'
       ) {
         const previousVersion = session.stateVersion;

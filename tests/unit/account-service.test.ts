@@ -14,6 +14,8 @@ jest.mock('../../src/server/auth/email-verification', () => ({
 
 jest.mock('../../src/server/platform/r1fs-characters', () => ({
   createInitialCharacterCheckpoint: jest.fn(),
+  loadCharacterByCid: jest.fn(),
+  saveCharacterCheckpoint: jest.fn(),
 }));
 
 jest.mock('../../src/server/platform/cstore-roster', () => ({
@@ -254,6 +256,124 @@ describe('account service', () => {
         accountId: 'first@test.invalid',
         latestCharacterCid: 'cid-initial',
         characterName: 'First Warden',
+      })
+    );
+  });
+
+  it('resets a beta character build while preserving XP-derived level', async () => {
+    const cstore = await import('../../src/server/auth/cstore');
+    const verification = await import('../../src/server/auth/email-verification');
+    const r1fsCharacters = await import('../../src/server/platform/r1fs-characters');
+    const roster = await import('../../src/server/platform/cstore-roster');
+    const accountService = await import('../../src/server/auth/account-service');
+
+    (cstore.isSharedAuthConfigured as jest.Mock).mockReturnValue(false);
+    (roster.readRosterEntry as jest.Mock).mockResolvedValue(null);
+    (verification.issueEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'reset@test.invalid',
+      email: 'reset@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    });
+    (verification.sendVerificationEmail as jest.Mock).mockResolvedValue(undefined);
+    (verification.consumeEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'reset@test.invalid',
+      email: 'reset@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    });
+    (r1fsCharacters.createInitialCharacterCheckpoint as jest.Mock).mockResolvedValue({
+      cid: 'cid-before-reset',
+      persist_revision: 2,
+      snapshot: { name: 'Reset Warden', classId: 'fighter' },
+    });
+    (r1fsCharacters.loadCharacterByCid as jest.Mock).mockResolvedValue({
+      cid: 'cid-before-reset',
+      persist_revision: 2,
+      snapshot: {
+        name: 'Reset Warden',
+        classId: 'fighter',
+        xp: 5500,
+        level: 4,
+        realLevel: 4,
+        currentLevel: 4,
+        inventory: ['rusted-sword'],
+        equipment: { weapon: 'rusted-sword' },
+        quest_progress: {},
+        activeQuestIds: ['survey-the-briar-edge'],
+        skills: [],
+        unlocks: [],
+      },
+    });
+    (r1fsCharacters.saveCharacterCheckpoint as jest.Mock).mockResolvedValue({
+      cid: 'cid-after-reset',
+      persist_revision: 3,
+      snapshot: {},
+    });
+
+    await accountService.registerAccount({
+      email: 'reset@test.invalid',
+      password: 'hunter234',
+      appOrigin: 'http://localhost:3000',
+    });
+    await accountService.verifyAccountEmail('verify-token');
+    await accountService.createCharacterForAccount({
+      accountId: 'reset@test.invalid',
+      characterName: 'Reset Warden',
+      classId: 'fighter',
+      attributes: {
+        strength: 15,
+        dexterity: 14,
+        constitution: 11,
+        intelligence: 10,
+        wisdom: 9,
+        charisma: 8,
+      },
+    });
+
+    await expect(
+      accountService.resetCharacterForAccount({
+        accountId: 'reset@test.invalid',
+        characterName: 'Reset Rogue',
+        classId: 'rogue',
+        attributes: {
+          strength: 15,
+          dexterity: 15,
+          constitution: 11,
+          intelligence: 10,
+          wisdom: 9,
+          charisma: 8,
+        },
+      })
+    ).resolves.toMatchObject({
+      accountId: 'reset@test.invalid',
+      characterId: 'cid-after-reset',
+      characterName: 'Reset Rogue',
+    });
+
+    expect(r1fsCharacters.saveCharacterCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cid: 'cid-before-reset',
+        persistRevision: 2,
+        snapshot: expect.objectContaining({
+          name: 'Reset Rogue',
+          classId: 'rogue',
+          xp: 5500,
+          realLevel: 5,
+          currentLevel: 5,
+          level: 5,
+          attributes: expect.objectContaining({ dexterity: 15 }),
+        }),
+      })
+    );
+    expect(roster.writeRosterEntry).toHaveBeenLastCalledWith(
+      'reset@test.invalid',
+      expect.objectContaining({
+        latestCharacterCid: 'cid-after-reset',
+        characterName: 'Reset Rogue',
+        persistRevision: 3,
       })
     );
   });

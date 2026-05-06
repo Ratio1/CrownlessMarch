@@ -17,9 +17,11 @@ describe('live browser smoke runner wiring', () => {
     expect(packageJson.devDependencies).toHaveProperty('playwright-core');
     expect(script).toContain('RESEND_TOKEN or RESEND_API_KEY is required for the live browser smoke runner');
     expect(script).toContain('const NETWORK_TIMEOUT_MS = 45_000;');
+    expect(script).toContain("readFlag('--idle-ms')");
     expect(script).toContain('waitForHealth');
     expect(script).toContain('resolveBrowserExecutable');
-    expect(script).toContain('moves north into Road Lane (5,4)');
+    expect(script).toContain('moves north into Grass (5,4)');
+    expect(script).toContain('idleStable');
     expect(script).toContain('page.screenshot');
     expect(script).toContain('bodyTextLower');
     expect(script).toContain("bodyTextLower.includes('dice log')");

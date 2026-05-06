@@ -237,7 +237,7 @@ export const regionSchema = z.object({
     z.object({
       x: z.number().int(),
       y: z.number().int(),
-      kind: z.enum(['town', 'road', 'forest', 'roots', 'ruin', 'shrine', 'water']),
+      kind: z.enum(['grass', 'mud', 'forest', 'stone']),
       blocked: z.boolean(),
     })
   ),

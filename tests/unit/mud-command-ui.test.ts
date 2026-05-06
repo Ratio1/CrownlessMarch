@@ -13,11 +13,12 @@ describe('MUD command UI wiring', () => {
 
     expect(commandPanel).toContain('Field Command');
     expect(commandPanel).toContain('onCommand');
-    expect(commandPanel).toContain('placeholder="look / consider goblin / lore / inventory"');
+    expect(commandPanel).toContain("placeholder={combatMode ? 'flee' : 'look / consider goblin / lore / inventory'}");
+    expect(commandPanel).toContain("combatMode ? ['flee'] : QUICK_COMMANDS");
     expect(commandPanel).toContain('command-panel__quick');
     expect(commandPanel).toContain('inventory');
     expect(commandPanel).toContain('lore goblin');
-    expect(gameShell).toContain('<CommandPanel disabled={!canCommand} onCommand={sendCommand} />');
+    expect(gameShell).toContain('combatMode={fightActive}');
     expect(hook).toContain("type: 'command'");
   });
 });

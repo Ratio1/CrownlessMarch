@@ -5,7 +5,7 @@ import {
 } from '../../src/client/phaser/sprite-catalog';
 
 describe('Phaser actor sprite catalog', () => {
-  it('defines bottom-anchored sprite assets for player classes and starter mobs', () => {
+  it('defines small bottom-anchored pixel-art sprite assets for player classes and starter mobs', () => {
     expect(Object.keys(ACTOR_SPRITES)).toEqual(
       expect.arrayContaining([
         'pc-fighter',
@@ -17,12 +17,32 @@ describe('Phaser actor sprite catalog', () => {
         'mob-sap-wolf',
         'mob-root-troll',
         'mob-vampire-lord',
+        'mob-generic',
       ])
     );
 
     for (const spec of Object.values(ACTOR_SPRITES)) {
-      expect(spec.frame).toEqual({ width: 64, height: 64 });
+      expect([32, 48]).toContain(spec.frame.width);
+      expect(spec.frame.height).toBe(spec.frame.width);
       expect(spec.anchor).toEqual({ x: 0.5, y: 1 });
+      expect(Object.keys(spec.palette).length).toBeLessThanOrEqual(6);
+      expect(spec.pixelArt.style).toBe('old-school-fantasy-rpg');
+      expect(spec.pixelArt.hints.length).toBeGreaterThanOrEqual(2);
+      expect(spec.pixelArt.blocks.length).toBeGreaterThanOrEqual(8);
+
+      for (const block of spec.pixelArt.blocks) {
+        expect(Object.prototype.hasOwnProperty.call(spec.palette, block.color)).toBe(true);
+        expect(Number.isInteger(block.x)).toBe(true);
+        expect(Number.isInteger(block.y)).toBe(true);
+        expect(Number.isInteger(block.width)).toBe(true);
+        expect(Number.isInteger(block.height)).toBe(true);
+        expect(block.width).toBeGreaterThan(0);
+        expect(block.height).toBeGreaterThan(0);
+        expect(block.x).toBeGreaterThanOrEqual(0);
+        expect(block.y).toBeGreaterThanOrEqual(0);
+        expect(block.x + block.width).toBeLessThanOrEqual(spec.frame.width);
+        expect(block.y + block.height).toBeLessThanOrEqual(spec.frame.height);
+      }
     }
   });
 

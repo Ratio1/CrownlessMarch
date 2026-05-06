@@ -1,5 +1,5 @@
 import type { EncounterSnapshot } from './domain/combat';
-import type { CharacterAction, CharacterDefenses, CharacterHitPoints } from './domain/types';
+import type { AttributeSet, CharacterAction, CharacterDefenses, CharacterHitPoints } from './domain/types';
 
 export type GameplayDirection = 'north' | 'south' | 'west' | 'east';
 export type GameplayOverrideCommand = 'encounter power' | 'potion' | 'retreat';
@@ -8,7 +8,7 @@ export type GameplayMudCommand = string;
 export interface GameplayTileSnapshot {
   x: number;
   y: number;
-  kind: 'town' | 'road' | 'forest' | 'roots' | 'ruin' | 'shrine' | 'water';
+  kind: 'grass' | 'mud' | 'forest' | 'stone';
   blocked: boolean;
 }
 
@@ -85,6 +85,7 @@ export interface GameplayCharacterCard {
   gold: number;
   hitPoints: CharacterHitPoints;
   defenses: CharacterDefenses;
+  attributes: AttributeSet;
   position: {
     x: number;
     y: number;

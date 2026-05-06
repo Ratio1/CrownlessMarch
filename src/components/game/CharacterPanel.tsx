@@ -1,4 +1,5 @@
 import type { GameplayShardSnapshot } from '@/shared/gameplay';
+import { attributes } from '@/shared/domain/types';
 
 interface CharacterPanelProps {
   snapshot: GameplayShardSnapshot | null;
@@ -37,6 +38,17 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
             <span className="status-pill">Ground {snapshot?.currentTile.kind ?? 'unknown'}</span>
             <span className="status-pill">Passive: {card.passive}</span>
             <span className="status-pill">Encounter: {card.encounterAbility}</span>
+          </div>
+
+          <div className="play-info-block">
+            <h3>Attributes</h3>
+            <div className="token-strip">
+              {attributes.map((attribute) => (
+                <span className="status-pill" key={attribute}>
+                  {attribute === 'constitution' ? 'Endurance' : attribute} {card.attributes[attribute]}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="play-info-block">

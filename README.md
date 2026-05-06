@@ -95,19 +95,22 @@ The current `/play` surface renders a Phaser-backed world surface with a text-fo
 
 - the center playfield is a Phaser canvas for the visible fog window
 - the canvas draws terrain silhouettes plus generated Phaser sprite textures for live PCs and mobs from the shard snapshot
-- the side HUD shows the character card, quest ledger, movement pad, and override controls
+- terrain kinds are deliberately simple: `grass` and `mud` are walkable, while `forest` trees and `stone` rocks block movement
+- the side HUD shows latest-first logs, the field command prompt, movement controls, and a short character sheet
+- full character details, beta reset, and quest information live behind the information tabs below the field
 - the combat panel is a dice-text log with visible initiative, attack, defense, damage, and queued-action math
 - the field command prompt accepts room-style MUD verbs, D20 terrain checks, `inventory`, `sheet`, `exits`, and `lore <target>`
-- the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
+- during active combat the typed command surface exposes only `flee`; other movement and MUD commands are held until the fight resolves
+- the non-combat feed reports shrine, town, and quest-turn-in events on the same panel when no encounter is active
 - the fixed release badge links to `/e` so operators can confirm the exact live build from the UI
 
 Combat rules are intentionally compact but now use the persistent weapon rules:
 
 - stepping onto hostile tiles starts combat
-- stepping onto `shrine`, `ruin`, and `town` tiles now triggers automatic world interactions
-- `shrine` grants a one-time recovery and marks the survey quest ready to report
-- `ruin` grants a one-time cache reward even though it is still hostile ground
-- `town` heals the PC and turns in any quest already marked ready
+- stepping onto the shrine and town coordinates triggers automatic world interactions even though both are rendered as `grass`
+- the shrine coordinate grants a one-time recovery and marks the survey quest ready to report
+- the town coordinate heals the PC and turns in any quest already marked ready
+- level-up reset extras are available at real levels 4, 8, and 14 as one additional attribute-score point each
 - initiative is rolled once when the encounter opens
 - rounds advance automatically on the live socket heartbeat cadence
 - equipped weapons supply damage dice, enhancement, critical range, and modifiers
@@ -241,16 +244,16 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.12.0
-pnpm live:browser -- --expect-version=1.12.0
-pnpm live:browser -- --expect-version=1.12.0 --profile=all --combat --report-path=test-results/live/browser-smoke-report.json
+pnpm live:devnet -- --expect-version=1.13.0
+pnpm live:browser -- --expect-version=1.13.0
+pnpm live:browser -- --expect-version=1.13.0 --profile=all --combat --idle-ms=300000 --report-path=test-results/live/browser-smoke-report.json
 ```
 
 Thornwrithe now has a four-level regression ladder:
 
 ```bash
 pnpm regression:local
-pnpm regression:live -- --expect-version=1.12.0
+pnpm regression:live -- --expect-version=1.13.0
 pnpm regression:agent -- --evidence-json=test-results/live/browser-smoke-report.json
 ```
 

@@ -1,8 +1,9 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { PublicUser } from '@ratio1/cstore-auth-ts';
-import { createInitialCharacterCheckpoint } from '../platform/r1fs-characters';
+import { createInitialCharacterCheckpoint, loadCharacterByCid, saveCharacterCheckpoint } from '../platform/r1fs-characters';
 import { readRosterEntry, writeRosterEntry, type ThornwritheRosterEntry } from '../platform/cstore-roster';
-import { buildInitialCharacterSnapshot } from '../../shared/domain/progression';
+import { buildInitialCharacterSnapshot, levelForExperience, normalizeDurableProgression } from '../../shared/domain/progression';
+import { pointBuyBudgetForLevel, validatePointBuy } from '../../shared/domain/point-buy';
 import type { AttributeSet, CharacterClass } from '../../shared/domain/types';
 import { ensureAuthInitialized, getAuthClient, isSharedAuthConfigured } from './cstore';
 import {
@@ -225,6 +226,18 @@ function validateCharacterNameInput(name: string) {
   }
 
   return normalized;
+}
+
+function starterKitForClass(classId: CharacterClass) {
+  return classId === 'wizard'
+    ? {
+        inventory: ['ash-staff', 'field-rations', 'health-potion'],
+        equipment: { implement: 'ash-staff', armor: 'travel-cloak' },
+      }
+    : {
+        inventory: ['rusted-sword', 'field-rations', 'health-potion'],
+        equipment: { weapon: 'rusted-sword', armor: 'patchwork-leather' },
+      };
 }
 
 function canDeliverOrExposeVerificationToken(): boolean {
@@ -556,18 +569,13 @@ export async function createCharacterForAccount(input: {
   }
 
   const characterName = validateCharacterNameInput(input.characterName);
+  const starterKit = starterKitForClass(input.classId);
   const snapshot = buildInitialCharacterSnapshot({
     name: characterName,
     classId: input.classId,
     attributes: input.attributes,
-    inventory:
-      input.classId === 'wizard'
-        ? ['ash-staff', 'field-rations', 'health-potion']
-        : ['rusted-sword', 'field-rations', 'health-potion'],
-    equipment:
-      input.classId === 'wizard'
-        ? { implement: 'ash-staff', armor: 'travel-cloak' }
-        : { weapon: 'rusted-sword', armor: 'patchwork-leather' },
+    inventory: starterKit.inventory,
+    equipment: starterKit.equipment,
     currency: 7,
     activeQuestIds: ['survey-the-briar-edge'],
   });
@@ -620,6 +628,128 @@ export async function createCharacterForAccount(input: {
     email: account.email,
     emailVerified: true,
     characterId: checkpoint.cid,
+    characterName,
+  });
+}
+
+export async function resetCharacterForAccount(input: {
+  accountId: string;
+  characterName: string;
+  classId: CharacterClass;
+  attributes: AttributeSet;
+}) {
+  const account = await getAccountById(input.accountId);
+
+  if (!account || !account.emailVerified || !account.characterId) {
+    throw new AccountServiceError('ACCOUNT_NOT_FOUND', 'Account record is missing.');
+  }
+
+  const characterName = validateCharacterNameInput(input.characterName);
+  const checkpoint = await loadCharacterByCid(account.characterId);
+  const currentSnapshot = normalizeDurableProgression(checkpoint.snapshot);
+  const xp = typeof currentSnapshot.xp === 'number' ? currentSnapshot.xp : 0;
+  const realLevel = levelForExperience(xp);
+  const pointBuy = validatePointBuy(input.attributes, pointBuyBudgetForLevel(realLevel));
+
+  if (!pointBuy.valid) {
+    throw new AccountServiceError(
+      'INVALID_INPUT',
+      `Invalid point-buy allocation (${pointBuy.spent}/${pointBuy.budget}).`
+    );
+  }
+
+  const starterKit = starterKitForClass(input.classId);
+  const starterSnapshot = buildInitialCharacterSnapshot({
+    name: characterName,
+    classId: input.classId,
+    attributes: pointBuy.attributes,
+    inventory: starterKit.inventory,
+    equipment: starterKit.equipment,
+    currency:
+      typeof currentSnapshot.currency === 'number'
+        ? currentSnapshot.currency
+        : typeof currentSnapshot.gold === 'number'
+          ? currentSnapshot.gold
+          : 7,
+    activeQuestIds: Array.isArray(currentSnapshot.activeQuestIds)
+      ? currentSnapshot.activeQuestIds.filter((entry): entry is string => typeof entry === 'string')
+      : ['survey-the-briar-edge'],
+    skills: Array.isArray(currentSnapshot.skills)
+      ? currentSnapshot.skills.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+    unlocks: Array.isArray(currentSnapshot.unlocks)
+      ? currentSnapshot.unlocks.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+  });
+  const nextSnapshot = normalizeDurableProgression({
+    ...starterSnapshot,
+    xp,
+    realLevel,
+    currentLevel: realLevel,
+    level: realLevel,
+    levelEffects: [],
+    quest_progress:
+      currentSnapshot.quest_progress &&
+      typeof currentSnapshot.quest_progress === 'object' &&
+      !Array.isArray(currentSnapshot.quest_progress)
+        ? currentSnapshot.quest_progress
+        : {},
+    gold:
+      typeof currentSnapshot.gold === 'number'
+        ? currentSnapshot.gold
+        : typeof currentSnapshot.currency === 'number'
+          ? currentSnapshot.currency
+          : starterSnapshot.gold,
+  });
+  const saved = await saveCharacterCheckpoint({
+    cid: checkpoint.cid,
+    persistRevision: checkpoint.persist_revision,
+    snapshot: nextSnapshot,
+  });
+  const existingRoster = await readRosterEntry(input.accountId);
+  const rosterEntry = createRosterEntry({
+    accountId: input.accountId,
+    email: account.email,
+    characterName,
+    latestCharacterCid: saved.cid,
+    persistRevision: saved.persist_revision,
+    registeredAt: existingRoster?.registeredAt,
+  });
+
+  await writeRosterEntry(input.accountId, rosterEntry);
+
+  if (isSharedAuthConfigured()) {
+    const client = getAuthClient();
+    const username = emailToUsername(account.email);
+
+    await ensureAuthInitialized(client);
+
+    const user = await client.simple.getUser<ThornwritheAccountMetadata>(username);
+
+    if (user && isSharedAccountMetadata(user.metadata)) {
+      await client.simple.updateUser<ThornwritheAccountMetadata>(username, {
+        metadata: {
+          ...user.metadata,
+          latestCharacterCid: saved.cid,
+          characterName,
+        },
+      });
+    }
+  } else {
+    const accountsByEmail = getLocalAccountsStore();
+    const localAccount = accountsByEmail.get(account.email);
+
+    if (localAccount) {
+      localAccount.latestCharacterCid = saved.cid;
+      localAccount.characterName = characterName;
+    }
+  }
+
+  return buildAccountRecord({
+    accountId: input.accountId,
+    email: account.email,
+    emailVerified: true,
+    characterId: saved.cid,
     characterName,
   });
 }

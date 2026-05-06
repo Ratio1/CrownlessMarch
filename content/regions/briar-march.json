@@ -10,79 +10,79 @@
     {
       "x": 5,
       "y": 5,
-      "kind": "town",
+      "kind": "grass",
       "blocked": false
     },
     {
       "x": 5,
       "y": 4,
-      "kind": "road",
+      "kind": "grass",
       "blocked": false
     },
     {
       "x": 5,
       "y": 3,
-      "kind": "road",
+      "kind": "grass",
       "blocked": false
     },
     {
       "x": 6,
       "y": 5,
-      "kind": "roots",
+      "kind": "mud",
       "blocked": false
     },
     {
       "x": 7,
       "y": 5,
-      "kind": "forest",
+      "kind": "mud",
       "blocked": false
     },
     {
       "x": 6,
       "y": 4,
       "kind": "forest",
-      "blocked": false
+      "blocked": true
     },
     {
       "x": 6,
       "y": 3,
       "kind": "forest",
-      "blocked": false
+      "blocked": true
     },
     {
       "x": 7,
       "y": 3,
-      "kind": "roots",
+      "kind": "mud",
       "blocked": false
     },
     {
       "x": 4,
       "y": 4,
       "kind": "forest",
-      "blocked": false
+      "blocked": true
     },
     {
       "x": 4,
       "y": 6,
-      "kind": "road",
+      "kind": "grass",
       "blocked": false
     },
     {
       "x": 3,
       "y": 6,
-      "kind": "ruin",
-      "blocked": false
+      "kind": "stone",
+      "blocked": true
     },
     {
       "x": 7,
       "y": 6,
-      "kind": "shrine",
+      "kind": "grass",
       "blocked": false
     },
     {
       "x": 6,
       "y": 7,
-      "kind": "water",
+      "kind": "stone",
       "blocked": true
     }
   ]

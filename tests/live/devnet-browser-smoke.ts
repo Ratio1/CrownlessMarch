@@ -14,6 +14,7 @@ interface BrowserSmokeOptions {
   profileNames: BrowserProfileName[];
   reportPath: string | null;
   combat: boolean;
+  idleMs: number;
 }
 
 interface HealthInfo {
@@ -157,6 +158,7 @@ function parseOptions(): BrowserSmokeOptions {
     profileNames: parseProfileNames(readFlag('--profile') ?? process.env.THORNWRITHE_BROWSER_PROFILE ?? 'desktop'),
     reportPath: readFlag('--report-path') ?? process.env.THORNWRITHE_BROWSER_REPORT ?? null,
     combat: readBooleanFlag('--combat', combatFlag, process.env.THORNWRITHE_BROWSER_COMBAT),
+    idleMs: Number(readFlag('--idle-ms') ?? process.env.THORNWRITHE_IDLE_MS ?? 0),
   };
 }
 
@@ -451,8 +453,8 @@ async function runBrowserSmoke(
 
     const moveDirection = options.combat ? 'East' : 'North';
     const expectedMoveText = options.combat
-      ? `${character.characterName} moves east into Briar Roots (6,5).`
-      : `${character.characterName} moves north into Road Lane (5,4).`;
+      ? `${character.characterName} moves east into Mud (6,5).`
+      : `${character.characterName} moves north into Grass (5,4).`;
 
     await page.getByRole('button', { name: moveDirection }).click();
     await page.waitForFunction((moveText) => document.body.innerText.includes(moveText), expectedMoveText, {
@@ -474,7 +476,13 @@ async function runBrowserSmoke(
       );
     }
 
-    const lastCanvasDiagnostics = await waitForCanvasInk(page);
+    let lastCanvasDiagnostics = await waitForCanvasInk(page);
+    if (options.idleMs > 0) {
+      logStage(`idling ${profile.name} profile for ${options.idleMs}ms`);
+      await page.waitForTimeout(options.idleMs);
+      lastCanvasDiagnostics = await waitForCanvasInk(page);
+    }
+
     const diagnostics = await page.evaluate((input) => {
       const moveText = input.moveText;
       const bodyText = document.body.innerText;
@@ -507,8 +515,16 @@ async function runBrowserSmoke(
         commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
         canvasInkRatio: input.lastCanvasDiagnostics.canvasInkRatio,
         canvas: input.lastCanvasDiagnostics.canvas,
+        idleStable:
+          input.idleMs === 0 ||
+          (
+            bodyText.includes('Connected to live shard.') &&
+            bodyText.includes(input.characterName) &&
+            Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0) &&
+            input.lastCanvasDiagnostics.canvas.width > 0
+          ),
       };
-    }, { moveText: expectedMoveText, combat: options.combat, lastCanvasDiagnostics });
+    }, { moveText: expectedMoveText, combat: options.combat, lastCanvasDiagnostics, idleMs: options.idleMs, characterName: character.characterName });
 
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -534,6 +550,10 @@ async function runBrowserSmoke(
 
     if (!diagnostics.movementPadVisible || !diagnostics.commandInputVisible) {
       throw new Error(`${profile.name} profile did not render the command and movement controls`);
+    }
+
+    if (!diagnostics.idleStable) {
+      throw new Error(`${profile.name} profile lost required playfield state after ${options.idleMs}ms idle`);
     }
 
     return {

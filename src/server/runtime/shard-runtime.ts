@@ -2,6 +2,7 @@ import type { ContentBundle } from '../content/load-content';
 import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
 import { DEFAULT_GAME_RULES, getWeaponRule, isEvilAlignment } from '../../shared/content/game-rules';
 import { getVisionWindow } from '../../shared/domain/fog';
+import { getDefaultAttributes } from '../../shared/domain/point-buy';
 import {
   addInventoryItem,
   applyExperienceGain,
@@ -54,6 +55,7 @@ interface RuntimePlayerState {
   snapshot: Record<string, unknown>;
   position: PresencePosition;
   activeEncounter: EncounterSnapshot | null;
+  clearedHostileTiles: Set<string>;
   pendingProgression: Record<string, unknown> | null;
 }
 
@@ -64,7 +66,7 @@ interface ShardRuntimeOptions {
 }
 
 const DEFAULT_TILE = {
-  kind: 'forest',
+  kind: 'grass',
   blocked: false,
 } as const;
 
@@ -97,54 +99,33 @@ const TERRAIN_COMMAND_DETAILS: Record<
     failure: string;
   }
 > = {
-  town: {
-    label: 'Town Hearth',
-    summary: 'Safe ground for rest, debriefs, and regrouping under ember watchfires.',
+  grass: {
+    label: 'Grass',
+    summary: 'Open green ground with safe footing.',
     dc: 10,
-    success: 'You read the road signs, watch posts, and fresh boot tracks around the hearth.',
-    failure: 'The hearth noise hides anything subtler than the open road.',
+    success: 'You read boot marks, snapped grass, and the cleanest safe line ahead.',
+    failure: 'The open ground shows only trampled green and old rain.',
   },
-  road: {
-    label: 'Road Lane',
-    summary: 'A worn lane where the forest has not yet swallowed the route.',
-    dc: 10,
-    success: 'You spot wagon ruts and safe footing along the lane.',
-    failure: 'The road gives up no new sign beyond its worn direction.',
+  mud: {
+    label: 'Mud',
+    summary: 'Brown churned ground where the dungeon-briar lanes begin.',
+    dc: 13,
+    success: 'You spot goblin scuffs, sinkholes, and the safest route through the mire.',
+    failure: 'The mud closes over tracks before you can read them.',
   },
   forest: {
-    label: 'Dark Forest',
-    summary: 'Dense canopy and low-visibility hunting ground.',
-    dc: 13,
-    success: 'You pick out bent moss, listening branches, and the cleanest line forward.',
-    failure: 'The canopy shifts and swallows the trail signs before they settle.',
-  },
-  roots: {
-    label: 'Briar Roots',
-    summary: 'Aggressive thorn corridors where goblins break cover.',
+    label: 'Forest',
+    summary: 'A hard tree line that blocks movement.',
     dc: 14,
-    success: 'You spot snare roots, goblin scuffs, and a narrow path through the briars.',
-    failure: 'The roots twitch underfoot and blur the safer path.',
+    success: 'You find claw marks and old warning cuts in the bark.',
+    failure: 'The trees crowd close enough to hide anything useful.',
   },
-  ruin: {
-    label: 'Watchpost Ruin',
-    summary: 'Broken stone lanes with loot and old blood in the moss.',
+  stone: {
+    label: 'Stone',
+    summary: 'Rock and broken dungeon stone that blocks movement.',
     dc: 14,
-    success: 'You find old claw tracks, loose stones, and the safest line through the ruin.',
-    failure: 'The broken watchpost keeps its useful marks under moss and old ash.',
-  },
-  shrine: {
-    label: 'Ember Shrine',
-    summary: 'Ancient refuge where the march briefly loosens its grip.',
-    dc: 12,
-    success: 'You read the ember rite and feel the shrine answer under the ash.',
-    failure: 'The shrine glows, but its older marks remain shut.',
-  },
-  water: {
-    label: 'Blackwater',
-    summary: 'Flooded and blocked ground.',
-    dc: 15,
-    success: 'You spot the flooded edge and the point where the bank gives way.',
-    failure: 'The blackwater reflects only the canopy and your own lantern.',
+    success: 'You read the broken rock face and mark where passage ends.',
+    failure: 'The stone gives up no path through the wall.',
   },
 };
 
@@ -196,8 +177,8 @@ const FALLBACK_CONTENT: ContentBundle = {
     height: 11,
     spawn: { x: 5, y: 5 },
     tiles: [
-      { x: 5, y: 5, kind: 'town', blocked: false },
-      { x: 6, y: 5, kind: 'roots', blocked: false },
+      { x: 5, y: 5, kind: 'grass', blocked: false },
+      { x: 6, y: 5, kind: 'mud', blocked: false },
     ],
   },
 };
@@ -256,6 +237,10 @@ function getQuestStatus(snapshot: Record<string, unknown>, questId: string) {
 function getQuestCounter(snapshot: Record<string, unknown>, questId: string, key: string, fallback: number) {
   const value = Number(getQuestProgressRecord(snapshot, questId)[key] ?? fallback);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function cellKey(x: number, y: number) {
+  return `${x}:${y}`;
 }
 
 function isTilePosition(tile: { x: number; y: number }, target: { x: number; y: number }) {
@@ -351,6 +336,55 @@ function normalizeCommand(command: string) {
 
 function terrainLabel(kind: GameplayTileSnapshot['kind']) {
   return TERRAIN_COMMAND_DETAILS[kind]?.label ?? kind;
+}
+
+function commandDetailsForTile(tile: GameplayTileSnapshot) {
+  const base = TERRAIN_COMMAND_DETAILS[tile.kind];
+
+  if (isTilePosition(tile, TOWN_TILE)) {
+    return {
+      ...base,
+      label: 'Town Hearth',
+      summary: 'Safe green ground for rest, debriefs, and regrouping under ember watchfires.',
+      success: 'You read the watch posts, boot tracks, and safe ground around the hearth.',
+      failure: 'The hearth noise hides anything subtler than the open green.',
+    };
+  }
+
+  if (isTilePosition(tile, EMBER_SHRINE_TILE)) {
+    return {
+      ...base,
+      label: 'Ember Shrine',
+      summary: 'Green shrine ground where the march briefly loosens its grip.',
+      dc: 12,
+      success: 'You read the ember rite and feel the shrine answer under the ash.',
+      failure: 'The shrine glows, but its older marks remain shut.',
+    };
+  }
+
+  if (isTilePosition(tile, WATCHPOST_LANE_TILE)) {
+    return {
+      ...base,
+      label: 'Watchpost Mud',
+      summary: 'Brown churned watchpost mud where Briar Goblins break cover.',
+      dc: 14,
+      success: 'You spot goblin scuffs, sinkholes, and the safest route through the mire.',
+      failure: 'The mud closes over tracks before you can read them.',
+    };
+  }
+
+  if (isTilePosition(tile, SHRINE_ROAD_GROVE_TILE)) {
+    return {
+      ...base,
+      label: 'Grove Mud',
+      summary: 'Brown grove mud on the contested shrine-road approach.',
+      dc: 14,
+      success: 'You spot sap tracks and the clean line back toward the shrine.',
+      failure: 'The grove mud smears each useful sign into the next.',
+    };
+  }
+
+  return base;
 }
 
 function rollD20(random: () => number) {
@@ -564,7 +598,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
       detail: ready ? 'Carry the shrine report back to Captain Mire.' : 'Reach the Ember Shrine east of town.',
       stateLabel: ready ? 'Return to town' : 'March to shrine',
       target: ready ? TOWN_TILE : EMBER_SHRINE_TILE,
-      terrain: ready ? 'town' : 'shrine',
+      terrain: 'grass',
     };
   }
 
@@ -575,7 +609,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
       detail: ready ? 'Return to town for the watchpost debrief.' : 'Cull Briar Goblins on the watchpost lane.',
       stateLabel: ready ? 'Return to town' : 'Cull goblins',
       target: ready ? TOWN_TILE : WATCHPOST_LANE_TILE,
-      terrain: ready ? 'town' : 'roots',
+      terrain: ready ? 'grass' : 'mud',
     };
   }
 
@@ -589,7 +623,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
         detail: 'Report back to town that the shrine road is holding.',
         stateLabel: 'Return to town',
         target: TOWN_TILE,
-        terrain: 'town',
+        terrain: 'grass',
       };
     }
 
@@ -599,7 +633,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
         detail: 'Return to the Ember Shrine to bless the cleared grove.',
         stateLabel: 'Revisit shrine',
         target: EMBER_SHRINE_TILE,
-        terrain: 'shrine',
+        terrain: 'grass',
       };
     }
 
@@ -611,7 +645,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
           : 'Bring down the Sap Wolf in the grove north of the shrine.',
         stateLabel: 'Break the grove wolf',
         target: SHRINE_ROAD_GROVE_TILE,
-        terrain: 'forest',
+        terrain: 'mud',
       };
     }
 
@@ -620,7 +654,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
       detail: 'Revisit the Ember Shrine and prepare the grove hunt.',
       stateLabel: 'Revisit shrine',
       target: EMBER_SHRINE_TILE,
-      terrain: 'shrine',
+      terrain: 'grass',
     };
   }
 
@@ -629,7 +663,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
     detail: quest.objective,
     stateLabel: 'Hold course',
     target: TOWN_TILE,
-    terrain: 'town',
+    terrain: 'grass',
   };
 }
 
@@ -637,16 +671,14 @@ function resolveHostileMonsterId(
   snapshot: Record<string, unknown>,
   tile: { x: number; y: number; kind: GameplayTileSnapshot['kind'] }
 ) {
-  if (tile.kind === 'roots' || tile.kind === 'ruin') {
+  if (isTilePosition(tile, WATCHPOST_LANE_TILE)) {
     return 'briar-goblin';
   }
 
-  if (tile.kind !== 'forest') {
-    return null;
-  }
-
   if (isTilePosition(tile, SHRINE_ROAD_GROVE_TILE)) {
-    return isShrineRoadSecured(snapshot) ? null : 'sap-wolf';
+    return !isShrineRoadSecured(snapshot) && getActiveQuestIds(snapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID)
+      ? 'sap-wolf'
+      : null;
   }
 
   return null;
@@ -740,6 +772,10 @@ function toCharacterCard(
     player.snapshot.defenses && typeof player.snapshot.defenses === 'object' && !Array.isArray(player.snapshot.defenses)
       ? clone(player.snapshot.defenses as GameplayCharacterCard['defenses'])
       : { armorClass: 10, fortitude: 10, reflex: 10, will: 10 };
+  const attributeSet =
+    player.snapshot.attributes && typeof player.snapshot.attributes === 'object' && !Array.isArray(player.snapshot.attributes)
+      ? clone(player.snapshot.attributes as GameplayCharacterCard['attributes'])
+      : getDefaultAttributes();
   const actions = Array.isArray(player.snapshot.actions) ? clone(player.snapshot.actions) : [];
 
   return {
@@ -757,6 +793,7 @@ function toCharacterCard(
     gold: typeof player.snapshot.gold === 'number' ? player.snapshot.gold : 0,
     hitPoints,
     defenses,
+    attributes: attributeSet,
     position: clone(player.position),
     actions,
     inventory: toInventory(player.snapshot, content),
@@ -791,6 +828,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       snapshot: normalizedSnapshot,
       position,
       activeEncounter: null,
+      clearedHostileTiles: new Set(),
       pendingProgression: null,
     };
 
@@ -824,6 +862,7 @@ export class ShardRuntime implements ShardRuntimeLike {
 
     if (player.activeEncounter) {
       player.activeEncounter = null;
+      player.clearedHostileTiles.clear();
     }
 
     const delta = DIRECTION_DELTAS[direction];
@@ -868,6 +907,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     }
 
     player.position = nextPosition;
+    player.clearedHostileTiles.clear();
     player.snapshot = normalizeDurableProgression(
       appendActivityLog(
         player.snapshot,
@@ -966,19 +1006,35 @@ export class ShardRuntime implements ShardRuntimeLike {
     }
 
     const normalizedCommand = normalizeCommand(command);
+    const overrideCommand = overrideFromCommand(normalizedCommand);
+    const nowIso = new Date(this.now()).toISOString();
+
+    if (player.activeEncounter?.status === 'active') {
+      if (overrideCommand === 'retreat') {
+        return this.queueOverride(characterId, overrideCommand);
+      }
+
+      player.snapshot = normalizeDurableProgression(
+        appendActivityLog(
+          player.snapshot,
+          'Fight is on. Use flee if you want to break contact.',
+          'system',
+          nowIso,
+        ),
+        this.content.rules,
+      );
+
+      return {
+        snapshot: this.snapshotFor(characterId),
+      };
+    }
+
     const direction = directionFromCommand(normalizedCommand);
 
     if (direction) {
       return this.movePlayer(characterId, direction);
     }
 
-    const overrideCommand = overrideFromCommand(normalizedCommand);
-
-    if (overrideCommand && player.activeEncounter?.status === 'active') {
-      return this.queueOverride(characterId, overrideCommand);
-    }
-
-    const nowIso = new Date(this.now()).toISOString();
     const text = this.resolveMudCommandText(player, normalizedCommand);
     const isCheckCommand =
       text.startsWith(`${this.characterName(player)} rolls `) ||
@@ -1018,7 +1074,7 @@ export class ShardRuntime implements ShardRuntimeLike {
 
   private describeCurrentRoom(player: RuntimePlayerState) {
     const tile = this.getTileAt(player.position.x, player.position.y);
-    const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
+    const terrain = commandDetailsForTile(this.toGameplayTileSnapshot(tile));
     const exits = exitsForTile(
       player.position,
       (x, y) => this.getTileAt(x, y),
@@ -1057,7 +1113,7 @@ export class ShardRuntime implements ShardRuntimeLike {
 
   private describeExamine(player: RuntimePlayerState, command: string) {
     const tile = this.getTileAt(player.position.x, player.position.y);
-    const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
+    const terrain = commandDetailsForTile(this.toGameplayTileSnapshot(tile));
     const target = command.replace(/^(examine|x|look at)\s*/, '').trim();
 
     if (!target || target === 'ground' || target === 'room' || target === tile.kind || target === terrain.label.toLowerCase()) {
@@ -1079,7 +1135,7 @@ export class ShardRuntime implements ShardRuntimeLike {
 
   private resolveFieldCheck(player: RuntimePlayerState, command: string) {
     const tile = this.getTileAt(player.position.x, player.position.y);
-    const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
+    const terrain = commandDetailsForTile(this.toGameplayTileSnapshot(tile));
     const roll = rollD20(this.random);
     const modifier = getModifier(player.snapshot, 'wisdom');
     const total = roll + modifier;
@@ -1117,7 +1173,12 @@ export class ShardRuntime implements ShardRuntimeLike {
     }
 
     const visibleMonsters = Object.values(
-      this.getVisibleMonsters(player.snapshot, player.position, getVisionWindow(getCurrentLevel(player.snapshot)).radius)
+      this.getVisibleMonsters(
+        player.snapshot,
+        player.position,
+        getVisionWindow(getCurrentLevel(player.snapshot)).radius,
+        player.clearedHostileTiles
+      )
     );
 
     for (const marker of visibleMonsters) {
@@ -1245,7 +1306,12 @@ export class ShardRuntime implements ShardRuntimeLike {
     const currentTile = this.toGameplayTileSnapshot(this.getTileAt(position.x, position.y));
     const visibleTiles = this.getVisibleTiles(position, vision.radius);
     const visibleCharacters = this.getVisibleCharacters(characterId, position, vision.radius);
-    const visibleMonsters = this.getVisibleMonsters(player?.snapshot ?? {}, position, vision.radius);
+    const visibleMonsters = this.getVisibleMonsters(
+      player?.snapshot ?? {},
+      position,
+      vision.radius,
+      player?.clearedHostileTiles
+    );
     const fallbackCard = player
       ? toCharacterCard(player, this.content)
       : {
@@ -1263,6 +1329,7 @@ export class ShardRuntime implements ShardRuntimeLike {
           gold: 0,
           hitPoints: { current: 10, max: 10, bloodied: 5 },
           defenses: { armorClass: 10, fortitude: 10, reflex: 10, will: 10 },
+          attributes: getDefaultAttributes(),
           position,
           actions: [],
           inventory: [],
@@ -1334,7 +1401,8 @@ export class ShardRuntime implements ShardRuntimeLike {
   private getVisibleMonsters(
     snapshot: Record<string, unknown>,
     position: PresencePosition,
-    radius: number
+    radius: number,
+    clearedHostileTiles: Set<string> = new Set()
   ): Record<string, GameplayMonsterMarker> {
     const visible: Record<string, GameplayMonsterMarker> = {};
 
@@ -1345,6 +1413,10 @@ export class ShardRuntime implements ShardRuntimeLike {
         }
 
         const tile = this.getTileAt(x, y);
+        if (clearedHostileTiles.has(cellKey(tile.x, tile.y))) {
+          continue;
+        }
+
         const monsterId = resolveHostileMonsterId(snapshot, tile);
         if (!monsterId) {
           continue;
@@ -1447,7 +1519,7 @@ export class ShardRuntime implements ShardRuntimeLike {
         ? nextSnapshot.hitPoints.max
         : null;
 
-    if (tile.kind === 'shrine' && !getUnlocks(nextSnapshot).includes(SHRINE_UNLOCK_ID)) {
+    if (isTilePosition(tile, EMBER_SHRINE_TILE) && !getUnlocks(nextSnapshot).includes(SHRINE_UNLOCK_ID)) {
       nextSnapshot = withUnlock(nextSnapshot, SHRINE_UNLOCK_ID);
       nextSnapshot = healToFull(nextSnapshot);
       nextSnapshot = addInventoryItem(nextSnapshot, 'health-potion');
@@ -1474,7 +1546,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       changed = true;
     }
 
-    if (tile.kind === 'ruin' && !getUnlocks(nextSnapshot).includes(RUIN_CACHE_UNLOCK_ID)) {
+    if (isTilePosition(tile, { x: 3, y: 6 }) && !tile.blocked && !getUnlocks(nextSnapshot).includes(RUIN_CACHE_UNLOCK_ID)) {
       nextSnapshot = withUnlock(nextSnapshot, RUIN_CACHE_UNLOCK_ID);
       nextSnapshot = changeCurrency(nextSnapshot, 4);
       nextSnapshot = addInventoryItem(nextSnapshot, 'field-rations');
@@ -1487,14 +1559,14 @@ export class ShardRuntime implements ShardRuntimeLike {
       changed = true;
     }
 
-    if (tile.kind === 'town') {
+    if (isTilePosition(tile, TOWN_TILE)) {
       const townArrival = this.resolveTownArrival(nextSnapshot, source, nowIso);
       nextSnapshot = townArrival.snapshot;
       changed = changed || townArrival.changed;
     }
 
     if (
-      tile.kind === 'shrine' &&
+      isTilePosition(tile, EMBER_SHRINE_TILE) &&
       getActiveQuestIds(nextSnapshot).includes(SECURE_SHRINE_ROAD_QUEST_ID) &&
       getQuestStatus(nextSnapshot, SECURE_SHRINE_ROAD_QUEST_ID) !== 'ready_to_turn_in'
     ) {
@@ -1532,6 +1604,10 @@ export class ShardRuntime implements ShardRuntimeLike {
     const nowIso = new Date(this.now()).toISOString();
     let nextSnapshot = player.snapshot;
     let changed = false;
+
+    if (encounter.status === 'won' || encounter.status === 'escaped') {
+      player.clearedHostileTiles.add(cellKey(player.position.x, player.position.y));
+    }
 
     if (
       encounter.status === 'won' &&
@@ -1589,6 +1665,7 @@ export class ShardRuntime implements ShardRuntimeLike {
 
     if (encounter.status === 'lost') {
       player.position = clone(this.content.region.spawn);
+      player.clearedHostileTiles.clear();
       const supplyLoss = Math.min(
         DEFEAT_SUPPLY_LOSS_GOLD,
         typeof nextSnapshot.gold === 'number' && Number.isFinite(nextSnapshot.gold) ? nextSnapshot.gold : 0

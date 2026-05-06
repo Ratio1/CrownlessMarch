@@ -35,6 +35,8 @@ function describeEncounterBanner(encounter: EncounterSnapshot) {
 
 export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPanelProps) {
   const logs = encounter?.logs ?? [];
+  const latestActivityEntryId = activityLog.at(-1)?.id ?? null;
+  const latestCombatLogEntry = logs.at(-1) ?? null;
   const encounterBanner = encounter ? describeEncounterBanner(encounter) : null;
   const combatHud = buildCombatHudModel(encounter);
 
@@ -55,10 +57,10 @@ export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPane
       {!encounter ? (
         activityLog.length > 0 ? (
           <ol className="combat-log combat-log--terminal">
-            {activityLog.map((entry, index) => (
+            {activityLog.slice().reverse().map((entry) => (
               <li
                 className={`combat-log__entry combat-log__entry--${entry.kind}${
-                  index === activityLog.length - 1 ? ' combat-log__entry--latest' : ''
+                  entry.id === latestActivityEntryId ? ' combat-log__entry--latest' : ''
                 }`}
                 key={entry.id}
               >
@@ -93,10 +95,10 @@ export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPane
           ) : null}
 
           <ol className="combat-log combat-log--terminal">
-            {logs.map((entry, index) => (
+            {logs.slice().reverse().map((entry, index) => (
               <li
                 className={`combat-log__entry combat-log__entry--${entry.kind ?? 'system'}${
-                  index === logs.length - 1 ? ' combat-log__entry--latest' : ''
+                  entry === latestCombatLogEntry ? ' combat-log__entry--latest' : ''
                 }`}
                 key={`${entry.round}-${index}`}
               >

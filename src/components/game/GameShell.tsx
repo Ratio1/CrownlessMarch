@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { useGameplaySocket } from '@/client/useGameplaySocket';
-import { CharacterPanel } from './CharacterPanel';
 import { CommandPanel } from './CommandPanel';
 import { CombatLogPanel } from './CombatLogPanel';
+import { InfoTabs } from './InfoTabs';
 import { MovementPad } from './MovementPad';
-import { OverrideBar } from './OverrideBar';
-import { QuestPanel } from './QuestPanel';
+import { ShortCharacterPanel } from './ShortCharacterPanel';
 import { WorldField } from './WorldField';
 
 function describeStatus(status: ReturnType<typeof useGameplaySocket>['status']) {
@@ -30,8 +29,9 @@ export function GameShell({
   gameplayPath: string;
   versionLabel: string;
 }) {
-  const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendOverride, sendCommand } = useGameplaySocket(gameplayPath);
+  const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendCommand } = useGameplaySocket(gameplayPath);
   const encounter = snapshot?.encounter ?? null;
+  const fightActive = encounter?.status === 'active';
   const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
   const canCommand = status === 'connected' && Boolean(snapshot);
   const primaryQuest = snapshot?.character.quests?.[0] ?? null;
@@ -92,16 +92,16 @@ export function GameShell({
         <WorldField snapshot={snapshot} />
 
         <aside className="play-sidebar">
-          <CharacterPanel snapshot={snapshot} />
           <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
-          <QuestPanel snapshot={snapshot} />
           <div className="play-controls">
-            <CommandPanel disabled={!canCommand} onCommand={sendCommand} />
+            <CommandPanel disabled={!canCommand} combatMode={fightActive} onCommand={sendCommand} />
             <MovementPad disabled={!canMove} onMove={sendMove} />
-            <OverrideBar encounter={encounter} onQueue={sendOverride} />
           </div>
+          <ShortCharacterPanel snapshot={snapshot} />
         </aside>
       </section>
+
+      <InfoTabs snapshot={snapshot} />
     </section>
   );
 }

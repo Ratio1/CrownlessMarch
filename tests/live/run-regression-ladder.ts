@@ -54,6 +54,7 @@ function main() {
     ...optionalFlag('--expect-version'),
     ...optionalFlag('--timeout-ms'),
   ];
+  const idleMs = readFlag('--idle-ms') ?? process.env.THORNWRITHE_IDLE_MS ?? '300000';
 
   run('level 2 live quest regression', 'pnpm', ['live:devnet', '--', ...liveFlags]);
   run('level 3 live browser regression', 'pnpm', [
@@ -62,6 +63,7 @@ function main() {
     ...liveFlags,
     '--profile=all',
     '--combat',
+    `--idle-ms=${idleMs}`,
     `--screenshot-dir=${screenshotDir}`,
     `--report-path=${browserReportPath}`,
   ]);

@@ -5,13 +5,15 @@ import type { GameplayMudCommand } from '@/shared/gameplay';
 
 interface CommandPanelProps {
   disabled: boolean;
+  combatMode?: boolean;
   onCommand: (command: GameplayMudCommand) => void;
 }
 
 const QUICK_COMMANDS: GameplayMudCommand[] = ['look', 'consider goblin', 'lore goblin', 'inventory'];
 
-export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
+export function CommandPanel({ disabled, combatMode = false, onCommand }: CommandPanelProps) {
   const [command, setCommand] = useState('');
+  const visibleQuickCommands = combatMode ? ['flee'] : QUICK_COMMANDS;
 
   function sendCommand(nextCommand: GameplayMudCommand) {
     if (!nextCommand.trim() || disabled) {
@@ -41,7 +43,7 @@ export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
             id="mud-command"
             name="command"
             onChange={(event) => setCommand(event.target.value)}
-            placeholder="look / consider goblin / lore / inventory"
+            placeholder={combatMode ? 'flee' : 'look / consider goblin / lore / inventory'}
             type="text"
             value={command}
           />
@@ -51,7 +53,7 @@ export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
         </button>
       </form>
       <div className="command-panel__quick" aria-label="Quick field commands">
-        {QUICK_COMMANDS.map((quickCommand) => (
+        {visibleQuickCommands.map((quickCommand) => (
           <button
             className="secondary-button"
             disabled={disabled}

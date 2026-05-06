@@ -18,6 +18,7 @@ const MIN_WIDTH = 480;
 const MIN_HEIGHT = 420;
 const BOARD_PADDING = 34;
 const TILE_GAP = 10;
+const TEXTURE_FILTER_NEAREST = 1 as PhaserType.Textures.FilterMode;
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
 type CellMap = Map<string, WorldRenderCell>;
@@ -57,8 +58,8 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
     height,
     backgroundColor: '#07110f',
     render: {
-      antialias: true,
-      pixelArt: false,
+      antialias: false,
+      pixelArt: true,
     },
     scene,
   });
@@ -214,165 +215,17 @@ function ensureActorSpriteTextures(scene: PhaserType.Scene) {
     const spriteGraphics = scene.add.graphics();
     drawActorSpriteTexture(spriteGraphics, spec);
     spriteGraphics.generateTexture(spec.key, spec.frame.width, spec.frame.height);
+    scene.textures.get(spec.key).setFilter(TEXTURE_FILTER_NEAREST);
     spriteGraphics.destroy();
   }
 }
 
 function drawActorSpriteTexture(graphics: PhaserType.GameObjects.Graphics, spec: ActorSpriteSpec) {
-  const { fill, edge, detail, accent } = spec.palette;
-
   graphics.clear();
-  graphics.fillStyle(0x000000, 0.22);
-  graphics.fillEllipse(32, 58, 34, 10);
 
-  switch (spec.kind) {
-    case 'fighter':
-      graphics.fillStyle(fill, 1);
-      graphics.fillRoundedRect(23, 23, 18, 31, 6);
-      graphics.fillStyle(edge, 1);
-      graphics.fillRoundedRect(20, 29, 14, 19, 5);
-      graphics.lineStyle(2, accent, 0.9);
-      graphics.strokeRoundedRect(21, 30, 12, 17, 5);
-      graphics.lineStyle(4, detail, 0.92);
-      graphics.beginPath();
-      graphics.moveTo(41, 50);
-      graphics.lineTo(50, 22);
-      graphics.strokePath();
-      graphics.fillStyle(accent, 0.95);
-      graphics.fillCircle(32, 18, 8);
-      graphics.fillStyle(edge, 1);
-      graphics.fillRect(25, 20, 14, 3);
-      break;
-    case 'rogue':
-      graphics.fillStyle(fill, 1);
-      graphics.fillTriangle(32, 15, 48, 53, 16, 53);
-      graphics.fillStyle(edge, 1);
-      graphics.fillTriangle(32, 18, 40, 32, 24, 32);
-      graphics.fillStyle(detail, 0.92);
-      graphics.fillRoundedRect(26, 32, 12, 20, 5);
-      graphics.lineStyle(3, accent, 0.9);
-      graphics.beginPath();
-      graphics.moveTo(42, 47);
-      graphics.lineTo(51, 35);
-      graphics.strokePath();
-      graphics.fillStyle(accent, 0.85);
-      graphics.fillCircle(29, 27, 2);
-      graphics.fillCircle(35, 27, 2);
-      break;
-    case 'wizard':
-      graphics.fillStyle(fill, 1);
-      graphics.fillTriangle(32, 14, 48, 54, 16, 54);
-      graphics.fillStyle(detail, 0.88);
-      graphics.fillRoundedRect(24, 28, 16, 24, 6);
-      graphics.lineStyle(3, edge, 1);
-      graphics.strokeTriangle(32, 14, 48, 54, 16, 54);
-      graphics.lineStyle(3, accent, 0.9);
-      graphics.beginPath();
-      graphics.moveTo(47, 53);
-      graphics.lineTo(47, 19);
-      graphics.strokePath();
-      graphics.fillStyle(accent, 0.96);
-      graphics.fillCircle(47, 17, 5);
-      graphics.fillStyle(0xffffff, 0.52);
-      graphics.fillCircle(49, 15, 2);
-      break;
-    case 'cleric':
-      graphics.fillStyle(fill, 1);
-      graphics.fillRoundedRect(21, 22, 22, 32, 7);
-      graphics.fillStyle(detail, 0.86);
-      graphics.fillRoundedRect(26, 25, 12, 27, 5);
-      graphics.fillStyle(accent, 0.95);
-      graphics.fillRect(30, 29, 4, 17);
-      graphics.fillRect(25, 35, 14, 4);
-      graphics.lineStyle(2, edge, 1);
-      graphics.strokeRoundedRect(21, 22, 22, 32, 7);
-      graphics.fillStyle(accent, 0.9);
-      graphics.fillCircle(32, 17, 7);
-      break;
-    case 'ally':
-      graphics.fillStyle(fill, 0.92);
-      graphics.fillRoundedRect(22, 24, 20, 30, 7);
-      graphics.fillStyle(detail, 0.9);
-      graphics.fillTriangle(32, 18, 45, 42, 19, 42);
-      graphics.lineStyle(2, edge, 0.92);
-      graphics.strokeRoundedRect(22, 24, 20, 30, 7);
-      graphics.fillStyle(accent, 0.82);
-      graphics.fillCircle(32, 21, 5);
-      break;
-    case 'goblin':
-      graphics.fillStyle(fill, 1);
-      graphics.fillTriangle(32, 16, 48, 51, 16, 51);
-      graphics.fillStyle(edge, 1);
-      graphics.fillTriangle(22, 24, 8, 17, 18, 33);
-      graphics.fillTriangle(42, 24, 56, 17, 46, 33);
-      graphics.fillStyle(detail, 0.95);
-      graphics.fillRoundedRect(24, 31, 16, 21, 5);
-      graphics.fillStyle(accent, 0.92);
-      graphics.fillCircle(28, 27, 2);
-      graphics.fillCircle(36, 27, 2);
-      graphics.lineStyle(3, edge, 0.98);
-      graphics.beginPath();
-      graphics.moveTo(42, 50);
-      graphics.lineTo(50, 30);
-      graphics.strokePath();
-      break;
-    case 'wolf':
-      graphics.fillStyle(fill, 1);
-      graphics.fillRoundedRect(16, 35, 30, 15, 7);
-      graphics.fillTriangle(39, 35, 54, 28, 49, 45);
-      graphics.fillTriangle(17, 37, 8, 29, 12, 47);
-      graphics.fillStyle(edge, 1);
-      graphics.fillTriangle(45, 30, 49, 18, 52, 32);
-      graphics.fillTriangle(35, 32, 39, 20, 43, 34);
-      graphics.fillStyle(accent, 0.94);
-      graphics.fillCircle(48, 35, 2);
-      graphics.fillStyle(detail, 0.95);
-      graphics.fillRect(20, 48, 4, 8);
-      graphics.fillRect(38, 48, 4, 8);
-      break;
-    case 'troll':
-      graphics.fillStyle(fill, 1);
-      graphics.fillRoundedRect(19, 18, 26, 38, 9);
-      graphics.fillStyle(detail, 0.9);
-      graphics.fillTriangle(24, 25, 13, 13, 24, 36);
-      graphics.fillTriangle(40, 25, 51, 13, 40, 36);
-      graphics.lineStyle(4, edge, 1);
-      graphics.strokeRoundedRect(19, 18, 26, 38, 9);
-      graphics.lineStyle(3, detail, 0.86);
-      graphics.beginPath();
-      graphics.moveTo(24, 51);
-      graphics.lineTo(15, 57);
-      graphics.moveTo(40, 51);
-      graphics.lineTo(49, 57);
-      graphics.strokePath();
-      graphics.fillStyle(accent, 0.9);
-      graphics.fillCircle(28, 31, 2);
-      graphics.fillCircle(36, 31, 2);
-      break;
-    case 'vampire':
-      graphics.fillStyle(edge, 1);
-      graphics.fillTriangle(32, 15, 52, 56, 12, 56);
-      graphics.fillStyle(fill, 1);
-      graphics.fillRoundedRect(23, 24, 18, 30, 5);
-      graphics.fillStyle(detail, 0.9);
-      graphics.fillTriangle(32, 28, 42, 54, 22, 54);
-      graphics.fillStyle(accent, 0.96);
-      graphics.fillCircle(32, 18, 6);
-      graphics.fillStyle(detail, 0.95);
-      graphics.fillCircle(29, 18, 1.5);
-      graphics.fillCircle(35, 18, 1.5);
-      break;
-    case 'generic':
-      graphics.fillStyle(fill, 1);
-      graphics.fillRoundedRect(20, 22, 24, 32, 8);
-      graphics.fillStyle(detail, 0.88);
-      graphics.fillTriangle(32, 16, 47, 37, 17, 37);
-      graphics.lineStyle(3, edge, 1);
-      graphics.strokeRoundedRect(20, 22, 24, 32, 8);
-      graphics.fillStyle(accent, 0.9);
-      graphics.fillCircle(28, 30, 2);
-      graphics.fillCircle(36, 30, 2);
-      break;
+  for (const block of spec.pixelArt.blocks) {
+    graphics.fillStyle(spec.palette[block.color], block.alpha ?? 1);
+    graphics.fillRect(block.x, block.y, block.width, block.height);
   }
 }
 
@@ -503,7 +356,7 @@ function drawTile(
   graphics.strokeRoundedRect(x, y, tileSize, tileSize, 20);
 
   drawTerrainConnections(graphics, cellMap, cell, x, y, tileSize);
-  drawTerrainDetail(graphics, cell, x, y, tileSize, pulse);
+  drawTerrainDetail(graphics, cell, x, y, tileSize);
 
   if (cell.tile.blocked) {
     graphics.lineStyle(3, 0xf08a6d, 0.9);
@@ -548,14 +401,8 @@ function drawTile(
     graphics.strokeRoundedRect(x + 14, y + 14, tileSize - 28, tileSize - 28, 10);
   }
 
-  if (cell.isCurrent && snapshot.encounter) {
-    const encounterEdge =
-      snapshot.encounter.status === 'active'
-        ? 0xe77757
-        : snapshot.encounter.status === 'won'
-          ? 0x7fcf8d
-          : 0xd9b45f;
-    graphics.lineStyle(3, encounterEdge, 0.54);
+  if (cell.isCurrent && snapshot.encounter?.status === 'active') {
+    graphics.lineStyle(3, 0xe77757, 0.54);
     graphics.strokeRoundedRect(x - 4, y - 4, tileSize + 8, tileSize + 8, 20);
   }
 }
@@ -578,37 +425,10 @@ function drawTerrainConnections(
     { neighbor: cellAt(cellMap, cell.x - 1, cell.y), point: { x: x + 8, y: centerY } },
   ];
 
-  if (cell.tile.kind === 'road') {
-    graphics.lineStyle(Math.max(8, tileSize * 0.14), detail, 0.2);
+  if (cell.tile.kind === 'mud') {
+    graphics.lineStyle(Math.max(5, tileSize * 0.08), detail, 0.18);
     for (const { neighbor, point } of connections) {
-      if (!neighbor || !['road', 'town', 'shrine', 'ruin'].includes(neighbor.tile.kind)) {
-        continue;
-      }
-      graphics.beginPath();
-      graphics.moveTo(centerX, centerY);
-      graphics.lineTo(point.x, point.y);
-      graphics.strokePath();
-    }
-  }
-
-  if (cell.tile.kind === 'roots') {
-    graphics.lineStyle(Math.max(4, tileSize * 0.07), detail, 0.34);
-    for (const { neighbor, point } of connections) {
-      if (!neighbor || !['roots', 'ruin'].includes(neighbor.tile.kind)) {
-        continue;
-      }
-      graphics.beginPath();
-      graphics.moveTo(centerX, centerY);
-      graphics.lineTo((centerX + point.x) / 2, (centerY + point.y) / 2 - 4);
-      graphics.lineTo(point.x, point.y);
-      graphics.strokePath();
-    }
-  }
-
-  if (cell.tile.kind === 'water') {
-    graphics.lineStyle(Math.max(6, tileSize * 0.11), detail, 0.16);
-    for (const { neighbor, point } of connections) {
-      if (!neighbor || neighbor.tile.kind !== 'water') {
+      if (!neighbor || neighbor.tile.kind !== 'mud') {
         continue;
       }
       graphics.beginPath();
@@ -624,110 +444,63 @@ function drawTerrainDetail(
   cell: WorldRenderCell,
   x: number,
   y: number,
-  tileSize: number,
-  pulse: number
+  tileSize: number
 ) {
-  const { detail, edge, glow } = cell.terrain.palette;
+  const { detail, edge } = cell.terrain.palette;
   const centerX = x + tileSize / 2;
   const centerY = y + tileSize / 2;
 
   switch (cell.tile.kind) {
-    case 'town': {
-      const glowRadius = tileSize * 0.14;
-      graphics.fillStyle(detail, 0.22 + pulse * 0.06);
-      graphics.fillCircle(centerX, centerY + tileSize * 0.12, glowRadius);
-      graphics.fillStyle(edge, 0.92);
-      graphics.fillTriangle(centerX - 18, centerY + 8, centerX - 6, centerY - 10, centerX + 6, centerY + 8);
-      graphics.fillTriangle(centerX - 4, centerY + 4, centerX + 10, centerY - 14, centerX + 24, centerY + 4);
-      graphics.fillStyle(detail, 0.95);
-      graphics.fillRect(centerX - 16, centerY + 8, 14, 12);
-      graphics.fillRect(centerX + 2, centerY + 4, 16, 16);
-      graphics.fillStyle(0xf7dd9a, 0.82);
-      graphics.fillRect(centerX + 8, centerY + 9, 4, 5);
+    case 'grass': {
+      graphics.lineStyle(2, detail, 0.56);
+      for (let index = 0; index < 5; index += 1) {
+        const bladeX = x + tileSize * (0.2 + index * 0.14);
+        const bladeY = y + tileSize * (0.64 + (index % 2) * 0.08);
+        graphics.beginPath();
+        graphics.moveTo(bladeX, bladeY + 8);
+        graphics.lineTo(bladeX + 4, bladeY - 5);
+        graphics.lineTo(bladeX + 9, bladeY + 7);
+        graphics.strokePath();
+      }
+      graphics.fillStyle(edge, 0.36);
+      graphics.fillCircle(centerX - tileSize * 0.22, centerY - tileSize * 0.14, 3);
+      graphics.fillCircle(centerX + tileSize * 0.2, centerY + tileSize * 0.18, 2);
       break;
     }
-    case 'road':
-      graphics.lineStyle(8, detail, 0.56);
+    case 'mud':
+      graphics.fillStyle(edge, 0.16);
+      graphics.fillEllipse(centerX - tileSize * 0.14, centerY + tileSize * 0.12, tileSize * 0.32, tileSize * 0.15);
+      graphics.fillEllipse(centerX + tileSize * 0.2, centerY - tileSize * 0.12, tileSize * 0.24, tileSize * 0.12);
+      graphics.lineStyle(3, detail, 0.46);
       graphics.beginPath();
-      graphics.moveTo(x + tileSize * 0.18, y + tileSize * 0.8);
-      graphics.lineTo(centerX, centerY + 2);
-      graphics.lineTo(x + tileSize * 0.82, y + tileSize * 0.22);
+      graphics.moveTo(x + tileSize * 0.18, y + tileSize * 0.72);
+      graphics.lineTo(centerX - 4, centerY + 5);
+      graphics.lineTo(x + tileSize * 0.76, y + tileSize * 0.28);
       graphics.strokePath();
-      graphics.lineStyle(2, edge, 0.48);
-      graphics.beginPath();
-      graphics.moveTo(x + tileSize * 0.24, y + tileSize * 0.76);
-      graphics.lineTo(centerX + 2, centerY + 4);
-      graphics.lineTo(x + tileSize * 0.78, y + tileSize * 0.26);
-      graphics.strokePath();
-      graphics.fillStyle(edge, 0.8);
-      graphics.fillCircle(centerX - 8, centerY + 8, 3);
       break;
     case 'forest':
       graphics.fillStyle(detail, 0.88);
-      graphics.fillTriangle(centerX - 18, centerY + 10, centerX - 6, centerY - 16, centerX + 6, centerY + 10);
-      graphics.fillTriangle(centerX - 2, centerY + 14, centerX + 12, centerY - 14, centerX + 26, centerY + 14);
+      graphics.fillTriangle(centerX - 24, centerY + 12, centerX - 8, centerY - 24, centerX + 8, centerY + 12);
+      graphics.fillTriangle(centerX - 14, centerY + 3, centerX - 1, centerY - 27, centerX + 14, centerY + 3);
+      graphics.fillTriangle(centerX - 6, centerY + 16, centerX + 14, centerY - 18, centerX + 32, centerY + 16);
       graphics.fillStyle(edge, 0.86);
-      graphics.fillRect(centerX - 8, centerY + 8, 4, 12);
-      graphics.fillRect(centerX + 8, centerY + 10, 4, 10);
+      graphics.fillRect(centerX - 5, centerY + 7, 7, 16);
+      graphics.fillRect(centerX + 11, centerY + 10, 7, 13);
       graphics.fillStyle(0x0c130f, 0.2);
       graphics.fillEllipse(centerX + 2, centerY + 16, tileSize * 0.32, tileSize * 0.08);
       break;
-    case 'roots':
-      graphics.lineStyle(3, detail, 0.92);
-      graphics.beginPath();
-      graphics.moveTo(x + 12, y + tileSize - 16);
-      graphics.lineTo(centerX - 8, centerY + 2);
-      graphics.lineTo(centerX + 4, centerY - 6);
-      graphics.lineTo(x + tileSize - 12, y + 16);
-      graphics.moveTo(x + 20, y + tileSize - 10);
-      graphics.lineTo(centerX + 2, centerY + 8);
-      graphics.lineTo(x + tileSize - 18, centerY + 10);
-      graphics.strokePath();
-      graphics.fillStyle(edge, 0.24);
-      graphics.fillCircle(centerX - 10, centerY + 10, 6);
-      graphics.fillCircle(centerX + 12, centerY - 4, 5);
-      break;
-    case 'ruin':
+    case 'stone':
       graphics.fillStyle(detail, 0.88);
-      graphics.fillRect(centerX - 18, centerY - 10, 8, 26);
-      graphics.fillRect(centerX + 10, centerY - 6, 8, 22);
-      graphics.fillRect(centerX - 14, centerY - 16, 28, 6);
+      graphics.fillRect(centerX - 20, centerY + 2, 16, 16);
+      graphics.fillRect(centerX - 6, centerY - 12, 24, 26);
+      graphics.fillRect(centerX + 13, centerY + 1, 12, 15);
       graphics.lineStyle(2, edge, 0.7);
-      graphics.strokeRect(centerX - 18, centerY - 10, 8, 26);
-      graphics.strokeRect(centerX + 10, centerY - 6, 8, 22);
-      graphics.strokeRect(centerX - 14, centerY - 16, 28, 6);
+      graphics.strokeRect(centerX - 20, centerY + 2, 16, 16);
+      graphics.strokeRect(centerX - 6, centerY - 12, 24, 26);
+      graphics.strokeRect(centerX + 13, centerY + 1, 12, 15);
       graphics.fillStyle(edge, 0.26);
-      graphics.fillRect(centerX - 8, centerY + 12, 10, 4);
-      break;
-    case 'shrine':
-      if (glow) {
-        graphics.fillStyle(glow, 0.16 + pulse * 0.08);
-        graphics.fillCircle(centerX, centerY, tileSize * 0.3);
-      }
-      graphics.fillStyle(edge, 0.88);
-      graphics.fillRect(centerX - 12, centerY + 6, 24, 8);
-      graphics.fillRect(centerX - 6, centerY - 8, 12, 14);
-      graphics.fillStyle(detail, 0.98);
-      graphics.fillTriangle(centerX, centerY - 20, centerX + 8, centerY - 2, centerX, centerY + 2);
-      graphics.fillTriangle(centerX, centerY - 20, centerX - 8, centerY - 2, centerX, centerY + 2);
-      graphics.lineStyle(2, glow ?? detail, 0.4 + pulse * 0.12);
-      graphics.strokeCircle(centerX, centerY, tileSize * 0.18);
-      break;
-    case 'water':
-      graphics.fillStyle(detail, 0.1);
-      graphics.fillEllipse(centerX, centerY + 6, tileSize * 0.42, tileSize * 0.18);
-      graphics.lineStyle(3, detail, 0.72);
-      graphics.beginPath();
-      graphics.moveTo(x + 10, centerY - 8);
-      graphics.lineTo(x + 22, centerY - 12);
-      graphics.lineTo(x + 34, centerY - 8);
-      graphics.lineTo(x + 46, centerY - 12);
-      graphics.lineTo(x + 58, centerY - 8);
-      graphics.moveTo(x + 14, centerY + 8);
-      graphics.lineTo(x + 28, centerY + 4);
-      graphics.lineTo(x + 42, centerY + 8);
-      graphics.lineTo(x + 56, centerY + 4);
-      graphics.strokePath();
+      graphics.fillRect(centerX - 13, centerY - 5, 12, 4);
+      graphics.fillRect(centerX + 3, centerY + 4, 10, 4);
       break;
     default:
       break;

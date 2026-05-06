@@ -22,89 +22,55 @@ export interface WorldTerrainDetails {
 }
 
 export const WORLD_TERRAIN_DETAILS: Record<GameplayTileSnapshot['kind'], WorldTerrainDetails> = {
-  town: {
-    code: 'TN',
-    label: 'Town Hearth',
-    summary: 'Safe ground for rest, turn-ins, and regrouping.',
+  grass: {
+    code: 'GR',
+    label: 'Grass',
+    summary: 'Normal green ground. You can walk here.',
     palette: {
-      fill: 0x647b55,
-      edge: 0xd9be7c,
-      detail: 0xf7dda4,
-      glow: 0xf0c56f,
+      fill: 0x3f7d45,
+      edge: 0x91c96f,
+      detail: 0xb8e08a,
+      glow: 0x8fd36d,
     },
   },
-  road: {
-    code: 'RD',
-    label: 'Road Lane',
-    summary: 'Clear travel lines with better sight.',
+  mud: {
+    code: 'MD',
+    label: 'Mud',
+    summary: 'Brown mud and dungeon ground. You can walk here.',
     palette: {
-      fill: 0x71552f,
-      edge: 0xc4a56b,
-      detail: 0xe3c88b,
+      fill: 0x765033,
+      edge: 0xb88958,
+      detail: 0xd1a36f,
+      glow: 0xc17a4d,
     },
   },
   forest: {
-    code: 'FR',
-    label: 'Dark Forest',
-    summary: 'Dense canopy and low-visibility hunting ground.',
+    code: 'TR',
+    label: 'Forest',
+    summary: 'A tree obstacle. You cannot walk here.',
     palette: {
-      fill: 0x23452f,
-      edge: 0x7faa73,
-      detail: 0xa8cb8b,
+      fill: 0x24472d,
+      edge: 0x5f8f48,
+      detail: 0xa9cf6c,
     },
   },
-  roots: {
-    code: 'RT',
-    label: 'Briar Roots',
-    summary: 'Aggressive thorn corridors where goblins break cover.',
-    palette: {
-      fill: 0x59371f,
-      edge: 0xd78654,
-      detail: 0x9c5633,
-      glow: 0xca7047,
-    },
-  },
-  ruin: {
-    code: 'RU',
-    label: 'Watchpost Ruin',
-    summary: 'Broken stone lanes with loot and old blood in the moss.',
+  stone: {
+    code: 'ST',
+    label: 'Stone',
+    summary: 'A rock obstacle. You cannot walk here.',
     palette: {
       fill: 0x535363,
       edge: 0xd2c9bc,
       detail: 0xa7a0b2,
     },
   },
-  shrine: {
-    code: 'SH',
-    label: 'Ember Shrine',
-    summary: 'Ancient refuge where the march briefly loosens its grip.',
-    palette: {
-      fill: 0x4d6844,
-      edge: 0xffdd8a,
-      detail: 0xf6c76f,
-      glow: 0xf7d889,
-    },
-  },
-  water: {
-    code: 'WT',
-    label: 'Blackwater',
-    summary: 'Flooded and blocked ground.',
-    palette: {
-      fill: 0x224e68,
-      edge: 0x8cc7df,
-      detail: 0xb7e4f0,
-    },
-  },
 };
 
 export const WORLD_LEGEND_ORDER: Array<keyof typeof WORLD_TERRAIN_DETAILS> = [
-  'town',
-  'road',
+  'grass',
+  'mud',
   'forest',
-  'roots',
-  'ruin',
-  'shrine',
-  'water',
+  'stone',
 ];
 
 export interface WorldRenderCell {

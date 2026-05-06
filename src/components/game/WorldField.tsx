@@ -9,8 +9,15 @@ interface WorldFieldProps {
 }
 
 const SHRINE_UNLOCK_ID = 'location:ember-shrine';
-const RUIN_CACHE_UNLOCK_ID = 'location:watchpost-cache';
 const SHRINE_ROAD_SECURED_UNLOCK_ID = 'route:shrine-road-secured';
+const TOWN_TILE = { x: 5, y: 5 } as const;
+const WATCHPOST_LANE_TILE = { x: 6, y: 5 } as const;
+const EMBER_SHRINE_TILE = { x: 7, y: 6 } as const;
+const SHRINE_ROAD_GROVE_TILE = { x: 7, y: 5 } as const;
+
+function sameTile(left: { x: number; y: number }, right: { x: number; y: number }) {
+  return left.x === right.x && left.y === right.y;
+}
 
 function buildSiteNotes(snapshot: GameplayShardSnapshot) {
   const unlocks = new Set(snapshot.character.unlocks);
@@ -20,46 +27,51 @@ function buildSiteNotes(snapshot: GameplayShardSnapshot) {
     objectiveFocus?.target.x === snapshot.position.x && objectiveFocus?.target.y === snapshot.position.y;
   const shrineRoadSecured = unlocks.has(SHRINE_ROAD_SECURED_UNLOCK_ID);
 
+  if (sameTile(snapshot.position, TOWN_TILE)) {
+    return [
+      readyQuest
+        ? `${readyQuest.label} can be debriefed here for durable rewards.`
+        : 'Quest debriefs resolve here once an objective is ready.',
+      shrineRoadSecured
+        ? 'The shrine road is currently secured and marked safe on the field surface.'
+        : 'Defeats route back through the town hearth and restore full HP.',
+    ];
+  }
+
+  if (sameTile(snapshot.position, EMBER_SHRINE_TILE)) {
+    return [
+      unlocks.has(SHRINE_UNLOCK_ID)
+        ? 'The Ember Shrine has already been rekindled and remains a rally point.'
+        : 'First contact restores full HP and grants a health potion.',
+      onObjectiveTile ? 'This shrine is the current objective anchor for the active contract.' : 'Shrine visits drive the survey and shrine-road quest chain.',
+    ];
+  }
+
+  if (sameTile(snapshot.position, WATCHPOST_LANE_TILE)) {
+    return [
+      onObjectiveTile ? 'This mud lane is the current goblin-cull target tile.' : 'Briar Goblins spawn here and advance the goblin-cull contract.',
+    ];
+  }
+
+  if (sameTile(snapshot.position, SHRINE_ROAD_GROVE_TILE)) {
+    return [
+      shrineRoadSecured && onObjectiveTile
+        ? 'The grove is quiet now. Shrine-road hostiles no longer spawn on this tile.'
+        : onObjectiveTile
+          ? 'This mud grove is the shrine-road kill zone for the Sap Wolf contract.'
+          : 'The grove mud marks the contested shrine-road approach.',
+    ];
+  }
+
   switch (snapshot.currentTile.kind) {
-    case 'town':
-      return [
-        readyQuest
-          ? `${readyQuest.label} can be debriefed here for durable rewards.`
-          : 'Quest debriefs resolve here once an objective is ready.',
-        shrineRoadSecured
-          ? 'The shrine road is currently secured and marked safe on the field surface.'
-          : 'Defeats now route back through the town hearth and restore full HP.',
-      ];
-    case 'shrine':
-      return [
-        unlocks.has(SHRINE_UNLOCK_ID)
-          ? 'The Ember Shrine has already been rekindled and remains a rally point.'
-          : 'First contact restores full HP and grants a health potion.',
-        onObjectiveTile ? 'This shrine is the current objective anchor for the active contract.' : 'Shrine visits drive the survey and shrine-road quest chain.',
-      ];
-    case 'ruin':
-      return [
-        unlocks.has(RUIN_CACHE_UNLOCK_ID)
-          ? 'The watchpost cache is stripped, but goblin pressure still holds the lane.'
-          : 'The first sweep yields field rations and 4 gold before the goblins close.',
-        'Ruin lanes stay hostile even after the cache is cleared.',
-      ];
-    case 'roots':
-      return [
-        onObjectiveTile ? 'This roots lane is the current goblin-cull target tile.' : 'Briar Goblins spawn here and advance the goblin-cull contract.',
-      ];
+    case 'grass':
+      return ['Green ground is normal walkable terrain.'];
+    case 'mud':
+      return ['Brown ground is walkable mud and dungeon floor.'];
     case 'forest':
-      return [
-        shrineRoadSecured && onObjectiveTile
-          ? 'The grove is quiet now. Shrine-road hostiles no longer spawn on this tile.'
-          : onObjectiveTile
-            ? 'This grove is the shrine-road kill zone for the Sap Wolf contract.'
-            : 'The deep woods still crowd the road, but the objective lane is now explicit on the field map.',
-      ];
-    case 'road':
-      return ['Road tiles keep the route to town readable and fast under pursuit.'];
-    case 'water':
-      return ['Flooded ground blocks movement and breaks safe lines of retreat.'];
+      return ['Forest tiles are tree obstacles and block movement.'];
+    case 'stone':
+      return ['Stone tiles are rock obstacles and block movement.'];
   }
 }
 
@@ -120,6 +132,7 @@ export function WorldField({ snapshot }: WorldFieldProps) {
   const trailState = buildTrailState(snapshot);
   const objectiveFocus = snapshot.objectiveFocus;
   const shrineRoadSecured = snapshot.character.unlocks.includes(SHRINE_ROAD_SECURED_UNLOCK_ID);
+  const fightActive = snapshot.encounter?.status === 'active';
 
   return (
     <section className="panel world-field" aria-label="World field">
@@ -137,6 +150,13 @@ export function WorldField({ snapshot }: WorldFieldProps) {
           </span>
         </div>
       </div>
+
+      {fightActive ? (
+        <div className="world-field__fight-banner" role="status">
+          <strong>Fight</strong>
+          <span>Only flee is available until this encounter resolves.</span>
+        </div>
+      ) : null}
 
       <div className="world-field__surface">
         <WorldCanvas snapshot={snapshot} />

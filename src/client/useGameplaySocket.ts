@@ -150,8 +150,10 @@ export function useGameplaySocket(gameplayPath: string) {
       closeSocket();
       setStatus(isRetry ? 'reconnecting' : 'connecting');
       setStatusDetail(isRetry ? 'Seeking a fresh shard host.' : 'Minting an attach token.');
-      setShardWorldInstanceId(null);
-      setSnapshot(null);
+      if (!isRetry) {
+        setShardWorldInstanceId(null);
+        setSnapshot(null);
+      }
 
       try {
         const response = await fetch(ATTACH_ENDPOINT, {
