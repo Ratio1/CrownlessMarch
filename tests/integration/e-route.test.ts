@@ -41,7 +41,7 @@ describe('/e route', () => {
       release: 4,
       feature: 2,
       build: 9,
-      packageVersion: '1.14.6',
+      packageVersion: '1.14.7',
       commitSha: 'deadbeefcafe',
       source: 'env',
     });

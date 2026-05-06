@@ -442,6 +442,14 @@ select {
   gap: 18px;
 }
 
+.play-sidebar,
+.play-controls,
+.play-panel,
+.command-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .play-controls {
   display: grid;
   gap: 12px;
@@ -1417,6 +1425,12 @@ select {
     ". south .";
 }
 
+.dpad button {
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .character-hero {
   display: flex;
   gap: 14px;
@@ -1902,6 +1916,32 @@ select {
 @media (max-width: 720px) {
   .attribute-grid {
     grid-template-columns: 1fr;
+  }
+
+  .command-panel__form {
+    grid-template-columns: 1fr;
+  }
+
+  .command-panel__form .primary-button,
+  .command-panel__quick .secondary-button {
+    width: 100%;
+  }
+
+  .command-panel__quick .secondary-button {
+    flex: 1 1 min(100%, 9rem);
+    text-align: center;
+  }
+
+  .command-panel__label {
+    grid-template-columns: 1fr;
+  }
+
+  .dpad {
+    gap: 8px;
+  }
+
+  .dpad button {
+    padding-inline: 10px;
   }
 
   .play-chip-row,

@@ -10,6 +10,7 @@ describe('play layout UI', () => {
     const shellSource = readSource('src/components/game/GameShell.tsx');
     const worldFieldSource = readSource('src/components/game/WorldField.tsx');
     const infoTabsSource = readSource('src/components/game/InfoTabs.tsx');
+    const globalCss = readSource('app/globals.css');
 
     expect(shellSource).toContain('<WorldField snapshot={snapshot} />');
     expect(shellSource).toContain('<CombatLogPanel');
@@ -19,5 +20,10 @@ describe('play layout UI', () => {
     expect(worldFieldSource).toContain('world-field__fight-banner');
     expect(infoTabsSource).toContain('Full Character');
     expect(infoTabsSource).toContain('Quests');
+    expect(globalCss).toContain('.play-sidebar,\n.play-controls,\n.play-panel,\n.command-panel');
+    expect(globalCss).toContain('min-width: 0;');
+    expect(globalCss).toContain('.dpad button {\n  width: 100%;');
+    expect(globalCss).toContain('@media (max-width: 720px)');
+    expect(globalCss).toContain('.command-panel__form {\n    grid-template-columns: 1fr;');
   });
 });
