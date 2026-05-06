@@ -25,6 +25,8 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('moves north into Grass (5,4)');
     expect(script).toContain('async function runResetSmoke');
     expect(script).toContain('async function runReconnectProbe');
+    expect(script).toContain('async function waitForCommandRoundTrip');
+    expect(script).toContain('examine reconnect-probe-');
     expect(script).toContain('async function clickVisibleButtonByName');
     expect(script).toContain('document.elementFromPoint');
     expect(script).toContain('context.setOffline(true)');

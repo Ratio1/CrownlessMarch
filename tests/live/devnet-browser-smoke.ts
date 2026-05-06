@@ -35,6 +35,8 @@ const NETWORK_TIMEOUT_MS = 45_000;
 const CANVAS_INK_THRESHOLD = 0.01;
 const CANVAS_INK_TIMEOUT_MS = 5_000;
 const CANVAS_INK_POLL_MS = 150;
+const COMMAND_ROUND_TRIP_TIMEOUT_MS = 90_000;
+const COMMAND_ROUND_TRIP_RETRY_MS = 2_500;
 const BROWSER_PROFILES: Record<BrowserProfileName, BrowserProfile> = {
   desktop: {
     name: 'desktop',
@@ -465,6 +467,49 @@ async function readPlayfieldRetentionDiagnostics(page: Page, characterName: stri
   }, { characterName });
 }
 
+async function waitForCommandRoundTrip(page: Page) {
+  const command = `examine reconnect-probe-${Date.now()}`;
+  const nonce = command.slice('examine '.length);
+  const expectedText = `You study ${nonce}, but`;
+  const startedAt = Date.now();
+  let attempts = 0;
+  let lastError = 'not attempted';
+
+  while (Date.now() - startedAt < COMMAND_ROUND_TRIP_TIMEOUT_MS) {
+    attempts += 1;
+
+    try {
+      await waitForConnectedPlayfield(page);
+      const commandInput = page.locator('#mud-command');
+      await commandInput.waitFor({ state: 'visible', timeout: 5_000 });
+      await page.waitForFunction(
+        () => {
+          const input = document.querySelector('#mud-command');
+          return input instanceof HTMLInputElement && !input.disabled;
+        },
+        null,
+        { timeout: 5_000 }
+      );
+      await commandInput.fill(command);
+      await commandInput.press('Enter');
+      await page.waitForFunction((text) => document.body.innerText.includes(text), expectedText, {
+        timeout: 5_000,
+      });
+
+      return {
+        command,
+        expectedText,
+        attempts,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await page.waitForTimeout(COMMAND_ROUND_TRIP_RETRY_MS);
+    }
+  }
+
+  throw new Error(`Reconnect probe did not complete command round-trip after ${attempts} attempts: ${lastError}`);
+}
+
 async function runReconnectProbe(context: BrowserContext, page: Page, characterName: string, durationMs: number) {
   const before = await readPlayfieldRetentionDiagnostics(page, characterName);
 
@@ -474,10 +519,7 @@ async function runReconnectProbe(context: BrowserContext, page: Page, characterN
   const during = await readPlayfieldRetentionDiagnostics(page, characterName);
 
   await context.setOffline(false);
-  await page.waitForFunction(() => document.body.innerText.includes('Connected to live shard.'), null, {
-    timeout: 75_000,
-  });
-  await waitForCanvasInk(page);
+  const commandRoundTrip = await waitForCommandRoundTrip(page);
   const after = await readPlayfieldRetentionDiagnostics(page, characterName);
 
   for (const [phase, diagnostics] of [
@@ -501,6 +543,7 @@ async function runReconnectProbe(context: BrowserContext, page: Page, characterN
     before,
     during,
     after,
+    commandRoundTrip,
   };
 }
 
