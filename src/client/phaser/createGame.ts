@@ -3,9 +3,13 @@ import type { GameplayShardSnapshot } from '@/shared/gameplay';
 import { buildWorldRenderModel, shortMarkerLabel } from '@/components/game/world-render-model';
 import {
   ACTOR_SPRITES,
+  actorSpriteAnimationKey,
+  actorSpriteTextureKey,
   characterSpriteKey,
   monsterSpriteKey,
+  type ActorSpritePose,
   type ActorSpriteSpec,
+  type ActorSpritePixelBlock,
 } from './sprite-catalog';
 
 export interface ThornwritheGameBridge {
@@ -44,6 +48,7 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
       activeScene = this;
       activeGraphics = this.add.graphics();
       ensureActorSpriteTextures(this);
+      ensureActorSpriteAnimations(this);
 
       if (pendingSnapshot) {
         drawSnapshot(this, activeGraphics, activeLabels, pendingSnapshot);
@@ -208,25 +213,106 @@ function drawSnapshot(
 
 function ensureActorSpriteTextures(scene: PhaserType.Scene) {
   for (const spec of Object.values(ACTOR_SPRITES)) {
-    if (scene.textures.exists(spec.key)) {
-      continue;
-    }
+    for (const pose of spec.animation.poses) {
+      const textureKey = actorSpriteTextureKey(spec.key, pose);
 
-    const spriteGraphics = scene.add.graphics();
-    drawActorSpriteTexture(spriteGraphics, spec);
-    spriteGraphics.generateTexture(spec.key, spec.frame.width, spec.frame.height);
-    scene.textures.get(spec.key).setFilter(TEXTURE_FILTER_NEAREST);
-    spriteGraphics.destroy();
+      if (scene.textures.exists(textureKey)) {
+        continue;
+      }
+
+      const spriteGraphics = scene.add.graphics();
+      drawActorSpriteTexture(spriteGraphics, spec, pose);
+      spriteGraphics.generateTexture(textureKey, spec.frame.width, spec.frame.height);
+      scene.textures.get(textureKey).setFilter(TEXTURE_FILTER_NEAREST);
+      spriteGraphics.destroy();
+    }
   }
 }
 
-function drawActorSpriteTexture(graphics: PhaserType.GameObjects.Graphics, spec: ActorSpriteSpec) {
+function ensureActorSpriteAnimations(scene: PhaserType.Scene) {
+  for (const spec of Object.values(ACTOR_SPRITES)) {
+    const idleKey = actorSpriteAnimationKey(spec.key, 'idle');
+    const combatKey = actorSpriteAnimationKey(spec.key, 'combat');
+
+    if (!scene.anims.exists(idleKey)) {
+      scene.anims.create({
+        key: idleKey,
+        frames: ['idle', 'step-left', 'idle', 'step-right'].map((pose) => ({
+          key: actorSpriteTextureKey(spec.key, pose as ActorSpritePose),
+        })),
+        frameRate: spec.animation.fps,
+        repeat: -1,
+      });
+    }
+
+    if (!scene.anims.exists(combatKey)) {
+      scene.anims.create({
+        key: combatKey,
+        frames: ['idle', 'strike', 'step-left', 'strike', 'step-right'].map((pose) => ({
+          key: actorSpriteTextureKey(spec.key, pose as ActorSpritePose),
+        })),
+        frameRate: spec.animation.fps + 1,
+        repeat: -1,
+      });
+    }
+  }
+}
+
+function drawActorSpriteTexture(graphics: PhaserType.GameObjects.Graphics, spec: ActorSpriteSpec, pose: ActorSpritePose) {
   graphics.clear();
 
   for (const block of spec.pixelArt.blocks) {
+    const posedBlock = poseActorSpriteBlock(spec, block, pose);
     graphics.fillStyle(spec.palette[block.color], block.alpha ?? 1);
-    graphics.fillRect(block.x, block.y, block.width, block.height);
+    graphics.fillRect(posedBlock.x, posedBlock.y, block.width, block.height);
   }
+}
+
+function poseActorSpriteBlock(spec: ActorSpriteSpec, block: ActorSpritePixelBlock, pose: ActorSpritePose) {
+  const middleX = spec.frame.width / 2;
+  const isHead = block.y < 14;
+  const isBody = block.y >= 14 && block.y < 25;
+  const isFoot = block.y >= spec.frame.height - 8;
+  const isRightSide = block.x >= middleX;
+  const isWeaponOrHand = (isRightSide && block.y >= 7 && block.y <= 25) || block.width <= 3;
+  let x = block.x;
+  let y = block.y;
+
+  if (pose === 'step-left') {
+    if (isHead || isBody) {
+      y -= 1;
+    }
+    if (isFoot) {
+      x += isRightSide ? 1 : -1;
+    }
+  }
+
+  if (pose === 'step-right') {
+    if (isHead || isBody) {
+      y -= 1;
+    }
+    if (isFoot) {
+      x += isRightSide ? -1 : 1;
+    }
+  }
+
+  if (pose === 'strike') {
+    if (isHead) {
+      x += isRightSide ? 1 : -1;
+    }
+    if (isBody) {
+      y -= 1;
+    }
+    if (isWeaponOrHand) {
+      x += isRightSide ? 2 : -2;
+      y -= 1;
+    }
+  }
+
+  return {
+    x: Math.max(0, Math.min(spec.frame.width - block.width, x)),
+    y: Math.max(0, Math.min(spec.frame.height - block.height, y)),
+  };
 }
 
 function drawBackdrop(
@@ -555,11 +641,12 @@ function drawCharacterToken(
   graphics.fillStyle(0x000000, 0.24);
   graphics.fillEllipse(centerX, spriteBaseY + 2, hero ? 32 : 26, hero ? 11 : 8);
 
-  const actorSprite = scene.add.sprite(centerX, spriteBaseY, spriteKey);
+  const actorSprite = scene.add.sprite(centerX, spriteBaseY, actorSpriteTextureKey(spriteKey, 'idle'));
   actorSprite.setOrigin(spec.anchor.x, spec.anchor.y);
   actorSprite.setScale(spriteScale);
   actorSprite.setAlpha(hero ? 1 : 0.88);
   actorSprite.setDepth(hero ? 14 : 12);
+  actorSprite.play(actorSpriteAnimationKey(spriteKey, hero && snapshot.encounter?.status === 'active' && cell.isCurrent ? 'combat' : 'idle'));
   labels.push(actorSprite);
 
   if (hero) {
@@ -626,10 +713,11 @@ function drawMonsterToken(
     graphics.strokeCircle(centerX, centerY, 27);
   }
 
-  const actorSprite = scene.add.sprite(centerX, spriteBaseY, spriteKey);
+  const actorSprite = scene.add.sprite(centerX, spriteBaseY, actorSpriteTextureKey(spriteKey, 'idle'));
   actorSprite.setOrigin(spec.anchor.x, spec.anchor.y);
   actorSprite.setScale(spriteScale);
   actorSprite.setDepth(activeThreat ? 15 : 13);
+  actorSprite.play(actorSpriteAnimationKey(spriteKey, activeThreat ? 'combat' : 'idle'));
   labels.push(actorSprite);
 
   const markerLabel = scene.add.text(centerX, centerY + 1, shortMarkerLabel(monster.label, spriteKey === 'mob-sap-wolf' ? 'SW' : 'BG'), {

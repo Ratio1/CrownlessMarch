@@ -36,9 +36,17 @@ export interface ActorSpriteSpec {
   };
   palette: ActorSpritePalette;
   pixelArt: ActorSpritePixelArt;
+  animation: ActorSpriteAnimationSpec;
 }
 
 export type ActorSpriteFrameSize = 32 | 48;
+export type ActorSpritePose = 'idle' | 'step-left' | 'step-right' | 'strike';
+export type ActorSpriteAnimationMode = 'idle' | 'combat';
+
+export interface ActorSpriteAnimationSpec {
+  poses: readonly ActorSpritePose[];
+  fps: number;
+}
 
 export interface ActorSpritePalette {
   fill: number;
@@ -69,6 +77,8 @@ export interface ActorSpritePixelArt {
 const BASE_FRAME = { width: 32, height: 32 } as const;
 const BOTTOM_CENTER_ANCHOR = { x: 0.5, y: 1 } as const;
 const PIXEL_STYLE = 'old-school-fantasy-rpg' as const;
+export const ACTOR_SPRITE_POSES = ['idle', 'step-left', 'step-right', 'strike'] as const;
+const DEFAULT_ACTOR_ANIMATION = { poses: ACTOR_SPRITE_POSES, fps: 5 } as const;
 
 const px = (
   color: ActorSpritePaletteSlot,
@@ -79,6 +89,14 @@ const px = (
   alpha?: number,
 ): ActorSpritePixelBlock => (alpha === undefined ? { color, x, y, width, height } : { color, x, y, width, height, alpha });
 
+export function actorSpriteTextureKey(spriteKey: ActorSpriteKey, pose: ActorSpritePose) {
+  return `${spriteKey}:${pose}`;
+}
+
+export function actorSpriteAnimationKey(spriteKey: ActorSpriteKey, mode: ActorSpriteAnimationMode) {
+  return `${spriteKey}:anim:${mode}`;
+}
+
 export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
   'pc-fighter': {
     key: 'pc-fighter',
@@ -87,6 +105,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x1c1714, fill: 0xb9b5a7, detail: 0x8a2f24, accent: 0xd9b45f, shade: 0x5a5f61, skin: 0xd79a62 },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['mail shirt', 'heater shield', 'short sword'],
@@ -120,6 +139,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x111817, fill: 0x314c3b, detail: 0x6b4a2f, accent: 0xbfc7b8, shade: 0x1f2c28, skin: 0xc8875e },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['deep hood', 'leather vest', 'twin knives'],
@@ -152,6 +172,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x11192d, fill: 0x3f66b2, detail: 0x6f4ca0, accent: 0xe1c35b, shade: 0x243a75, skin: 0xd99f73 },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['pointed hat', 'star staff', 'stepped robe'],
@@ -184,6 +205,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x27251f, fill: 0xc8c0a6, detail: 0x7e2c2a, accent: 0xd6b35c, shade: 0x756f64, skin: 0xd69a69 },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['square coif', 'sun badge', 'pilgrim mace'],
@@ -216,6 +238,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x132018, fill: 0x557d42, detail: 0x8b6a3c, accent: 0xd3b35e, shade: 0x31482e, skin: 0xca8b62 },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['travel cloak', 'round cap', 'small lantern'],
@@ -246,6 +269,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x20150e, fill: 0x7c8b3d, detail: 0x9a512e, accent: 0xd6aa55, shade: 0x405329, skin: 0x93a85a },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['pointed ears', 'briar spear', 'crouched stance'],
@@ -279,6 +303,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x1f130f, fill: 0x7a5543, detail: 0xa05f34, accent: 0xe5c16a, shade: 0x4b3129, skin: 0x8c6755 },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['low wolf body', 'sap-streak muzzle', 'raised tail'],
@@ -310,6 +335,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x1d2114, fill: 0x6f7d46, detail: 0x80522e, accent: 0xb8b766, shade: 0x43502e, skin: 0x8a9562 },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['broad root body', 'branch horns', 'heavy fists'],
@@ -343,6 +369,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x120d14, fill: 0x7e2430, detail: 0x2d203b, accent: 0xccb67d, shade: 0x251626, skin: 0xd8d0bd },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['high collar', 'dark cape', 'pale noble face'],
@@ -375,6 +402,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     frame: BASE_FRAME,
     anchor: BOTTOM_CENTER_ANCHOR,
     palette: { edge: 0x1d140f, fill: 0x795b3c, detail: 0x45623c, accent: 0xc7a55b, shade: 0x47311f, skin: 0x9b744d },
+    animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['lumpy brute', 'single eye glint', 'claw hands'],

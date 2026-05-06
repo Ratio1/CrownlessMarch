@@ -17,7 +17,11 @@ describe('Phaser renderer configuration', () => {
     const source = readSource('src/client/phaser/createGame.ts');
 
     expect(source).toContain('ensureActorSpriteTextures');
+    expect(source).toContain('ensureActorSpriteAnimations');
     expect(source).toContain('scene.add.sprite');
+    expect(source).toContain('actorSpriteTextureKey');
+    expect(source).toContain('actorSpriteAnimationKey');
+    expect(source).toContain('actorSprite.play');
     expect(source).toContain('characterSpriteKey');
     expect(source).toContain('monsterSpriteKey');
   });

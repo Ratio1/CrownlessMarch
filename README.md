@@ -94,10 +94,10 @@ resolver code.
 The current `/play` surface renders a Phaser-backed world surface with a text-forward field HUD:
 
 - the center playfield is a Phaser canvas for the visible fog window
-- the canvas draws terrain silhouettes plus generated Phaser sprite textures for live PCs and mobs from the shard snapshot
+- the canvas draws terrain silhouettes plus generated animated Phaser sprite textures for live PCs and mobs from the shard snapshot
 - terrain kinds are deliberately simple: `grass` and `mud` are walkable, while `forest` trees and `stone` rocks block movement
 - the side HUD shows latest-first logs, the field command prompt, movement controls, and a short character sheet
-- full character details, beta reset, and quest information live behind the information tabs below the field
+- full character details, beta reset, and quest information live behind the information tabs below the field; beta reset forces a fresh playfield attach so the live sheet and class sprite refresh from the durable checkpoint
 - the combat panel is a dice-text log with visible initiative, attack, defense, damage, and queued-action math
 - the field command prompt accepts room-style MUD verbs, D20 terrain checks, `inventory`, `sheet`, `exits`, and `lore <target>`
 - during active combat the typed command surface exposes only `flee`; other movement and MUD commands are held until the fight resolves
@@ -188,7 +188,7 @@ Proxy note:
 
 `pnpm live:devnet` runs the public devnet quest runner in `tests/live/devnet-quest-runner.ts`. It waits for `/e`, registers a fresh account through Resend, verifies the email link, creates a character, attaches over `/ws`, and drives the live quest chain through `Secure the Shrine Road`. Movement waits for a concrete player-visible state change, and the runner fails if the route exceeds its defeat budget, which defaults to one defeat and can be changed with `--max-defeats`.
 
-`pnpm live:browser` runs the public devnet browser smoke runner in `tests/live/devnet-browser-smoke.ts`. It waits for `/e`, registers a fresh account through Resend, opens `/play` in Chromium through `playwright-core`, verifies that the Phaser canvas and WebSocket-attached HUD render, clicks North from town, and fails unless the March Feed shows the styled `MOVE` entry. Set `THORNWRITHE_BROWSER_EXECUTABLE` when Chromium is not installed in a standard system or Playwright cache path.
+`pnpm live:browser` runs the public devnet browser smoke runner in `tests/live/devnet-browser-smoke.ts`. It waits for `/e`, registers a fresh account through Resend, opens `/play` in Chromium through `playwright-core`, verifies that the Phaser canvas and WebSocket-attached HUD render, and fails unless the March Feed shows the styled `MOVE` entry. `--reset` drives the beta reset UI before moving, and `--reconnect-probe-ms=<ms>` forces a browser offline/online window to prove the canvas, sheet, and command controls do not deplete during reconnect. Set `THORNWRITHE_BROWSER_EXECUTABLE` when Chromium is not installed in a standard system or Playwright cache path.
 
 `GET /e` returns the current Thornwrithe version contract as JSON and mirrors it in headers:
 
@@ -244,21 +244,21 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.13.1
-pnpm live:browser -- --expect-version=1.13.1
-pnpm live:browser -- --expect-version=1.13.1 --profile=all --combat --idle-ms=300000 --report-path=test-results/live/browser-smoke-report.json
+pnpm live:devnet -- --expect-version=1.14.0
+pnpm live:browser -- --expect-version=1.14.0
+pnpm live:browser -- --expect-version=1.14.0 --profile=all --combat --reset --reconnect-probe-ms=15000 --idle-ms=300000 --report-path=test-results/live/browser-smoke-report.json
 ```
 
 Thornwrithe now has a four-level regression ladder:
 
 ```bash
 pnpm regression:local
-pnpm regression:live -- --expect-version=1.13.1
+pnpm regression:live -- --expect-version=1.14.0
 pnpm regression:agent -- --evidence-json=test-results/live/browser-smoke-report.json
 ```
 
 `regression:local` runs lint, typecheck, Jest, and a production build. `regression:live`
-runs the quest regression, then desktop and mobile browser smoke profiles, then writes
+runs the quest regression, then desktop and mobile browser smoke profiles with reset, reconnect probe, screenshots, and idle checks, then writes
 an agent-review brief from the browser evidence. `regression:agent` can regenerate
 that review brief for an agent or human reviewer without rerunning the live smoke.
 

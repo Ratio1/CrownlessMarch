@@ -18,6 +18,16 @@ interface BrowserProfileEvidence {
     moveEntryStyled?: boolean;
     ground?: string | null;
   };
+  resetSmoke?: {
+    characterName?: string;
+    classLabel?: string;
+  } | null;
+  reconnectProbe?: {
+    durationMs?: number;
+    before?: { connected?: boolean; hasCharacterName?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean };
+    during?: { connected?: boolean; hasCharacterName?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean };
+    after?: { connected?: boolean; hasCharacterName?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean };
+  } | null;
 }
 
 interface BrowserEvidence {
@@ -67,6 +77,8 @@ function renderProfile(profile: BrowserProfileEvidence) {
     `- Canvas ink ratio: ${diagnostics.canvasInkRatio ?? 'unknown'}`,
     `- WebSocket seen: ${String(Boolean(profile.websocketSeen))}`,
     `- Movement log styled: ${String(Boolean(diagnostics.moveEntryStyled))}`,
+    `- Reset smoke: ${profile.resetSmoke ? `${profile.resetSmoke.characterName ?? 'renamed'} / ${profile.resetSmoke.classLabel ?? 'class updated'}` : 'not run'}`,
+    `- Reconnect probe: ${profile.reconnectProbe ? `${profile.reconnectProbe.durationMs ?? 'unknown'}ms` : 'not run'}`,
     `- Controls rendered: ${String(Boolean(diagnostics.movementPadVisible && diagnostics.commandInputVisible))}`,
     `- Horizontal overflow: ${diagnostics.horizontalOverflowPx ?? 'unknown'}px`,
     `- Console errors: ${consoleErrorCount}`,
@@ -116,6 +128,17 @@ function evaluateRegressionVerdict(evidence: BrowserEvidence) {
     }
     if (diagnostics.moveEntryStyled === false) {
       polish.push(`${name}: movement-feed styling was not visible during this profile.`);
+    }
+    if (profile.reconnectProbe) {
+      const during = profile.reconnectProbe.during ?? {};
+      const after = profile.reconnectProbe.after ?? {};
+
+      if (!during.hasCharacterName || !during.hasCanvas || !during.commandInputVisible) {
+        blockers.push(`${name}: reconnect probe depleted the retained playfield while offline.`);
+      }
+      if (!after.connected || !after.hasCharacterName || !after.hasCanvas || !after.commandInputVisible) {
+        blockers.push(`${name}: reconnect probe did not recover the playfield after network restoration.`);
+      }
     }
   }
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { pointBuyBudgetForLevel, validatePointBuy } from '@/shared/domain/point-buy';
 import { attributes, characterClasses, type AttributeSet, type CharacterClass } from '@/shared/domain/types';
 import type { GameplayShardSnapshot } from '@/shared/gameplay';
@@ -19,7 +18,6 @@ function cloneAttributes(values: AttributeSet): AttributeSet {
 }
 
 export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
-  const router = useRouter();
   const card = snapshot?.character ?? null;
   const cardCid = card?.cid ?? null;
   const cardName = card?.name ?? '';
@@ -74,8 +72,7 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
         return;
       }
 
-      router.replace('/play');
-      router.refresh();
+      window.location.assign('/play');
     } catch {
       setError('Failed to reset character.');
     } finally {

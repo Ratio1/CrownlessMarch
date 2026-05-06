@@ -1,5 +1,8 @@
 import {
   ACTOR_SPRITES,
+  ACTOR_SPRITE_POSES,
+  actorSpriteAnimationKey,
+  actorSpriteTextureKey,
   characterSpriteKey,
   monsterSpriteKey,
 } from '../../src/client/phaser/sprite-catalog';
@@ -29,6 +32,9 @@ describe('Phaser actor sprite catalog', () => {
       expect(spec.pixelArt.style).toBe('old-school-fantasy-rpg');
       expect(spec.pixelArt.hints.length).toBeGreaterThanOrEqual(2);
       expect(spec.pixelArt.blocks.length).toBeGreaterThanOrEqual(8);
+      expect(spec.animation.poses).toEqual(ACTOR_SPRITE_POSES);
+      expect(spec.animation.fps).toBeGreaterThanOrEqual(3);
+      expect(spec.animation.fps).toBeLessThanOrEqual(8);
 
       for (const block of spec.pixelArt.blocks) {
         expect(Object.prototype.hasOwnProperty.call(spec.palette, block.color)).toBe(true);
@@ -56,5 +62,13 @@ describe('Phaser actor sprite catalog', () => {
     expect(monsterSpriteKey('Root Troll')).toBe('mob-root-troll');
     expect(monsterSpriteKey('Vampire Lord')).toBe('mob-vampire-lord');
     expect(monsterSpriteKey('Unlisted Horror')).toBe('mob-generic');
+  });
+
+  it('names generated pose textures and looping animation keys without reusing the static texture', () => {
+    expect(ACTOR_SPRITE_POSES).toEqual(['idle', 'step-left', 'step-right', 'strike']);
+    expect(actorSpriteTextureKey('pc-fighter', 'idle')).toBe('pc-fighter:idle');
+    expect(actorSpriteTextureKey('pc-fighter', 'strike')).toBe('pc-fighter:strike');
+    expect(actorSpriteAnimationKey('pc-fighter', 'idle')).toBe('pc-fighter:anim:idle');
+    expect(actorSpriteAnimationKey('mob-briar-goblin', 'combat')).toBe('mob-briar-goblin:anim:combat');
   });
 });

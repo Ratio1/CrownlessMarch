@@ -54,10 +54,12 @@ describe('mobile playfield CSS', () => {
     expect(mobileCss).toMatch(/\.world-canvas__hero\s*\{[^}]*margin-top:\s*108px;/s);
   });
 
-  it('moves the command controls ahead of long sidebar panels on mobile', () => {
+  it('keeps the live log above the sticky command controls on mobile', () => {
     const mobileCss = extractMediaBlock(readGlobalCss(), '@media (max-width: 720px)');
+    const shellSource = fs.readFileSync(path.join(process.cwd(), 'src/components/game/GameShell.tsx'), 'utf8');
 
-    expect(mobileCss).toMatch(/\.play-controls\s*\{[^}]*order:\s*-1;/s);
+    expect(shellSource.indexOf('<CombatLogPanel')).toBeLessThan(shellSource.indexOf('<div className="play-controls">'));
+    expect(mobileCss).not.toMatch(/\.play-controls\s*\{[^}]*order:\s*-1;/s);
     expect(mobileCss).toMatch(/\.play-controls\s*\{[^}]*position:\s*sticky;/s);
     expect(mobileCss).toMatch(/\.play-panel--terminal\s*\{[^}]*max-height:\s*520px;/s);
   });

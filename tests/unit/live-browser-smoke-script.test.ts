@@ -18,9 +18,15 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('RESEND_TOKEN or RESEND_API_KEY is required for the live browser smoke runner');
     expect(script).toContain('const NETWORK_TIMEOUT_MS = 45_000;');
     expect(script).toContain("readFlag('--idle-ms')");
+    expect(script).toContain("readFlag('--reset')");
+    expect(script).toContain("readFlag('--reconnect-probe-ms')");
     expect(script).toContain('waitForHealth');
     expect(script).toContain('resolveBrowserExecutable');
     expect(script).toContain('moves north into Grass (5,4)');
+    expect(script).toContain('async function runResetSmoke');
+    expect(script).toContain('async function runReconnectProbe');
+    expect(script).toContain('context.setOffline(true)');
+    expect(script).toContain('context.setOffline(false)');
     expect(script).toContain('idleStable');
     expect(script).toContain('page.screenshot');
     expect(script).toContain('bodyTextLower');

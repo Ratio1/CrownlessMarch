@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium, type BrowserContextOptions, type Page } from 'playwright-core';
+import { chromium, type BrowserContext, type BrowserContextOptions, type Page } from 'playwright-core';
 import { SESSION_COOKIE_NAME } from '../../src/server/auth/session';
 
 interface BrowserSmokeOptions {
@@ -15,6 +15,8 @@ interface BrowserSmokeOptions {
   reportPath: string | null;
   combat: boolean;
   idleMs: number;
+  reset: boolean;
+  reconnectProbeMs: number;
 }
 
 interface HealthInfo {
@@ -143,6 +145,7 @@ function resolveBrowserExecutable() {
 function parseOptions(): BrowserSmokeOptions {
   const resendToken = process.env.RESEND_TOKEN ?? process.env.RESEND_API_KEY ?? null;
   const combatFlag = readFlag('--combat');
+  const resetFlag = readFlag('--reset');
 
   if (!resendToken) {
     throw new Error('RESEND_TOKEN or RESEND_API_KEY is required for the live browser smoke runner');
@@ -159,6 +162,8 @@ function parseOptions(): BrowserSmokeOptions {
     reportPath: readFlag('--report-path') ?? process.env.THORNWRITHE_BROWSER_REPORT ?? null,
     combat: readBooleanFlag('--combat', combatFlag, process.env.THORNWRITHE_BROWSER_COMBAT),
     idleMs: Number(readFlag('--idle-ms') ?? process.env.THORNWRITHE_IDLE_MS ?? 0),
+    reset: readBooleanFlag('--reset', resetFlag, process.env.THORNWRITHE_BROWSER_RESET),
+    reconnectProbeMs: Number(readFlag('--reconnect-probe-ms') ?? process.env.THORNWRITHE_RECONNECT_PROBE_MS ?? 0),
   };
 }
 
@@ -397,6 +402,108 @@ async function createVerifiedCharacter(options: BrowserSmokeOptions) {
   };
 }
 
+async function waitForConnectedPlayfield(page: Page) {
+  await page.waitForFunction(() => document.body.innerText.includes('Connected to live shard.'), null, {
+    timeout: 60_000,
+  });
+  await page.waitForFunction(() => Boolean(document.querySelector('.world-canvas__host canvas')), null, {
+    timeout: 45_000,
+  });
+  await waitForCanvasInk(page);
+}
+
+async function runResetSmoke(page: Page, characterName: string) {
+  const resetCharacterName = `${characterName}Reset`;
+
+  logStage(`resetting browser smoke character to ${resetCharacterName}`);
+  await page.getByRole('tab', { name: 'Full Character' }).click();
+  await page.getByLabel('Character name').fill(resetCharacterName);
+  await page.getByLabel('Class').selectOption('wizard');
+  await page.getByRole('button', { name: 'Reset Character' }).click();
+  await page.waitForFunction(
+    (input) => {
+      const bodyText = document.body.innerText;
+
+      return (
+        bodyText.includes('Connected to live shard.') &&
+        bodyText.includes(input.characterName) &&
+        bodyText.includes('Wizard')
+      );
+    },
+    { characterName: resetCharacterName },
+    { timeout: 75_000 }
+  );
+  await waitForCanvasInk(page);
+
+  return {
+    characterName: resetCharacterName,
+    classLabel: 'Wizard',
+  };
+}
+
+async function readPlayfieldRetentionDiagnostics(page: Page, characterName: string) {
+  return page.evaluate((input) => {
+    const bodyText = document.body.innerText;
+    const canvas = document.querySelector('.world-canvas__host canvas');
+    const canvasRect = canvas?.getBoundingClientRect();
+    const commandInput = document.querySelector('#mud-command');
+    const commandInputRect = commandInput?.getBoundingClientRect();
+    const movementPad = document.querySelector('[aria-label="Movement controls"]');
+    const movementPadRect = movementPad?.getBoundingClientRect();
+
+    return {
+      connected: bodyText.includes('Connected to live shard.'),
+      reconnecting: bodyText.toLowerCase().includes('reconnecting'),
+      hasCharacterName: bodyText.includes(input.characterName),
+      hasShortSheet: bodyText.includes('Short Sheet'),
+      hasCanvas: canvas instanceof HTMLCanvasElement && canvas.width > 0,
+      canvasClientWidth: canvasRect?.width ?? 0,
+      canvasClientHeight: canvasRect?.height ?? 0,
+      commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
+      movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
+    };
+  }, { characterName });
+}
+
+async function runReconnectProbe(context: BrowserContext, page: Page, characterName: string, durationMs: number) {
+  const before = await readPlayfieldRetentionDiagnostics(page, characterName);
+
+  logStage(`forcing browser offline for ${durationMs}ms to probe snapshot retention`);
+  await context.setOffline(true);
+  await page.waitForTimeout(durationMs);
+  const during = await readPlayfieldRetentionDiagnostics(page, characterName);
+
+  await context.setOffline(false);
+  await page.waitForFunction(() => document.body.innerText.includes('Connected to live shard.'), null, {
+    timeout: 75_000,
+  });
+  await waitForCanvasInk(page);
+  const after = await readPlayfieldRetentionDiagnostics(page, characterName);
+
+  for (const [phase, diagnostics] of [
+    ['before', before],
+    ['during', during],
+    ['after', after],
+  ] as const) {
+    if (!diagnostics.hasCharacterName || !diagnostics.hasCanvas || !diagnostics.commandInputVisible) {
+      throw new Error(
+        `Reconnect probe depleted playfield during ${phase}: ${JSON.stringify(diagnostics)}`
+      );
+    }
+  }
+
+  if (!after.connected) {
+    throw new Error(`Reconnect probe did not recover connected state: ${JSON.stringify(after)}`);
+  }
+
+  return {
+    durationMs,
+    before,
+    during,
+    after,
+  };
+}
+
 async function runBrowserSmoke(
   options: BrowserSmokeOptions,
   character: Awaited<ReturnType<typeof createVerifiedCharacter>>,
@@ -444,17 +551,23 @@ async function runBrowserSmoke(
     });
 
     await page.goto(`${options.baseUrl}/play`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => document.body.innerText.includes('Connected to live shard.'), null, {
-      timeout: 45_000,
-    });
-    await page.waitForFunction(() => Boolean(document.querySelector('.world-canvas__host canvas')), null, {
-      timeout: 45_000,
-    });
+    await waitForConnectedPlayfield(page);
+
+    let activeCharacterName = character.characterName;
+    const resetSmoke = options.reset ? await runResetSmoke(page, activeCharacterName) : null;
+    if (resetSmoke) {
+      activeCharacterName = resetSmoke.characterName;
+    }
+
+    const reconnectProbe =
+      options.reconnectProbeMs > 0
+        ? await runReconnectProbe(context, page, activeCharacterName, options.reconnectProbeMs)
+        : null;
 
     const moveDirection = options.combat ? 'East' : 'North';
     const expectedMoveText = options.combat
-      ? `${character.characterName} moves east into Mud (6,5).`
-      : `${character.characterName} moves north into Grass (5,4).`;
+      ? `${activeCharacterName} moves east into Mud (6,5).`
+      : `${activeCharacterName} moves north into Grass (5,4).`;
 
     await page.getByRole('button', { name: moveDirection }).click();
     await page.waitForFunction((moveText) => document.body.innerText.includes(moveText), expectedMoveText, {
@@ -524,7 +637,7 @@ async function runBrowserSmoke(
             input.lastCanvasDiagnostics.canvas.width > 0
           ),
       };
-    }, { moveText: expectedMoveText, combat: options.combat, lastCanvasDiagnostics, idleMs: options.idleMs, characterName: character.characterName });
+    }, { moveText: expectedMoveText, combat: options.combat, lastCanvasDiagnostics, idleMs: options.idleMs, characterName: activeCharacterName });
 
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
@@ -561,6 +674,8 @@ async function runBrowserSmoke(
       attachStatuses,
       websocketSeen,
       consoleErrors,
+      resetSmoke,
+      reconnectProbe,
       diagnostics,
       screenshotPath,
     };

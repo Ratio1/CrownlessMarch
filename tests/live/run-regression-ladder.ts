@@ -55,6 +55,7 @@ function main() {
     ...optionalFlag('--timeout-ms'),
   ];
   const idleMs = readFlag('--idle-ms') ?? process.env.THORNWRITHE_IDLE_MS ?? '300000';
+  const reconnectProbeMs = readFlag('--reconnect-probe-ms') ?? process.env.THORNWRITHE_RECONNECT_PROBE_MS ?? '15000';
 
   run('level 2 live quest regression', 'pnpm', ['live:devnet', '--', ...liveFlags]);
   run('level 3 live browser regression', 'pnpm', [
@@ -63,7 +64,9 @@ function main() {
     ...liveFlags,
     '--profile=all',
     '--combat',
+    '--reset',
     `--idle-ms=${idleMs}`,
+    `--reconnect-probe-ms=${reconnectProbeMs}`,
     `--screenshot-dir=${screenshotDir}`,
     `--report-path=${browserReportPath}`,
   ]);
