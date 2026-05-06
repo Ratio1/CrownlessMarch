@@ -597,6 +597,15 @@ async function clickVisibleButtonByName(page: Page, name: string) {
     throw new Error(`Button "${name}" center is covered before click: ${JSON.stringify(clickPoint)}`);
   }
 
+  const usesTouchInput = await page.evaluate(
+    () => navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches
+  );
+
+  if (usesTouchInput) {
+    await button.tap();
+    return;
+  }
+
   await page.mouse.click(clickPoint.centerX, clickPoint.centerY);
 }
 

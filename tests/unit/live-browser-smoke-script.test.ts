@@ -31,6 +31,8 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('disabled');
     expect(script).toContain('async function clickVisibleButtonByName');
     expect(script).toContain('document.elementFromPoint');
+    expect(script).toContain('navigator.maxTouchPoints');
+    expect(script).toContain('await button.tap()');
     expect(script).toContain('context.setOffline(true)');
     expect(script).toContain('context.setOffline(false)');
     expect(script).toContain('idleStable');
