@@ -504,6 +504,51 @@ async function runReconnectProbe(context: BrowserContext, page: Page, characterN
   };
 }
 
+async function clickVisibleButtonByName(page: Page, name: string) {
+  const button = page.getByRole('button', { name, exact: true });
+
+  await button.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+
+  const clickPoint = await button.evaluate((element, input) => {
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const topElement = document.elementFromPoint(centerX, centerY);
+    const receivesPointer = topElement === element || (topElement instanceof Node && element.contains(topElement));
+
+    return {
+      centerX,
+      centerY,
+      receivesPointer,
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      topElement: topElement
+        ? {
+            tagName: topElement.tagName,
+            className: typeof topElement.className === 'string' ? topElement.className : '',
+            text: topElement.textContent?.trim().slice(0, 80) ?? '',
+          }
+        : null,
+      buttonName: input.name,
+    };
+  }, { name });
+
+  if (clickPoint.rect.width <= 0 || clickPoint.rect.height <= 0) {
+    throw new Error(`Button "${name}" is not visible enough to click: ${JSON.stringify(clickPoint)}`);
+  }
+
+  if (!clickPoint.receivesPointer) {
+    throw new Error(`Button "${name}" center is covered before click: ${JSON.stringify(clickPoint)}`);
+  }
+
+  await page.mouse.click(clickPoint.centerX, clickPoint.centerY);
+}
+
 async function runBrowserSmoke(
   options: BrowserSmokeOptions,
   character: Awaited<ReturnType<typeof createVerifiedCharacter>>,
@@ -569,7 +614,7 @@ async function runBrowserSmoke(
       ? `${activeCharacterName} moves east into Mud (6,5).`
       : `${activeCharacterName} moves north into Grass (5,4).`;
 
-    await page.getByRole('button', { name: moveDirection }).click();
+    await clickVisibleButtonByName(page, moveDirection);
     await page.waitForFunction((moveText) => document.body.innerText.includes(moveText), expectedMoveText, {
       timeout: 30_000,
     });
