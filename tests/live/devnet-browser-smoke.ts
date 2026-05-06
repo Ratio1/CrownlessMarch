@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { chromium, type BrowserContextOptions } from 'playwright-core';
+import { chromium, type BrowserContextOptions, type Page } from 'playwright-core';
 import { SESSION_COOKIE_NAME } from '../../src/server/auth/session';
 
 interface BrowserSmokeOptions {
@@ -29,6 +29,9 @@ interface BrowserProfile {
 }
 
 const NETWORK_TIMEOUT_MS = 45_000;
+const CANVAS_INK_THRESHOLD = 0.01;
+const CANVAS_INK_TIMEOUT_MS = 5_000;
+const CANVAS_INK_POLL_MS = 150;
 const BROWSER_PROFILES: Record<BrowserProfileName, BrowserProfile> = {
   desktop: {
     name: 'desktop',
@@ -179,6 +182,61 @@ async function fetchWithTimeout(input: string, init?: RequestInit) {
     ...init,
     signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
   });
+}
+
+async function readCanvasDiagnostics(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('.world-canvas__host canvas');
+    const canvasRect = canvas?.getBoundingClientRect();
+    let canvasInkRatio = 0;
+
+    if (canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0) {
+      const sample = document.createElement('canvas');
+      sample.width = 96;
+      sample.height = 96;
+      const context = sample.getContext('2d');
+
+      if (context) {
+        context.drawImage(canvas, 0, 0, sample.width, sample.height);
+        const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
+        let inkedPixels = 0;
+
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index + 3] > 0 && pixels[index] + pixels[index + 1] + pixels[index + 2] > 36) {
+            inkedPixels += 1;
+          }
+        }
+
+        canvasInkRatio = inkedPixels / (sample.width * sample.height);
+      }
+    }
+
+    return {
+      canvasInkRatio,
+      canvas: {
+        width: canvas instanceof HTMLCanvasElement ? canvas.width : 0,
+        height: canvas instanceof HTMLCanvasElement ? canvas.height : 0,
+        clientWidth: canvasRect?.width ?? 0,
+        clientHeight: canvasRect?.height ?? 0,
+      },
+    };
+  });
+}
+
+async function waitForCanvasInk(page: Page) {
+  const startedAt = Date.now();
+  let lastCanvasDiagnostics = await readCanvasDiagnostics(page);
+
+  while (Date.now() - startedAt < CANVAS_INK_TIMEOUT_MS) {
+    if (lastCanvasDiagnostics.canvasInkRatio >= CANVAS_INK_THRESHOLD) {
+      return lastCanvasDiagnostics;
+    }
+
+    await page.waitForTimeout(CANVAS_INK_POLL_MS);
+    lastCanvasDiagnostics = await readCanvasDiagnostics(page);
+  }
+
+  return lastCanvasDiagnostics;
 }
 
 async function waitForHealth(baseUrl: string, expectedVersion: string | null, timeoutMs: number): Promise<HealthInfo> {
@@ -416,6 +474,7 @@ async function runBrowserSmoke(
       );
     }
 
+    const lastCanvasDiagnostics = await waitForCanvasInk(page);
     const diagnostics = await page.evaluate((input) => {
       const moveText = input.moveText;
       const bodyText = document.body.innerText;
@@ -423,39 +482,15 @@ async function runBrowserSmoke(
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
         node.textContent?.includes(moveText)
       );
-      const canvas = document.querySelector('.world-canvas__host canvas');
-      const canvasRect = canvas?.getBoundingClientRect();
       const movementPad = document.querySelector('[aria-label="Movement controls"]');
-          const movementPadRect = movementPad?.getBoundingClientRect();
-          const commandInput = document.querySelector('#mud-command');
-          const commandInputRect = commandInput?.getBoundingClientRect();
-          const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
-          let canvasInkRatio = 0;
+      const movementPadRect = movementPad?.getBoundingClientRect();
+      const commandInput = document.querySelector('#mud-command');
+      const commandInputRect = commandInput?.getBoundingClientRect();
+      const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
 
-          if (canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0) {
-            const sample = document.createElement('canvas');
-            sample.width = 96;
-            sample.height = 96;
-            const context = sample.getContext('2d');
-
-            if (context) {
-              context.drawImage(canvas, 0, 0, sample.width, sample.height);
-              const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
-              let inkedPixels = 0;
-
-              for (let index = 0; index < pixels.length; index += 4) {
-                if (pixels[index + 3] > 0 && pixels[index] + pixels[index + 1] + pixels[index + 2] > 36) {
-                  inkedPixels += 1;
-                }
-              }
-
-              canvasInkRatio = inkedPixels / (sample.width * sample.height);
-            }
-          }
-
-          return {
-            connected: bodyText.includes('Connected to live shard.'),
-            hasCanvas: Boolean(canvas),
+      return {
+        connected: bodyText.includes('Connected to live shard.'),
+        hasCanvas: input.lastCanvasDiagnostics.canvas.width > 0,
         statusLine: document.querySelector('.status-line')?.textContent ?? null,
         ground:
           Array.from(document.querySelectorAll('.world-field__badges .status-pill'))
@@ -467,18 +502,15 @@ async function runBrowserSmoke(
         moveEntryStyled: Boolean(moveEntry),
         combatActive: bodyTextLower.includes('dice log') && bodyText.includes('D20'),
         d20LogVisible: bodyText.includes('D20'),
-            horizontalOverflowPx,
-            movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
-            commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
-            canvasInkRatio,
-            canvas: {
-              width: canvas instanceof HTMLCanvasElement ? canvas.width : 0,
-          height: canvas instanceof HTMLCanvasElement ? canvas.height : 0,
-          clientWidth: canvasRect?.width ?? 0,
-          clientHeight: canvasRect?.height ?? 0,
-        },
+        horizontalOverflowPx,
+        movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
+        commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
+        canvasInkRatio: input.lastCanvasDiagnostics.canvasInkRatio,
+        canvas: input.lastCanvasDiagnostics.canvas,
       };
-    }, { moveText: expectedMoveText, combat: options.combat });
+    }, { moveText: expectedMoveText, combat: options.combat, lastCanvasDiagnostics });
+
+    await page.screenshot({ path: screenshotPath, fullPage: true });
 
     if (!diagnostics.moveTextVisible) {
       throw new Error(`Movement feed text did not render: ${expectedMoveText}`);
@@ -496,15 +528,13 @@ async function runBrowserSmoke(
       throw new Error(`${profile.name} profile has ${diagnostics.horizontalOverflowPx}px of horizontal overflow`);
     }
 
-    if (diagnostics.canvasInkRatio < 0.01) {
-      throw new Error(`${profile.name} profile canvas rendered blank`);
+    if (diagnostics.canvasInkRatio < CANVAS_INK_THRESHOLD) {
+      throw new Error(`${profile.name} profile canvas rendered blank (ink ratio ${diagnostics.canvasInkRatio.toFixed(4)})`);
     }
 
     if (!diagnostics.movementPadVisible || !diagnostics.commandInputVisible) {
       throw new Error(`${profile.name} profile did not render the command and movement controls`);
     }
-
-    await page.screenshot({ path: screenshotPath, fullPage: true });
 
     return {
       profileName: profile.name,

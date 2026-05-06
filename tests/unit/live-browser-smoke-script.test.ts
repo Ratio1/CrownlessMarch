@@ -26,6 +26,9 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('moveTextVisible');
     expect(script).toContain('!options.combat && !diagnostics.moveEntryStyled');
     expect(script).toContain('canvasInkRatio');
+    expect(script).toContain('async function waitForCanvasInk');
+    expect(script).toContain('await waitForCanvasInk(page)');
+    expect(script).toContain('lastCanvasDiagnostics');
     expect(script).toContain('profile canvas rendered blank');
     expect(script).not.toContain('console.log(options.resendToken');
     expect(script).not.toContain('console.error(options.resendToken');
