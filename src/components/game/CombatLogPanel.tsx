@@ -1,5 +1,6 @@
 import type { GameplayActivityEntry, GameplaySocketStatus } from '@/shared/gameplay';
 import type { EncounterSnapshot } from '@/shared/domain/combat';
+import { buildCombatHudModel } from './combat-hud-model';
 
 interface CombatLogPanelProps {
   encounter: EncounterSnapshot | null;
@@ -35,6 +36,7 @@ function describeEncounterBanner(encounter: EncounterSnapshot) {
 export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPanelProps) {
   const logs = encounter?.logs ?? [];
   const encounterBanner = encounter ? describeEncounterBanner(encounter) : null;
+  const combatHud = buildCombatHudModel(encounter);
 
   return (
     <section className="panel play-panel play-panel--terminal">
@@ -78,6 +80,17 @@ export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPane
             <strong>{encounterBanner?.title ?? encounter.status.toUpperCase()}</strong>
             <span className="monospace">{encounterBanner?.detail}</span>
           </div>
+
+          {combatHud ? (
+            <div className="combat-math-grid" aria-label="D20 combat math">
+              <span>{combatHud.initiativeLabel}</span>
+              <span>{combatHud.heroAttackLabel}</span>
+              <span>{combatHud.heroDamageLabel}</span>
+              <span>{combatHud.threatAttackLabel}</span>
+              <span>{combatHud.threatDamageLabel}</span>
+              <span>{combatHud.queuedActionLabel}</span>
+            </div>
+          ) : null}
 
           <ol className="combat-log combat-log--terminal">
             {logs.map((entry, index) => (

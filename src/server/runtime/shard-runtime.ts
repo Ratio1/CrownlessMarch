@@ -1031,6 +1031,30 @@ export class ShardRuntime implements ShardRuntimeLike {
     return `${terrain.label}. ${terrain.summary}${hostileText} Exits: ${exits.join(', ') || 'none'}.`;
   }
 
+  private describeExits(player: RuntimePlayerState) {
+    const exits = exitsForTile(
+      player.position,
+      (x, y) => this.getTileAt(x, y),
+      (position) => this.isWithinBounds(position)
+    );
+
+    return `Exits: ${exits.join(', ') || 'none'}.`;
+  }
+
+  private describeInventory(player: RuntimePlayerState) {
+    const card = toCharacterCard(player, this.content);
+    const inventory = card.inventory.map((item) => item.label).join(', ') || 'empty';
+    const equipped = card.equipment.map((item) => item.label).join(', ') || 'nothing equipped';
+
+    return `Inventory: ${inventory}. Equipped: ${equipped}. Gold ${card.gold}.`;
+  }
+
+  private describeCharacterSheet(player: RuntimePlayerState) {
+    const card = toCharacterCard(player, this.content);
+
+    return `${card.name}: ${card.classLabel} level ${card.level}, HP ${card.hitPoints.current}/${card.hitPoints.max}, AC ${card.defenses.armorClass}, Fort ${card.defenses.fortitude}, Ref ${card.defenses.reflex}, Will ${card.defenses.will}.`;
+  }
+
   private describeExamine(player: RuntimePlayerState, command: string) {
     const tile = this.getTileAt(player.position.x, player.position.y);
     const terrain = TERRAIN_COMMAND_DETAILS[tile.kind];
@@ -1145,13 +1169,49 @@ export class ShardRuntime implements ShardRuntimeLike {
     }.${gateHint}${holyHint}`;
   }
 
+  private resolveMonsterLore(player: RuntimePlayerState, command: string) {
+    const target = command.replace(/^(lore|study|recall)\s*/, '').trim();
+    const monster = this.findConsiderTarget(player, target);
+
+    if (!monster) {
+      return target
+        ? `You search memory for ${target}, but no known threat matches the visible field.`
+        : 'Name a visible threat for lore, such as lore goblin or lore wolf.';
+    }
+
+    const alignment = this.content.rules.alignments.find((entry) => entry.code === monster.alignment)?.label ?? monster.alignment;
+    const damage = monster.damage.bonus === 0 ? monster.damage.dice : `${monster.damage.dice}+${monster.damage.bonus}`;
+    const gate = monster.minimumEnhancementToHit
+      ? ` Ward: requires +${monster.minimumEnhancementToHit} weapon.`
+      : '';
+    const vulnerabilities = monster.vulnerabilities?.length
+      ? ` Vulnerable: ${monster.vulnerabilities.join(', ')}.`
+      : '';
+
+    return `${monster.label} lore: ${monster.behavior}, ${alignment}, ${monster.hitPoints} HP, AC ${monster.defenses.ac}, Fort ${monster.defenses.fortitude}, Ref ${monster.defenses.reflex}, Will ${monster.defenses.will}, ${formatSignedBonus(
+      monster.attackBonus
+    )} Attack, ${damage} damage.${gate}${vulnerabilities}`;
+  }
+
   private resolveMudCommandText(player: RuntimePlayerState, command: string) {
     if (!command || command === 'help' || command === '?') {
-      return 'Commands: look, consider <target>, examine <thing>, search, scout, pray, north, south, east, west, potion, power, retreat.';
+      return 'Commands: look, exits, consider <target>, lore <target>, examine <thing>, search, scout, pray, inventory, sheet, north, south, east, west, potion, power, retreat.';
     }
 
     if (command === 'look' || command === 'l') {
       return this.describeCurrentRoom(player);
+    }
+
+    if (command === 'exits') {
+      return this.describeExits(player);
+    }
+
+    if (command === 'inventory' || command === 'inv' || command === 'i') {
+      return this.describeInventory(player);
+    }
+
+    if (command === 'sheet' || command === 'stats' || command === 'character') {
+      return this.describeCharacterSheet(player);
     }
 
     if (command.startsWith('examine ') || command.startsWith('x ') || command.startsWith('look at ')) {
@@ -1162,6 +1222,10 @@ export class ShardRuntime implements ShardRuntimeLike {
       return this.resolveConsider(player, command);
     }
 
+    if (command === 'lore' || command.startsWith('lore ') || command === 'study' || command.startsWith('study ') || command === 'recall' || command.startsWith('recall ')) {
+      return this.resolveMonsterLore(player, command);
+    }
+
     if (command === 'search' || command.startsWith('search ') || command === 'scout' || command.startsWith('scout ') || command === 'pray' || command.startsWith('pray ')) {
       return this.resolveFieldCheck(player, command);
     }
@@ -1170,7 +1234,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       return 'That override only matters while an encounter is active.';
     }
 
-    return `Unknown command "${command}". Try look, consider, examine, search, scout, pray, north, south, east, west, potion, power, or retreat.`;
+    return `Unknown command "${command}". Try look, exits, consider, lore, examine, search, scout, pray, inventory, sheet, north, south, east, west, potion, power, or retreat.`;
   }
 
   snapshotFor(characterId: string): GameplayShardSnapshot {

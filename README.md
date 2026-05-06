@@ -96,8 +96,8 @@ The current `/play` surface renders a Phaser-backed world surface with a text-fo
 - the center playfield is a Phaser canvas for the visible fog window
 - the canvas draws terrain silhouettes plus generated Phaser sprite textures for live PCs and mobs from the shard snapshot
 - the side HUD shows the character card, quest ledger, movement pad, and override controls
-- the combat panel is a dice-text log driven by server-authoritative encounter rounds
-- the field command prompt accepts room-style MUD verbs and D20 terrain checks
+- the combat panel is a dice-text log with visible initiative, attack, defense, damage, and queued-action math
+- the field command prompt accepts room-style MUD verbs, D20 terrain checks, `inventory`, `sheet`, `exits`, and `lore <target>`
 - the non-combat feed now reports shrine, ruin, town, and quest-turn-in events on the same panel when no encounter is active
 - the fixed release badge links to `/e` so operators can confirm the exact live build from the UI
 
@@ -241,16 +241,16 @@ curl -sSI https://devnet-thorn.ratio1.link/e | rg '^x-thornwrithe-'
 For the permanent public-devnet quest regression, run:
 
 ```bash
-pnpm live:devnet -- --expect-version=1.11.0
-pnpm live:browser -- --expect-version=1.11.0
-pnpm live:browser -- --expect-version=1.11.0 --profile=all --combat --report-path=test-results/live/browser-smoke-report.json
+pnpm live:devnet -- --expect-version=1.12.0
+pnpm live:browser -- --expect-version=1.12.0
+pnpm live:browser -- --expect-version=1.12.0 --profile=all --combat --report-path=test-results/live/browser-smoke-report.json
 ```
 
 Thornwrithe now has a four-level regression ladder:
 
 ```bash
 pnpm regression:local
-pnpm regression:live -- --expect-version=1.11.0
+pnpm regression:live -- --expect-version=1.12.0
 pnpm regression:agent -- --evidence-json=test-results/live/browser-smoke-report.json
 ```
 

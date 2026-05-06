@@ -43,5 +43,8 @@ describe('regression ladder wiring', () => {
     expect(agentBrief).toContain('D20');
     expect(agentBrief).toContain('mobile');
     expect(agentBrief).toContain('blocker');
+    expect(agentBrief).toContain('evaluateRegressionVerdict');
+    expect(agentBrief).toContain('Verdict: ${verdict.label}');
+    expect(agentBrief).not.toContain('Verdict: pending');
   });
 });

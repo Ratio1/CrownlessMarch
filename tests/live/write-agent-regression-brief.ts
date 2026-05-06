@@ -9,6 +9,9 @@ interface BrowserProfileEvidence {
   diagnostics?: {
     connected?: boolean;
     hasCanvas?: boolean;
+    combatActive?: boolean;
+    d20LogVisible?: boolean;
+    canvasInkRatio?: number;
     horizontalOverflowPx?: number;
     movementPadVisible?: boolean;
     commandInputVisible?: boolean;
@@ -59,6 +62,9 @@ function renderProfile(profile: BrowserProfileEvidence) {
     `- Screenshot: ${profile.screenshotPath ?? 'not captured'}`,
     `- Connected: ${String(Boolean(diagnostics.connected))}`,
     `- Canvas: ${String(Boolean(diagnostics.hasCanvas))}`,
+    `- Combat HUD active: ${String(Boolean(diagnostics.combatActive))}`,
+    `- D20 log visible: ${String(Boolean(diagnostics.d20LogVisible))}`,
+    `- Canvas ink ratio: ${diagnostics.canvasInkRatio ?? 'unknown'}`,
     `- WebSocket seen: ${String(Boolean(profile.websocketSeen))}`,
     `- Movement log styled: ${String(Boolean(diagnostics.moveEntryStyled))}`,
     `- Controls rendered: ${String(Boolean(diagnostics.movementPadVisible && diagnostics.commandInputVisible))}`,
@@ -69,9 +75,65 @@ function renderProfile(profile: BrowserProfileEvidence) {
   ].join('\n');
 }
 
+function evaluateRegressionVerdict(evidence: BrowserEvidence) {
+  const blockers: string[] = [];
+  const polish: string[] = [];
+  const profiles = evidence.profiles ?? [];
+
+  if (profiles.length === 0) {
+    blockers.push('No browser profiles were captured.');
+  }
+
+  for (const profile of profiles) {
+    const name = profile.profileName ?? 'unknown';
+    const diagnostics = profile.diagnostics ?? {};
+    const consoleErrorCount = profile.consoleErrors?.length ?? 0;
+    const horizontalOverflowPx = diagnostics.horizontalOverflowPx ?? 0;
+
+    if (!diagnostics.connected) {
+      blockers.push(`${name}: live client did not reach a connected state.`);
+    }
+    if (!diagnostics.hasCanvas) {
+      blockers.push(`${name}: Phaser canvas was not rendered.`);
+    }
+    if (!profile.websocketSeen) {
+      blockers.push(`${name}: websocket traffic was not observed.`);
+    }
+    if (!diagnostics.movementPadVisible || !diagnostics.commandInputVisible) {
+      blockers.push(`${name}: movement controls or command input were missing.`);
+    }
+    if (horizontalOverflowPx > 2) {
+      blockers.push(`${name}: horizontal overflow measured ${horizontalOverflowPx}px.`);
+    }
+    if (consoleErrorCount > 0) {
+      blockers.push(`${name}: ${consoleErrorCount} browser console error(s) were captured.`);
+    }
+    if (typeof diagnostics.canvasInkRatio === 'number' && diagnostics.canvasInkRatio < 0.01) {
+      blockers.push(`${name}: canvas ink ratio was too low to prove the renderer is visible.`);
+    }
+    if (diagnostics.combatActive && !diagnostics.d20LogVisible) {
+      blockers.push(`${name}: combat was active but D20 log text was not visible.`);
+    }
+    if (diagnostics.moveEntryStyled === false) {
+      polish.push(`${name}: movement-feed styling was not visible during this profile.`);
+    }
+  }
+
+  return {
+    label: blockers.length > 0 ? 'fail' : 'pass',
+    blockers: blockers.length > 0 ? blockers : ['none'],
+    polish: polish.length > 0 ? polish : ['none'],
+    recommendedNextStep:
+      blockers.length > 0
+        ? 'Fix blocker findings, redeploy, and rerun the live regression ladder.'
+        : 'Accept the build after screenshot review confirms actor sprites and mobile controls remain legible.',
+  };
+}
+
 function renderBrief(evidence: BrowserEvidence) {
   const profiles = evidence.profiles ?? [];
   const profileSections = profiles.length > 0 ? profiles.map(renderProfile).join('\n') : '- No browser evidence JSON was provided.\n';
+  const verdict = evaluateRegressionVerdict(evidence);
 
   return `# Agent Regression Review
 
@@ -99,10 +161,13 @@ ${profileSections}
 
 ## Agent Verdict
 
-- Verdict: pending
+- Verdict: ${verdict.label}
 - Blocker findings:
+- ${verdict.blockers.join('\n- ')}
 - Non-blocking polish:
+- ${verdict.polish.join('\n- ')}
 - Recommended next step:
+${verdict.recommendedNextStep}
 `;
 }
 

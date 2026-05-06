@@ -8,19 +8,25 @@ interface CommandPanelProps {
   onCommand: (command: GameplayMudCommand) => void;
 }
 
+const QUICK_COMMANDS: GameplayMudCommand[] = ['look', 'consider goblin', 'lore goblin', 'inventory'];
+
 export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
   const [command, setCommand] = useState('');
+
+  function sendCommand(nextCommand: GameplayMudCommand) {
+    if (!nextCommand.trim() || disabled) {
+      return;
+    }
+
+    onCommand(nextCommand.trim());
+    setCommand('');
+  }
 
   function submitCommand(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextCommand = command.trim();
 
-    if (!nextCommand || disabled) {
-      return;
-    }
-
-    onCommand(nextCommand);
-    setCommand('');
+    sendCommand(nextCommand);
   }
 
   return (
@@ -35,7 +41,7 @@ export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
             id="mud-command"
             name="command"
             onChange={(event) => setCommand(event.target.value)}
-            placeholder="look / consider / search / north"
+            placeholder="look / consider goblin / lore / inventory"
             type="text"
             value={command}
           />
@@ -44,6 +50,19 @@ export function CommandPanel({ disabled, onCommand }: CommandPanelProps) {
           Send
         </button>
       </form>
+      <div className="command-panel__quick" aria-label="Quick field commands">
+        {QUICK_COMMANDS.map((quickCommand) => (
+          <button
+            className="secondary-button"
+            disabled={disabled}
+            key={quickCommand}
+            onClick={() => sendCommand(quickCommand)}
+            type="button"
+          >
+            {quickCommand}
+          </button>
+        ))}
+      </div>
     </section>
   );
 }

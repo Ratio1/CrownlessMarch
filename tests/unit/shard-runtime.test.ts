@@ -854,4 +854,51 @@ describe('shard runtime', () => {
     expect(update.snapshot.activityLog.at(-1)?.text).toContain('1d4 damage');
     expect(update.snapshot.activityLog.at(-1)?.text).toContain('Rusted Sword');
   });
+
+  it('answers inventory, sheet, exits, and lore commands as MUD utility verbs', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({
+      content,
+      random: makeRandom([0.99, 0.0]),
+      now: () => Date.parse('2026-04-30T10:00:00.000Z'),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-command-utility',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Mossblade',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+        inventory: ['rusted-sword', 'field-rations'],
+        equipment: { weapon: 'rusted-sword' },
+      }),
+    });
+
+    const inventory = runtime.commandPlayer('cid-command-utility', 'inventory');
+    expect(inventory.snapshot.activityLog.at(-1)?.text).toContain('Inventory: Rusted Sword, Field Rations.');
+    expect(inventory.snapshot.activityLog.at(-1)?.text).toContain('Equipped: Rusted Sword.');
+
+    const sheet = runtime.commandPlayer('cid-command-utility', 'sheet');
+    expect(sheet.snapshot.activityLog.at(-1)?.text).toContain('Mossblade: Fighter level 1');
+    expect(sheet.snapshot.activityLog.at(-1)?.text).toContain('AC 13');
+
+    const exits = runtime.commandPlayer('cid-command-utility', 'exits');
+    expect(exits.snapshot.activityLog.at(-1)?.text).toBe('Exits: north, south, west, east.');
+
+    runtime.movePlayer('cid-command-utility', 'east');
+    const lore = runtime.commandPlayer('cid-command-utility', 'lore goblin');
+    expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Briar Goblin lore:');
+    expect(lore.snapshot.activityLog.at(-1)?.text).toContain('AC 14');
+    expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Fort 12');
+    expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Ref 13');
+    expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Will 11');
+  });
 });

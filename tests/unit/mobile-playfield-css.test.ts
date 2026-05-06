@@ -53,4 +53,12 @@ describe('mobile playfield CSS', () => {
 
     expect(mobileCss).toMatch(/\.world-canvas__hero\s*\{[^}]*margin-top:\s*108px;/s);
   });
+
+  it('moves the command controls ahead of long sidebar panels on mobile', () => {
+    const mobileCss = extractMediaBlock(readGlobalCss(), '@media (max-width: 720px)');
+
+    expect(mobileCss).toMatch(/\.play-controls\s*\{[^}]*order:\s*-1;/s);
+    expect(mobileCss).toMatch(/\.play-controls\s*\{[^}]*position:\s*sticky;/s);
+    expect(mobileCss).toMatch(/\.play-panel--terminal\s*\{[^}]*max-height:\s*520px;/s);
+  });
 });

@@ -67,6 +67,12 @@ describe('combat HUD model', () => {
       heroHpLabel: '9/15',
       threatHpLabel: '5/12',
       queueLabel: '1 queued',
+      initiativeLabel: 'Briar Goblin > Mossblade',
+      heroAttackLabel: 'Hero +4 vs AC 14',
+      threatAttackLabel: 'Threat +2 vs AC 14',
+      heroDamageLabel: 'Hero 1d8+2',
+      threatDamageLabel: 'Threat 1d4',
+      queuedActionLabel: 'Queued encounter power',
       latestLog: 'Mossblade queues Shield Rush.',
       isActive: true,
     });

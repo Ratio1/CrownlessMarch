@@ -1227,6 +1227,25 @@ select {
   padding-right: 4px;
 }
 
+.combat-math-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.combat-math-grid span {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(247, 201, 120, 0.12);
+  background: rgba(247, 201, 120, 0.055);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .combat-log__entry {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1299,6 +1318,18 @@ select {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+}
+
+.command-panel__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.command-panel__quick .secondary-button {
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
 }
 
 .command-panel__label {
@@ -1856,6 +1887,26 @@ select {
   }
 
   .world-canvas__combat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .play-controls {
+    order: -1;
+    position: sticky;
+    bottom: 12px;
+    z-index: 10;
+  }
+
+  .play-panel--terminal {
+    max-height: 520px;
+    overflow: hidden;
+  }
+
+  .combat-log--terminal {
+    max-height: 300px;
+  }
+
+  .combat-math-grid {
     grid-template-columns: 1fr;
   }
 }
