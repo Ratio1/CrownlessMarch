@@ -482,6 +482,12 @@ function hasMoveEffect(before: GameplayShardSnapshot, after: GameplayShardSnapsh
   return focusSignature(after) !== focusSignature(before);
 }
 
+function isResolvedEncounterState(snapshot: GameplayShardSnapshot | null) {
+  const status = snapshot?.encounter?.status;
+
+  return status === 'won' || status === 'lost' || status === 'escaped';
+}
+
 async function waitForMoveResult(
   session: LiveShardSession,
   before: GameplayShardSnapshot,
@@ -496,6 +502,40 @@ async function waitForMoveResult(
       `Timed out waiting for ${direction} move from ${describeSnapshotPosition(before)}; latest ${describeSnapshotPosition(session.latestState)}`
     );
   }
+}
+
+async function sendMoveWithRetry(
+  session: LiveShardSession,
+  snapshot: GameplayShardSnapshot,
+  direction: GameplayDirection,
+  record: (message: string) => void
+) {
+  let attemptSnapshot = snapshot;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const previousVersion = session.stateVersion;
+
+    session.sendMove(direction);
+
+    try {
+      return await waitForMoveResult(session, attemptSnapshot, previousVersion, direction, MOVE_RESULT_TIMEOUT_MS);
+    } catch (error) {
+      if (
+        attempt === 0 &&
+        isResolvedEncounterState(snapshot) &&
+        isResolvedEncounterState(session.latestState)
+      ) {
+        record(`move-retry-after-resolved-encounter:${direction}:${encounterStateSummary(session.latestState)}`);
+        attemptSnapshot = session.latestState ?? attemptSnapshot;
+        await sleep(1_000);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error(`Move retry unexpectedly exhausted for ${direction}`);
 }
 
 async function waitForEncounterResolution(session: LiveShardSession, snapshot: GameplayShardSnapshot) {
@@ -608,10 +648,8 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
         activeQuest === 'Burn the First Nest' &&
         snapshot.currentTile.kind === 'mud'
       ) {
-        const previousVersion = session.stateVersion;
         record(`burn-reset-west:from=${snapshot.position.x},${snapshot.position.y}`);
-        session.sendMove('west');
-        await waitForMoveResult(session, snapshot, previousVersion, 'west', MOVE_RESULT_TIMEOUT_MS);
+        await sendMoveWithRetry(session, snapshot, 'west', record);
         continue;
       }
 
@@ -620,10 +658,8 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
         snapshot.currentTile.kind === 'mud' &&
         focus.stateLabel === 'Break the grove wolf'
       ) {
-        const previousVersion = session.stateVersion;
         record(`secure-reset-south:from=${snapshot.position.x},${snapshot.position.y}`);
-        session.sendMove('south');
-        await waitForMoveResult(session, snapshot, previousVersion, 'south', MOVE_RESULT_TIMEOUT_MS);
+        await sendMoveWithRetry(session, snapshot, 'south', record);
         continue;
       }
 
@@ -633,10 +669,8 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
       continue;
     }
 
-    const previousVersion = session.stateVersion;
     record(`move:${direction}:${focus.label}:${focus.stateLabel}:from=${snapshot.position.x},${snapshot.position.y}:target=${focus.target.x},${focus.target.y}`);
-    session.sendMove(direction);
-    await waitForMoveResult(session, snapshot, previousVersion, direction, MOVE_RESULT_TIMEOUT_MS);
+    await sendMoveWithRetry(session, snapshot, direction, record);
   }
 
   if (!session.latestState) {

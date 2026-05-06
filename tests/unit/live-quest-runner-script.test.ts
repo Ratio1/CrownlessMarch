@@ -10,7 +10,9 @@ describe('live quest runner wiring', () => {
     const script = readSource('tests/live/devnet-quest-runner.ts');
 
     expect(script).toContain('const MOVE_RESULT_TIMEOUT_MS = 45_000;');
-    expect(script).toContain('waitForMoveResult(session, snapshot, previousVersion, direction, MOVE_RESULT_TIMEOUT_MS)');
+    expect(script).toContain('async function sendMoveWithRetry');
+    expect(script).toContain('isResolvedEncounterState(snapshot)');
+    expect(script).toContain('move-retry-after-resolved-encounter');
     expect(script).not.toContain("direction, 15_000)");
   });
 });
