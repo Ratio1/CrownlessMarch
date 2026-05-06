@@ -37,6 +37,8 @@ const CANVAS_INK_TIMEOUT_MS = 5_000;
 const CANVAS_INK_POLL_MS = 150;
 const COMMAND_ROUND_TRIP_TIMEOUT_MS = 90_000;
 const COMMAND_ROUND_TRIP_RETRY_MS = 2_500;
+const MOVEMENT_RESULT_TIMEOUT_MS = 90_000;
+const MOVEMENT_RESULT_POLL_MS = 2_500;
 const BROWSER_PROFILES: Record<BrowserProfileName, BrowserProfile> = {
   desktop: {
     name: 'desktop',
@@ -559,10 +561,12 @@ async function clickVisibleButtonByName(page: Page, name: string) {
     const centerY = rect.top + rect.height / 2;
     const topElement = document.elementFromPoint(centerX, centerY);
     const receivesPointer = topElement === element || (topElement instanceof Node && element.contains(topElement));
+    const disabled = element instanceof HTMLButtonElement ? element.disabled : element.getAttribute('aria-disabled') === 'true';
 
     return {
       centerX,
       centerY,
+      disabled,
       receivesPointer,
       rect: {
         left: rect.left,
@@ -585,11 +589,63 @@ async function clickVisibleButtonByName(page: Page, name: string) {
     throw new Error(`Button "${name}" is not visible enough to click: ${JSON.stringify(clickPoint)}`);
   }
 
+  if (clickPoint.disabled) {
+    throw new Error(`Button "${name}" is disabled before click: ${JSON.stringify(clickPoint)}`);
+  }
+
   if (!clickPoint.receivesPointer) {
     throw new Error(`Button "${name}" center is covered before click: ${JSON.stringify(clickPoint)}`);
   }
 
   await page.mouse.click(clickPoint.centerX, clickPoint.centerY);
+}
+
+async function clickMovementAndWait(page: Page, direction: string, expectedMoveText: string, combat: boolean) {
+  const startedAt = Date.now();
+  let attempts = 0;
+  let lastError = 'not attempted';
+
+  while (Date.now() - startedAt < MOVEMENT_RESULT_TIMEOUT_MS) {
+    attempts += 1;
+
+    try {
+      await waitForConnectedPlayfield(page);
+      await page.waitForFunction(
+        (input) => {
+          const button = Array.from(document.querySelectorAll('button')).find(
+            (entry) => entry.textContent?.trim() === input.direction
+          );
+
+          return button instanceof HTMLButtonElement && !button.disabled;
+        },
+        { direction },
+        { timeout: 5_000 }
+      );
+      await clickVisibleButtonByName(page, direction);
+      await page.waitForFunction(
+        (input) => {
+          const bodyText = document.body.innerText;
+          const bodyTextLower = bodyText.toLowerCase();
+
+          return (
+            bodyText.includes(input.expectedMoveText) ||
+            (input.combat && bodyTextLower.includes('dice log') && bodyText.includes('D20'))
+          );
+        },
+        { expectedMoveText, combat },
+        { timeout: 10_000 }
+      );
+
+      return {
+        attempts,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await page.waitForTimeout(MOVEMENT_RESULT_POLL_MS);
+    }
+  }
+
+  throw new Error(`Movement ${direction} did not produce a live result after ${attempts} attempts: ${lastError}`);
 }
 
 async function runBrowserSmoke(
@@ -657,10 +713,7 @@ async function runBrowserSmoke(
       ? `${activeCharacterName} moves east into Mud (6,5).`
       : `${activeCharacterName} moves north into Grass (5,4).`;
 
-    await clickVisibleButtonByName(page, moveDirection);
-    await page.waitForFunction((moveText) => document.body.innerText.includes(moveText), expectedMoveText, {
-      timeout: 30_000,
-    });
+    const movementSmoke = await clickMovementAndWait(page, moveDirection, expectedMoveText, options.combat);
 
     if (options.combat) {
       await page.waitForFunction(
@@ -764,6 +817,7 @@ async function runBrowserSmoke(
       consoleErrors,
       resetSmoke,
       reconnectProbe,
+      movementSmoke,
       diagnostics,
       screenshotPath,
     };
