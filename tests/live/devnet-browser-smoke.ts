@@ -426,14 +426,36 @@ async function runBrowserSmoke(
       const canvas = document.querySelector('.world-canvas__host canvas');
       const canvasRect = canvas?.getBoundingClientRect();
       const movementPad = document.querySelector('[aria-label="Movement controls"]');
-      const movementPadRect = movementPad?.getBoundingClientRect();
-      const commandInput = document.querySelector('#mud-command');
-      const commandInputRect = commandInput?.getBoundingClientRect();
-      const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
+          const movementPadRect = movementPad?.getBoundingClientRect();
+          const commandInput = document.querySelector('#mud-command');
+          const commandInputRect = commandInput?.getBoundingClientRect();
+          const horizontalOverflowPx = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
+          let canvasInkRatio = 0;
 
-      return {
-        connected: bodyText.includes('Connected to live shard.'),
-        hasCanvas: Boolean(canvas),
+          if (canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0) {
+            const sample = document.createElement('canvas');
+            sample.width = 96;
+            sample.height = 96;
+            const context = sample.getContext('2d');
+
+            if (context) {
+              context.drawImage(canvas, 0, 0, sample.width, sample.height);
+              const pixels = context.getImageData(0, 0, sample.width, sample.height).data;
+              let inkedPixels = 0;
+
+              for (let index = 0; index < pixels.length; index += 4) {
+                if (pixels[index + 3] > 0 && pixels[index] + pixels[index + 1] + pixels[index + 2] > 36) {
+                  inkedPixels += 1;
+                }
+              }
+
+              canvasInkRatio = inkedPixels / (sample.width * sample.height);
+            }
+          }
+
+          return {
+            connected: bodyText.includes('Connected to live shard.'),
+            hasCanvas: Boolean(canvas),
         statusLine: document.querySelector('.status-line')?.textContent ?? null,
         ground:
           Array.from(document.querySelectorAll('.world-field__badges .status-pill'))
@@ -445,11 +467,12 @@ async function runBrowserSmoke(
         moveEntryStyled: Boolean(moveEntry),
         combatActive: bodyTextLower.includes('dice log') && bodyText.includes('D20'),
         d20LogVisible: bodyText.includes('D20'),
-        horizontalOverflowPx,
-        movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
-        commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
-        canvas: {
-          width: canvas instanceof HTMLCanvasElement ? canvas.width : 0,
+            horizontalOverflowPx,
+            movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
+            commandInputVisible: Boolean(commandInputRect && commandInputRect.width > 0 && commandInputRect.height > 0),
+            canvasInkRatio,
+            canvas: {
+              width: canvas instanceof HTMLCanvasElement ? canvas.width : 0,
           height: canvas instanceof HTMLCanvasElement ? canvas.height : 0,
           clientWidth: canvasRect?.width ?? 0,
           clientHeight: canvasRect?.height ?? 0,
@@ -471,6 +494,10 @@ async function runBrowserSmoke(
 
     if (diagnostics.horizontalOverflowPx > 2) {
       throw new Error(`${profile.name} profile has ${diagnostics.horizontalOverflowPx}px of horizontal overflow`);
+    }
+
+    if (diagnostics.canvasInkRatio < 0.01) {
+      throw new Error(`${profile.name} profile canvas rendered blank`);
     }
 
     if (!diagnostics.movementPadVisible || !diagnostics.commandInputVisible) {

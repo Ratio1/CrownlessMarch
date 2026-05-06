@@ -25,6 +25,8 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain("bodyTextLower.includes('dice log')");
     expect(script).toContain('moveTextVisible');
     expect(script).toContain('!options.combat && !diagnostics.moveEntryStyled');
+    expect(script).toContain('canvasInkRatio');
+    expect(script).toContain('profile canvas rendered blank');
     expect(script).not.toContain('console.log(options.resendToken');
     expect(script).not.toContain('console.error(options.resendToken');
   });
