@@ -21,6 +21,8 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('resolveBrowserExecutable');
     expect(script).toContain('moves north into Road Lane (5,4)');
     expect(script).toContain('page.screenshot');
+    expect(script).toContain('bodyTextLower');
+    expect(script).toContain("bodyTextLower.includes('dice log')");
     expect(script).not.toContain('console.log(options.resendToken');
     expect(script).not.toContain('console.error(options.resendToken');
   });

@@ -402,13 +402,23 @@ async function runBrowserSmoke(
     });
 
     if (options.combat) {
-      await page.waitForFunction(() => document.body.innerText.includes('Dice Log') && document.body.innerText.includes('D20'), null, {
-        timeout: 45_000,
-      });
+      await page.waitForFunction(
+        () => {
+          const bodyText = document.body.innerText;
+          const bodyTextLower = bodyText.toLowerCase();
+
+          return bodyTextLower.includes('dice log') && bodyText.includes('D20');
+        },
+        null,
+        {
+          timeout: 45_000,
+        }
+      );
     }
 
     const diagnostics = await page.evaluate((moveText) => {
       const bodyText = document.body.innerText;
+      const bodyTextLower = bodyText.toLowerCase();
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
         node.textContent?.includes(moveText)
       );
@@ -431,7 +441,7 @@ async function runBrowserSmoke(
         moveText,
         moveEntryText: moveEntry?.textContent ?? null,
         moveEntryStyled: Boolean(moveEntry),
-        combatActive: bodyText.includes('Dice Log') && bodyText.includes('D20'),
+        combatActive: bodyTextLower.includes('dice log') && bodyText.includes('D20'),
         d20LogVisible: bodyText.includes('D20'),
         horizontalOverflowPx,
         movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),
