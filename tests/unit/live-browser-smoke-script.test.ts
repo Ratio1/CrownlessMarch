@@ -27,6 +27,7 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain("getByRole('tab', { name: 'Character Sheet' })");
     expect(script).toContain("getByLabel('Confirm beta character reset')");
     expect(script).toContain("getByRole('button', { name: 'Accept & Apply Reset' })");
+    expect(script).toContain('await waitForConnectedPlayfield(page);');
     expect(script).toContain('async function runReconnectProbe');
     expect(script).toContain('async function waitForCommandRoundTrip');
     expect(script).toContain('examine reconnect-probe-');

@@ -426,6 +426,8 @@ async function runResetSmoke(page: Page, characterName: string) {
   await page.getByLabel('Class').selectOption('wizard');
   await page.getByLabel('Confirm beta character reset').check();
   await page.getByRole('button', { name: 'Accept & Apply Reset' }).click();
+  await waitForConnectedPlayfield(page);
+  await page.getByRole('tab', { name: 'Character Sheet' }).click();
   await page.waitForFunction(
     (input) => {
       const bodyText = document.body.innerText;
