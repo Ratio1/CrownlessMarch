@@ -10,7 +10,15 @@ import {
   type CharacterModifiers,
   type DurableCharacterSnapshot,
 } from './types';
-import { POINT_BUY_MAX_SCORE, POINT_BUY_MIN_SCORE, buildAttributes, getDefaultAttributes } from './point-buy';
+import {
+  POINT_BUY_BUDGET,
+  POINT_BUY_MAX_SCORE,
+  POINT_BUY_MIN_SCORE,
+  buildAttributes,
+  getDefaultAttributes,
+  levelUpAttributePoints,
+  validatePointBuy,
+} from './point-buy';
 import { DEFAULT_GAME_RULES, getClassRule } from '../content/game-rules';
 import type { GameRules } from '../content/schema';
 
@@ -47,6 +55,8 @@ const SHARD_LOCAL_KEYS = [
 export const MAX_CHARACTER_LEVEL = DEFAULT_GAME_RULES.progression.maxLevel;
 
 export const XP_LEVEL_TABLE = DEFAULT_GAME_RULES.progression.xpLevelTable;
+
+export const POINT_BUY_ALLOCATION_VERSION = 2;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -160,6 +170,53 @@ function normalizeAttributes(value: unknown): AttributeSet {
     result[key] = normalizeAttributeValue(record[key] ?? defaults[key]);
     return result;
   }, {} as AttributeSet);
+}
+
+export function requiresPointBuyAllocation(
+  snapshot: object,
+  rules: GameRules = DEFAULT_GAME_RULES
+) {
+  const record = snapshot as Record<string, unknown>;
+
+  if (
+    record.pointBuyComplete !== true ||
+    record.pointBuyVersion !== POINT_BUY_ALLOCATION_VERSION
+  ) {
+    return true;
+  }
+
+  const xp = toFiniteNonNegativeNumber(record.xp);
+  const realLevel = resolveRealLevel(record, xp, rules);
+  const pointBuy = validatePointBuy(normalizeAttributes(record.attributes), {
+    abilityRaises: levelUpAttributePoints(realLevel),
+  });
+
+  return !pointBuy.valid;
+}
+
+export function markPointBuyAllocationComplete(
+  snapshot: object,
+  rules: GameRules = DEFAULT_GAME_RULES
+): Record<string, unknown> {
+  const record = snapshot as Record<string, unknown>;
+  const attributesSet = normalizeAttributes(record.attributes);
+  const xp = toFiniteNonNegativeNumber(record.xp);
+  const realLevel = resolveRealLevel(record, xp, rules);
+  const pointBuy = validatePointBuy(attributesSet, {
+    abilityRaises: levelUpAttributePoints(realLevel),
+  });
+
+  return {
+    ...record,
+    attributes: attributesSet,
+    pointBuyComplete: true,
+    pointBuyVersion: POINT_BUY_ALLOCATION_VERSION,
+    pointBuyBudget: POINT_BUY_BUDGET,
+    pointBuySpent: pointBuy.spent,
+    pointBuyAbilityRaises: pointBuy.abilityRaises,
+    pointBuyUsedAbilityRaises: pointBuy.usedAbilityRaises,
+    pointBuyBaseAttributes: pointBuy.baseAttributes,
+  };
 }
 
 function modifierForScore(score: number) {
@@ -279,7 +336,7 @@ export function buildInitialCharacterSnapshot(input: {
   const actions = clone(classRule.actions);
   const currency = toFiniteNonNegativeNumber(input.currency);
 
-  return {
+  const baseSnapshot: DurableCharacterSnapshot = {
     name: input.name,
     classId: input.classId,
     level: 1,
@@ -298,6 +355,13 @@ export function buildInitialCharacterSnapshot(input: {
     passiveInsight: 10 + modifiers.wisdom,
     inventory: input.inventory ? [...input.inventory] : [],
     equipment: input.equipment ? clone(input.equipment) : {},
+    pointBuyComplete: true,
+    pointBuyVersion: POINT_BUY_ALLOCATION_VERSION,
+    pointBuyBudget: POINT_BUY_BUDGET,
+    pointBuySpent: validatePointBuy(normalizedAttributes).spent,
+    pointBuyAbilityRaises: 0,
+    pointBuyUsedAbilityRaises: 0,
+    pointBuyBaseAttributes: normalizedAttributes,
     currency,
     gold: currency,
     quest_progress: {},
@@ -306,6 +370,8 @@ export function buildInitialCharacterSnapshot(input: {
     unlocks: input.unlocks ? [...input.unlocks] : [],
     actions,
   };
+
+  return markPointBuyAllocationComplete(baseSnapshot, rules) as unknown as DurableCharacterSnapshot;
 }
 
 export function normalizeDurableProgression(

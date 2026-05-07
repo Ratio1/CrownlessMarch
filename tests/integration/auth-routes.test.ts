@@ -75,6 +75,10 @@ describe('auth routes', () => {
     );
 
     expect(loginResponse.status).toBe(200);
+    await expect(loginResponse.clone().json()).resolves.toMatchObject({
+      needsCharacterCreation: true,
+      needsPointBuyAllocation: false,
+    });
     const setCookie = loginResponse.headers.get('set-cookie');
     expect(setCookie).toContain('thornwrithe_session=');
     const cookieHeader = setCookie?.split(';')[0] ?? '';
@@ -116,6 +120,17 @@ describe('auth routes', () => {
       cid: expect.any(String),
     });
     expect(upgradedSession.characterId).toBe(characterBody.character?.cid);
+
+    const readyLoginResponse = await loginRoute.POST(
+      jsonRequest(`${baseUrl}/api/auth/login`, {
+        email: 'thornrunner@example.com',
+        password: 'S3curePassw0rd!',
+      })
+    );
+    await expect(readyLoginResponse.json()).resolves.toMatchObject({
+      needsCharacterCreation: false,
+      needsPointBuyAllocation: false,
+    });
   });
 
   it('rejects invalid point-buy totals', async () => {

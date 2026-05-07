@@ -250,6 +250,15 @@ describe('account service', () => {
     });
 
     expect(r1fsCharacters.createInitialCharacterCheckpoint).toHaveBeenCalled();
+    expect(r1fsCharacters.createInitialCharacterCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshot: expect.objectContaining({
+          pointBuyComplete: true,
+          pointBuyVersion: 2,
+          pointBuyBudget: 30,
+        }),
+      })
+    );
     expect(roster.writeRosterEntry).toHaveBeenCalledWith(
       'first@test.invalid',
       expect.objectContaining({
@@ -258,6 +267,85 @@ describe('account service', () => {
         characterName: 'First Warden',
       })
     );
+  });
+
+  it('marks accounts with legacy character checkpoints as requiring point-buy allocation', async () => {
+    const cstore = await import('../../src/server/auth/cstore');
+    const verification = await import('../../src/server/auth/email-verification');
+    const r1fsCharacters = await import('../../src/server/platform/r1fs-characters');
+    const accountService = await import('../../src/server/auth/account-service');
+
+    (cstore.isSharedAuthConfigured as jest.Mock).mockReturnValue(false);
+    (verification.issueEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'legacy-points@test.invalid',
+      email: 'legacy-points@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    });
+    (verification.sendVerificationEmail as jest.Mock).mockResolvedValue(undefined);
+    (verification.consumeEmailVerificationToken as jest.Mock).mockResolvedValue({
+      token: 'verify-token',
+      accountId: 'legacy-points@test.invalid',
+      email: 'legacy-points@test.invalid',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    });
+    (r1fsCharacters.createInitialCharacterCheckpoint as jest.Mock).mockResolvedValue({
+      cid: 'cid-legacy-points',
+      persist_revision: 0,
+      snapshot: { name: 'Legacy Points', classId: 'fighter' },
+    });
+    (r1fsCharacters.loadCharacterByCid as jest.Mock).mockResolvedValue({
+      cid: 'cid-legacy-points',
+      persist_revision: 0,
+      snapshot: {
+        name: 'Legacy Points',
+        classId: 'fighter',
+        xp: 0,
+        level: 1,
+        attributes: {
+          strength: 10,
+          dexterity: 10,
+          constitution: 10,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 10,
+        },
+        inventory: [],
+        equipment: {},
+      },
+    });
+
+    await accountService.registerAccount({
+      email: 'legacy-points@test.invalid',
+      password: 'hunter234',
+      appOrigin: 'http://localhost:3000',
+    });
+    await accountService.verifyAccountEmail('verify-token');
+    await accountService.createCharacterForAccount({
+      accountId: 'legacy-points@test.invalid',
+      characterName: 'Legacy Points',
+      classId: 'fighter',
+      attributes: {
+        strength: 15,
+        dexterity: 14,
+        constitution: 11,
+        intelligence: 10,
+        wisdom: 9,
+        charisma: 8,
+      },
+    });
+
+    await expect(
+      accountService.authenticateAccount({
+        email: 'legacy-points@test.invalid',
+        password: 'hunter234',
+      })
+    ).resolves.toMatchObject({
+      characterId: 'cid-legacy-points',
+      pointBuyRequired: true,
+    });
   });
 
   it('resets a beta character build while preserving XP-derived level', async () => {

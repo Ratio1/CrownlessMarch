@@ -18,7 +18,7 @@ function createSnapshot(): GameplayShardSnapshot {
     visibleTiles: [
       { x: 4, y: 4, kind: 'forest', blocked: true },
       { x: 5, y: 4, kind: 'grass', blocked: false },
-      { x: 6, y: 4, kind: 'mud', blocked: false },
+      { x: 6, y: 4, kind: 'grass', blocked: false },
       { x: 4, y: 5, kind: 'forest', blocked: true },
       { x: 5, y: 5, kind: 'grass', blocked: false },
       { x: 6, y: 5, kind: 'stone', blocked: true },
@@ -35,17 +35,17 @@ function createSnapshot(): GameplayShardSnapshot {
       { x: 4, y: 3, kind: 'grass', blocked: false },
       { x: 5, y: 3, kind: 'grass', blocked: false },
       { x: 6, y: 3, kind: 'forest', blocked: true },
-      { x: 7, y: 3, kind: 'mud', blocked: false },
+      { x: 7, y: 3, kind: 'grass', blocked: false },
       { x: 3, y: 4, kind: 'grass', blocked: false },
       { x: 4, y: 4, kind: 'forest', blocked: true },
       { x: 5, y: 4, kind: 'grass', blocked: false },
-      { x: 6, y: 4, kind: 'mud', blocked: false },
+      { x: 6, y: 4, kind: 'grass', blocked: false },
       { x: 7, y: 4, kind: 'grass', blocked: false },
       { x: 3, y: 5, kind: 'grass', blocked: false },
       { x: 4, y: 5, kind: 'forest', blocked: true },
       { x: 5, y: 5, kind: 'grass', blocked: false },
       { x: 6, y: 5, kind: 'stone', blocked: true },
-      { x: 7, y: 5, kind: 'mud', blocked: false },
+      { x: 7, y: 5, kind: 'grass', blocked: false },
       { x: 3, y: 6, kind: 'stone', blocked: true },
       { x: 4, y: 6, kind: 'stone', blocked: true },
       { x: 5, y: 6, kind: 'grass', blocked: false },
@@ -187,7 +187,7 @@ describe('world render model', () => {
   it('marks the current encounter monster as the active threat for stronger rendering', () => {
     const snapshot = createSnapshot();
     snapshot.position = { x: 6, y: 4 };
-    snapshot.currentTile = { x: 6, y: 4, kind: 'mud', blocked: false };
+    snapshot.currentTile = { x: 6, y: 4, kind: 'grass', blocked: false };
     snapshot.character.position = { x: 6, y: 4 };
     snapshot.characters.hero.position = { x: 6, y: 4 };
     snapshot.objectiveFocus = null;

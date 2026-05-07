@@ -2,7 +2,13 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import type { PublicUser } from '@ratio1/cstore-auth-ts';
 import { createInitialCharacterCheckpoint, loadCharacterByCid, saveCharacterCheckpoint } from '../platform/r1fs-characters';
 import { readRosterEntry, writeRosterEntry, type ThornwritheRosterEntry } from '../platform/cstore-roster';
-import { buildInitialCharacterSnapshot, levelForExperience, normalizeDurableProgression } from '../../shared/domain/progression';
+import {
+  buildInitialCharacterSnapshot,
+  levelForExperience,
+  markPointBuyAllocationComplete,
+  normalizeDurableProgression,
+  requiresPointBuyAllocation,
+} from '../../shared/domain/progression';
 import { levelUpAttributePoints, validatePointBuy } from '../../shared/domain/point-buy';
 import type { AttributeSet, CharacterClass } from '../../shared/domain/types';
 import { ensureAuthInitialized, getAuthClient, isSharedAuthConfigured } from './cstore';
@@ -50,6 +56,7 @@ export interface AccountRecord {
   emailVerified: boolean;
   characterId: string | null;
   characterName: string | null;
+  pointBuyRequired: boolean;
 }
 
 export interface AuthenticatedAccount extends AccountRecord {}
@@ -198,6 +205,7 @@ function buildAccountRecord(input: {
   emailVerified: boolean;
   characterId?: string | null;
   characterName?: string | null;
+  pointBuyRequired?: boolean;
 }): AccountRecord {
   return {
     accountId: input.accountId,
@@ -205,6 +213,27 @@ function buildAccountRecord(input: {
     emailVerified: input.emailVerified,
     characterId: input.characterId ?? null,
     characterName: input.characterName ?? null,
+    pointBuyRequired: input.pointBuyRequired ?? false,
+  };
+}
+
+async function resolvePointBuyRequired(characterId: string | null | undefined) {
+  if (!characterId) {
+    return false;
+  }
+
+  try {
+    const checkpoint = await loadCharacterByCid(characterId);
+    return requiresPointBuyAllocation(checkpoint.snapshot);
+  } catch {
+    return true;
+  }
+}
+
+async function withPointBuyRequirement(account: AccountRecord): Promise<AuthenticatedAccount> {
+  return {
+    ...account,
+    pointBuyRequired: await resolvePointBuyRequired(account.characterId),
   };
 }
 
@@ -285,13 +314,13 @@ async function mapSharedUser(email: string, user: PublicUser<unknown> | null): P
 
   const rosterEntry = await resolveSharedRosterEntry(email, metadata);
 
-  return buildAccountRecord({
+  return await withPointBuyRequirement(buildAccountRecord({
     accountId: email,
     email,
     emailVerified: metadata.emailVerified,
     characterId: rosterEntry?.latestCharacterCid ?? metadata.latestCharacterCid ?? null,
     characterName: rosterEntry?.characterName ?? metadata.characterName ?? null,
-  });
+  }));
 }
 
 async function authenticatePendingSharedAccount(email: string, password: string, metadata: ThornwritheAccountMetadata) {
@@ -307,13 +336,13 @@ async function authenticatePendingSharedAccount(email: string, password: string,
     throw error;
   }
 
-  return buildAccountRecord({
+  return await withPointBuyRequirement(buildAccountRecord({
     accountId: metadata.accountId,
     email,
     emailVerified: metadata.emailVerified,
     characterId: metadata.latestCharacterCid ?? null,
     characterName: metadata.characterName ?? null,
-  });
+  }));
 }
 
 export async function registerAccount(input: {
@@ -468,13 +497,13 @@ export async function verifyAccountEmail(token: string): Promise<AccountRecord> 
       emailVerified: true,
     });
 
-    return buildAccountRecord({
+    return await withPointBuyRequirement(buildAccountRecord({
       accountId: user.metadata.accountId,
       email,
       emailVerified: true,
       characterId: rosterEntry?.latestCharacterCid ?? user.metadata.latestCharacterCid ?? null,
       characterName: rosterEntry?.characterName ?? user.metadata.characterName ?? null,
-    });
+    }));
   }
 
   const accountsByEmail = getLocalAccountsStore();
@@ -486,13 +515,13 @@ export async function verifyAccountEmail(token: string): Promise<AccountRecord> 
 
   account.emailVerified = true;
 
-  return buildAccountRecord({
+  return await withPointBuyRequirement(buildAccountRecord({
     accountId: account.accountId,
     email,
     emailVerified: true,
     characterId: account.latestCharacterCid,
     characterName: account.characterName,
-  });
+  }));
 }
 
 export async function authenticateAccount(input: {
@@ -543,13 +572,13 @@ export async function authenticateAccount(input: {
     throw new AccountServiceError('EMAIL_NOT_VERIFIED', 'Verify your email before logging in.');
   }
 
-  return buildAccountRecord({
+  return await withPointBuyRequirement(buildAccountRecord({
     accountId: account.accountId,
     email,
     emailVerified: true,
     characterId: account.latestCharacterCid,
     characterName: account.characterName,
-  });
+  }));
 }
 
 export async function createCharacterForAccount(input: {
@@ -629,6 +658,7 @@ export async function createCharacterForAccount(input: {
     emailVerified: true,
     characterId: checkpoint.cid,
     characterName,
+    pointBuyRequired: false,
   });
 }
 
@@ -681,26 +711,28 @@ export async function resetCharacterForAccount(input: {
       ? currentSnapshot.unlocks.filter((entry): entry is string => typeof entry === 'string')
       : [],
   });
-  const nextSnapshot = normalizeDurableProgression({
-    ...starterSnapshot,
-    xp,
-    realLevel,
-    currentLevel: realLevel,
-    level: realLevel,
-    levelEffects: [],
-    quest_progress:
-      currentSnapshot.quest_progress &&
-      typeof currentSnapshot.quest_progress === 'object' &&
-      !Array.isArray(currentSnapshot.quest_progress)
-        ? currentSnapshot.quest_progress
-        : {},
-    gold:
-      typeof currentSnapshot.gold === 'number'
-        ? currentSnapshot.gold
-        : typeof currentSnapshot.currency === 'number'
-          ? currentSnapshot.currency
-          : starterSnapshot.gold,
-  });
+  const nextSnapshot = markPointBuyAllocationComplete(
+    normalizeDurableProgression({
+      ...starterSnapshot,
+      xp,
+      realLevel,
+      currentLevel: realLevel,
+      level: realLevel,
+      levelEffects: [],
+      quest_progress:
+        currentSnapshot.quest_progress &&
+        typeof currentSnapshot.quest_progress === 'object' &&
+        !Array.isArray(currentSnapshot.quest_progress)
+          ? currentSnapshot.quest_progress
+          : {},
+      gold:
+        typeof currentSnapshot.gold === 'number'
+          ? currentSnapshot.gold
+          : typeof currentSnapshot.currency === 'number'
+            ? currentSnapshot.currency
+            : starterSnapshot.gold,
+    })
+  );
   const saved = await saveCharacterCheckpoint({
     cid: checkpoint.cid,
     persistRevision: checkpoint.persist_revision,
@@ -751,6 +783,7 @@ export async function resetCharacterForAccount(input: {
     emailVerified: true,
     characterId: saved.cid,
     characterName,
+    pointBuyRequired: false,
   });
 }
 
@@ -773,13 +806,13 @@ export async function getAccountById(accountId: string): Promise<AuthenticatedAc
     return null;
   }
 
-  return buildAccountRecord({
+  return await withPointBuyRequirement(buildAccountRecord({
     accountId: account.accountId,
     email,
     emailVerified: account.emailVerified,
     characterId: account.latestCharacterCid,
     characterName: account.characterName,
-  });
+  }));
 }
 
 export function __resetAccountsForTests() {

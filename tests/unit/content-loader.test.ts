@@ -8,8 +8,10 @@ describe('content loader', () => {
     const bundle = await loadContentBundle(process.cwd());
 
     expect(bundle.region.id).toBe('briar-march');
-    expect(new Set(bundle.region.tiles.map((tile) => tile.kind))).toEqual(new Set(['grass', 'mud', 'forest', 'stone']));
+    expect(new Set(bundle.region.tiles.map((tile) => tile.kind))).toEqual(new Set(['grass', 'forest', 'stone']));
+    expect(bundle.region.tiles.filter((tile) => !tile.blocked).every((tile) => tile.kind === 'grass')).toBe(true);
     expect(bundle.region.tiles.map((tile) => tile.kind)).not.toContain('road' as never);
+    expect(bundle.region.tiles.map((tile) => tile.kind)).not.toContain('mud' as never);
     expect(bundle.region.tiles.filter((tile) => tile.kind === 'forest' || tile.kind === 'stone').every((tile) => tile.blocked)).toBe(true);
     expect(bundle.classes.map((entry) => entry.id)).toEqual(['fighter', 'rogue', 'wizard', 'cleric']);
     expect(bundle.monsters.map((entry) => entry.id)).toEqual(

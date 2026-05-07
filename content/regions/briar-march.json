@@ -28,13 +28,13 @@
     {
       "x": 6,
       "y": 5,
-      "kind": "mud",
+      "kind": "grass",
       "blocked": false
     },
     {
       "x": 7,
       "y": 5,
-      "kind": "mud",
+      "kind": "grass",
       "blocked": false
     },
     {
@@ -52,7 +52,7 @@
     {
       "x": 7,
       "y": 3,
-      "kind": "mud",
+      "kind": "grass",
       "blocked": false
     },
     {

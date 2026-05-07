@@ -441,7 +441,7 @@ select {
 .play-layout {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
   align-items: start;
 }
 
@@ -453,15 +453,37 @@ select {
 .play-sidebar,
 .play-controls,
 .play-panel,
-.command-panel {
+.command-panel,
+.play-vitals {
   min-width: 0;
   max-width: 100%;
 }
 
+.play-vitals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 16px;
+}
+
+.play-vitals strong {
+  color: var(--text-ember);
+  font-size: 1.05rem;
+}
+
+.play-vitals span {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .play-controls {
+  grid-column: 1 / -1;
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  align-items: start;
 }
 
 .game-tab-panel {
@@ -481,7 +503,7 @@ select {
 }
 
 .play-panel--compact {
-  padding: 16px 18px;
+  padding: 12px 14px;
 }
 
 .play-panel--terminal {
@@ -556,6 +578,19 @@ select {
   border-radius: var(--radius-md);
   border: 1px solid rgba(247, 201, 120, 0.14);
   background: rgba(5, 9, 8, 0.54);
+}
+
+.field-notes {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.field-notes p {
+  margin: 0;
 }
 
 .field-notes ul {
@@ -1446,7 +1481,7 @@ select {
 
 .dpad {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-areas:
     ". north ."
@@ -1457,6 +1492,9 @@ select {
 .dpad button {
   width: 100%;
   min-width: 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 

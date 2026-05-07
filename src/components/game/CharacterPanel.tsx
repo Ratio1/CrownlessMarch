@@ -60,8 +60,21 @@ function formatModifier(value: number) {
   return value >= 0 ? `+${value}` : String(value);
 }
 
+function formatDamage(dice: string | undefined, bonus: number | undefined) {
+  if (!dice) {
+    return 'unlisted';
+  }
+
+  if (!bonus) {
+    return dice;
+  }
+
+  return `${dice}${formatModifier(bonus)}`;
+}
+
 export function CharacterPanel({ snapshot }: CharacterPanelProps) {
   const card = snapshot?.character;
+  const weapon = card?.equipment.find((entry) => entry.slot === 'weapon') ?? null;
 
   return (
     <section className="panel play-panel character-sheet">
@@ -99,14 +112,17 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
                 const modifier = abilityModifier(score);
 
                 return (
-                  <article className="character-sheet__ability" key={attribute}>
+                  <article
+                    className="character-sheet__ability"
+                    key={attribute}
+                    title={ATTRIBUTE_LABELS[attribute].description}
+                  >
                     <div className="character-sheet__ability-head">
                       <span>{ATTRIBUTE_LABELS[attribute].short}</span>
                       <strong>{score}</strong>
                       <span>{formatModifier(modifier)}</span>
                     </div>
                     <h4>{ATTRIBUTE_LABELS[attribute].label}</h4>
-                    <p>{ATTRIBUTE_LABELS[attribute].description}</p>
                   </article>
                 );
               })}
@@ -134,14 +150,31 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
             </div>
             <div className="character-sheet__skill-grid">
               {D20_SKILLS.map((skill) => (
-                <article className="character-sheet__skill" key={skill.name}>
+                <article className="character-sheet__skill" key={skill.name} title={skill.description}>
                   <strong>{skill.name}</strong>
                   <span>
                     {ATTRIBUTE_LABELS[skill.attribute].short} {formatModifier(abilityModifier(card.attributes[skill.attribute]))}
                   </span>
-                  <p>{skill.description}</p>
                 </article>
               ))}
+            </div>
+          </div>
+
+          <div className="character-sheet__section">
+            <div>
+              <h3>Equipped Weapon</h3>
+              <p className="muted">Roll d20 plus hit bonus against the target defense; damage uses the listed dice plus bonus on a hit.</p>
+            </div>
+            <div className="token-strip">
+              {weapon ? (
+                <>
+                  <span className="status-pill">{weapon.label} x{weapon.quantity}</span>
+                  <span className="status-pill">Hit {formatModifier(weapon.attackBonus ?? 0)}</span>
+                  <span className="status-pill">Damage {formatDamage(weapon.damageDice, weapon.damageBonus)}</span>
+                </>
+              ) : (
+                <span className="status-pill">Unarmed | Hit +0 | Damage unlisted</span>
+              )}
             </div>
           </div>
 
@@ -154,12 +187,12 @@ export function CharacterPanel({ snapshot }: CharacterPanelProps) {
               {card.equipment.length === 0 && card.inventory.length === 0 ? <span className="status-pill">Pack is empty.</span> : null}
               {card.equipment.map((entry) => (
                 <span className="status-pill" key={`${entry.slot}:${entry.id}`}>
-                  {entry.slot} | {entry.label}
+                  {entry.slot} | {entry.label} x{entry.quantity}
                 </span>
               ))}
-              {card.inventory.map((entry, index) => (
-                <span className="status-pill" key={`${entry.id}:${index}`}>
-                  {entry.label}
+              {card.inventory.map((entry) => (
+                <span className="status-pill" key={entry.id}>
+                  {entry.label} x{entry.quantity}
                 </span>
               ))}
             </div>

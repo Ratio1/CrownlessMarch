@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     const response = Response.json({
       account,
       needsCharacterCreation: !account.characterId,
+      needsPointBuyAllocation: account.characterId ? account.pointBuyRequired : false,
     });
 
     response.headers.set(

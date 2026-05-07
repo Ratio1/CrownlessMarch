@@ -1,6 +1,6 @@
 import type { ContentBundle } from '../content/load-content';
 import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
-import { DEFAULT_GAME_RULES, getWeaponRule, isEvilAlignment } from '../../shared/content/game-rules';
+import { DEFAULT_GAME_RULES, getClassRule, getWeaponRule, isEvilAlignment } from '../../shared/content/game-rules';
 import { getMaximumVisionWindow, getVisionWindow } from '../../shared/domain/fog';
 import { getDefaultAttributes } from '../../shared/domain/point-buy';
 import {
@@ -20,6 +20,7 @@ import type {
   GameplayShardSnapshot,
   GameplayTileSnapshot,
 } from '../../shared/gameplay';
+import type { CharacterClass } from '../../shared/domain/types';
 import { advanceEncounterSnapshot, createEncounterSnapshot, queueEncounterOverride } from './combat-engine';
 
 export interface PresencePosition {
@@ -107,11 +108,11 @@ const TERRAIN_COMMAND_DETAILS: Record<
     failure: 'The open ground shows only trampled green and old rain.',
   },
   mud: {
-    label: 'Mud',
-    summary: 'Brown churned ground where the dungeon-briar lanes begin.',
-    dc: 13,
-    success: 'You spot goblin scuffs, sinkholes, and the safest route through the mire.',
-    failure: 'The mud closes over tracks before you can read them.',
+    label: 'Grass',
+    summary: 'Legacy mud is treated as grass-green open ground.',
+    dc: 10,
+    success: 'You read boot marks, snapped grass, and the cleanest safe line ahead.',
+    failure: 'The open ground shows only trampled green and old rain.',
   },
   forest: {
     label: 'Forest',
@@ -178,7 +179,7 @@ const FALLBACK_CONTENT: ContentBundle = {
     spawn: { x: 5, y: 5 },
     tiles: [
       { x: 5, y: 5, kind: 'grass', blocked: false },
-      { x: 6, y: 5, kind: 'mud', blocked: false },
+      { x: 6, y: 5, kind: 'grass', blocked: false },
     ],
   },
 };
@@ -365,22 +366,22 @@ function commandDetailsForTile(tile: GameplayTileSnapshot) {
   if (isTilePosition(tile, WATCHPOST_LANE_TILE)) {
     return {
       ...base,
-      label: 'Watchpost Mud',
-      summary: 'Brown churned watchpost mud where Briar Goblins break cover.',
+      label: 'Watchpost Plains',
+      summary: 'Grass-green watchpost ground where Briar Goblins break cover.',
       dc: 14,
-      success: 'You spot goblin scuffs, sinkholes, and the safest route through the mire.',
-      failure: 'The mud closes over tracks before you can read them.',
+      success: 'You spot goblin scuffs, flattened grass, and the safest route through the watchpost lane.',
+      failure: 'The grass springs back over tracks before you can read them.',
     };
   }
 
   if (isTilePosition(tile, SHRINE_ROAD_GROVE_TILE)) {
     return {
       ...base,
-      label: 'Grove Mud',
-      summary: 'Brown grove mud on the contested shrine-road approach.',
+      label: 'Grove Plains',
+      summary: 'Grass-green grove ground on the contested shrine-road approach.',
       dc: 14,
       success: 'You spot sap tracks and the clean line back toward the shrine.',
-      failure: 'The grove mud smears each useful sign into the next.',
+      failure: 'The grove grass hides each useful sign under briar shade.',
     };
   }
 
@@ -406,6 +407,10 @@ function getCurrentLevel(snapshot: Record<string, unknown>) {
     : typeof snapshot.level === 'number'
       ? snapshot.level
       : 1;
+}
+
+function toCharacterClass(value: unknown): CharacterClass {
+  return value === 'rogue' || value === 'wizard' || value === 'cleric' ? value : 'fighter';
 }
 
 function matchesTargetText(target: string, id: string, label: string) {
@@ -604,13 +609,13 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
 
   if (questId === BURN_QUEST_ID) {
     const ready = getQuestStatus(snapshot, questId) === 'ready_to_turn_in';
-    return {
-      label: quest.label,
-      detail: ready ? 'Return to town for the watchpost debrief.' : 'Cull Briar Goblins on the watchpost lane.',
-      stateLabel: ready ? 'Return to town' : 'Cull goblins',
-      target: ready ? TOWN_TILE : WATCHPOST_LANE_TILE,
-      terrain: ready ? 'grass' : 'mud',
-    };
+      return {
+        label: quest.label,
+        detail: ready ? 'Return to town for the watchpost debrief.' : 'Cull Briar Goblins on the watchpost lane.',
+        stateLabel: ready ? 'Return to town' : 'Cull goblins',
+        target: ready ? TOWN_TILE : WATCHPOST_LANE_TILE,
+        terrain: 'grass',
+      };
   }
 
   if (questId === SECURE_SHRINE_ROAD_QUEST_ID) {
@@ -645,7 +650,7 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
           : 'Bring down the Sap Wolf in the grove north of the shrine.',
         stateLabel: 'Break the grove wolf',
         target: SHRINE_ROAD_GROVE_TILE,
-        terrain: 'mud',
+        terrain: 'grass',
       };
     }
 
@@ -731,15 +736,50 @@ function toInventory(snapshot: Record<string, unknown>, content: ContentBundle) 
   const inventoryIds = Array.isArray(snapshot.inventory)
     ? snapshot.inventory.filter((entry): entry is string => typeof entry === 'string')
     : [];
+  const counts = new Map<string, number>();
 
-  return inventoryIds.map((itemId) => {
+  for (const itemId of inventoryIds) {
+    counts.set(itemId, (counts.get(itemId) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries()).map(([itemId, quantity]) => {
     const item = content.items.find((entry) => entry.id === itemId);
     return {
       id: itemId,
       label: item?.label ?? itemId,
       effect: item?.effect ?? 'Unknown field gear.',
+      quantity,
     };
   });
+}
+
+function weaponStatsForEquipment(
+  snapshot: Record<string, unknown>,
+  content: ContentBundle,
+  item: ItemRecord | undefined
+) {
+  if (!item || item.slot !== 'weapon') {
+    return {};
+  }
+
+  const classId = toCharacterClass(snapshot.classId);
+  const classRule = getClassRule(content.rules, classId);
+  const modifiers = isRecord(snapshot.modifiers) ? snapshot.modifiers : {};
+  const level = getCurrentLevel(snapshot);
+  const progressionIndex = Math.max(0, Math.min(content.rules.progression.maxLevel - 1, Math.floor(level) - 1));
+  const progressionBonus = classRule.attackProgression[progressionIndex] ?? 0;
+  const abilityModifier =
+    typeof modifiers[classRule.attackAbility] === 'number' && Number.isFinite(modifiers[classRule.attackAbility])
+      ? Number(modifiers[classRule.attackAbility])
+      : 0;
+  const weaponRule = getWeaponRule(content.rules, item.weaponType);
+  const itemBonus = typeof item.bonus === 'number' && Number.isFinite(item.bonus) ? item.bonus : 0;
+
+  return {
+    attackBonus: progressionBonus + abilityModifier + itemBonus,
+    damageDice: item.damage ?? weaponRule?.damage ?? classRule.defaultDamageDice,
+    damageBonus: abilityModifier + itemBonus,
+  };
 }
 
 function toEquipment(snapshot: Record<string, unknown>, content: ContentBundle) {
@@ -758,6 +798,8 @@ function toEquipment(snapshot: Record<string, unknown>, content: ContentBundle) 
         id: itemId,
         label: item?.label ?? itemId,
         effect: item?.effect ?? 'Unknown field gear.',
+        quantity: 1,
+        ...weaponStatsForEquipment(snapshot, content, item),
       };
     });
 }
@@ -897,11 +939,12 @@ export class ShardRuntime implements ShardRuntimeLike {
     }
 
     const tile = this.getTileAt(nextPosition.x, nextPosition.y);
+    const gameplayTile = this.toGameplayTileSnapshot(tile);
     if (tile.blocked) {
       player.snapshot = normalizeDurableProgression(
         appendActivityLog(
           player.snapshot,
-          `${terrainLabel(tile.kind)} blocks the way ${direction}.`,
+          `${terrainLabel(gameplayTile.kind)} blocks the way ${direction}.`,
           'move',
           nowIso,
         ),
@@ -918,7 +961,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     player.snapshot = normalizeDurableProgression(
       appendActivityLog(
         player.snapshot,
-        `${characterName} moves ${direction} into ${terrainLabel(tile.kind)} (${nextPosition.x},${nextPosition.y}).`,
+        `${characterName} moves ${direction} into ${terrainLabel(gameplayTile.kind)} (${nextPosition.x},${nextPosition.y}).`,
         'move',
         nowIso,
       ),
@@ -934,7 +977,7 @@ export class ShardRuntime implements ShardRuntimeLike {
           characterId,
           characterSnapshot: player.snapshot,
           monster,
-          tileKind: tile.kind,
+          tileKind: gameplayTile.kind,
           content: this.content,
           now: new Date(this.now()),
           random: this.random,
@@ -1108,8 +1151,8 @@ export class ShardRuntime implements ShardRuntimeLike {
 
   private describeInventory(player: RuntimePlayerState) {
     const card = toCharacterCard(player, this.content);
-    const inventory = card.inventory.map((item) => item.label).join(', ') || 'empty';
-    const equipped = card.equipment.map((item) => item.label).join(', ') || 'nothing equipped';
+    const inventory = card.inventory.map((item) => `${item.label} x${item.quantity}`).join(', ') || 'empty';
+    const equipped = card.equipment.map((item) => `${item.slot} ${item.label} x${item.quantity}`).join(', ') || 'nothing equipped';
 
     return `Inventory: ${inventory}. Equipped: ${equipped}. Gold ${card.gold}.`;
   }
@@ -1383,6 +1426,12 @@ export class ShardRuntime implements ShardRuntimeLike {
     for (let y = position.y - radius; y <= position.y + radius; y += 1) {
       for (let x = position.x - radius; x <= position.x + radius; x += 1) {
         if (!this.isWithinBounds({ x, y })) {
+          tiles.push({
+            x,
+            y,
+            kind: 'stone',
+            blocked: true,
+          });
           continue;
         }
 
@@ -1488,7 +1537,7 @@ export class ShardRuntime implements ShardRuntimeLike {
     return {
       x: tile.x,
       y: tile.y,
-      kind: tile.kind,
+      kind: tile.kind === 'mud' && !tile.blocked ? 'grass' : tile.kind,
       blocked: tile.blocked,
     };
   }

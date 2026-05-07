@@ -76,6 +76,13 @@ export interface DurableCharacterSnapshot {
   passiveInsight: number;
   inventory: string[];
   equipment: Record<string, unknown>;
+  pointBuyComplete: boolean;
+  pointBuyVersion: number;
+  pointBuyBudget: number;
+  pointBuySpent: number;
+  pointBuyAbilityRaises: number;
+  pointBuyUsedAbilityRaises: number;
+  pointBuyBaseAttributes: AttributeSet;
   currency: number;
   gold: number;
   quest_progress: Record<string, unknown>;

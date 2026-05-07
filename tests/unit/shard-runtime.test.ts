@@ -108,14 +108,15 @@ function runLiveQuestRoute(input: {
     if (!direction) {
       const activeQuest = snapshot.character.quests[0]?.label ?? null;
 
-      if (activeQuest === 'Burn the First Nest' && snapshot.currentTile.kind === 'mud') {
+      if (activeQuest === 'Burn the First Nest' && snapshot.position.x === 6 && snapshot.position.y === 5) {
         update = input.runtime.movePlayer(input.characterId, 'west');
         continue;
       }
 
       if (
         activeQuest === 'Secure the Shrine Road' &&
-        snapshot.currentTile.kind === 'mud' &&
+        snapshot.position.x === 7 &&
+        snapshot.position.y === 5 &&
         focus.stateLabel === 'Break the grove wolf'
       ) {
         update = input.runtime.movePlayer(input.characterId, 'south');
@@ -160,8 +161,37 @@ describe('shard runtime', () => {
 
     expect(update.snapshot.regionId).toBe('briar-march');
     expect(update.snapshot.position).toEqual({ x: 5, y: 5 });
-    expect(update.snapshot.visibleTiles.some((tile) => tile.kind === 'mud')).toBe(true);
+    expect(update.snapshot.visibleTiles.filter((tile) => !tile.blocked).every((tile) => tile.kind === 'grass')).toBe(true);
     expect(Object.values(update.snapshot.monsters).some((monster) => monster.label === 'Briar Goblin')).toBe(true);
+  });
+
+  it('keeps the visible and maximum FoW frame rectangular at shard edges', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({ content });
+
+    const update = runtime.addPlayer({
+      cid: 'cid-edge-frame',
+      position: { x: 0, y: 0 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Edgeward',
+        classId: 'rogue',
+        attributes: {
+          strength: 10,
+          dexterity: 15,
+          constitution: 12,
+          intelligence: 13,
+          wisdom: 10,
+          charisma: 8,
+        },
+      }),
+    });
+
+    expect(update.snapshot.visibleTiles).toHaveLength(update.snapshot.vision.size * update.snapshot.vision.size);
+    expect(update.snapshot.maximumVisibleTiles).toHaveLength(
+      (update.snapshot.maximumVision?.size ?? 0) * (update.snapshot.maximumVision?.size ?? 0)
+    );
+    expect(update.snapshot.visibleTiles.some((tile) => tile.x < 0 && tile.y < 0)).toBe(true);
+    expect(update.snapshot.visibleTiles.filter((tile) => tile.x < 0 || tile.y < 0).every((tile) => tile.kind === 'stone' && tile.blocked)).toBe(true);
   });
 
   it('logs successful movement with terrain and coordinates in the march feed', async () => {
@@ -192,7 +222,7 @@ describe('shard runtime', () => {
 
     expect(update.snapshot.activityLog.at(-1)).toMatchObject({
       kind: 'move',
-      text: 'Aelis moves east into Mud (6,5).',
+      text: 'Aelis moves east into Grass (6,5).',
     });
   });
 
@@ -458,7 +488,7 @@ describe('shard runtime', () => {
     const blocked = runtime.movePlayer('cid-cleared-after-win', 'north');
 
     expect(blocked.snapshot.position).toEqual({ x: 6, y: 5 });
-    expect(blocked.snapshot.currentTile.kind).toBe('mud');
+    expect(blocked.snapshot.currentTile.kind).toBe('grass');
     expect(blocked.snapshot.encounter).toBeNull();
     expect(Object.values(blocked.snapshot.monsters).some((monster) => monster.position.x === 6 && monster.position.y === 5)).toBe(false);
   });
@@ -893,11 +923,11 @@ describe('shard runtime', () => {
       }),
     });
 
-    const update = runtime.commandPlayer('cid-command-search', 'search mud');
+    const update = runtime.commandPlayer('cid-command-search', 'search grass');
 
     expect(update.snapshot.activityLog.at(-1)).toMatchObject({
       kind: 'check',
-      text: 'Mire rolls 15 + 2 = 17 vs DC 14 to search Watchpost Mud: success. You spot goblin scuffs, sinkholes, and the safest route through the mire.',
+      text: 'Mire rolls 15 + 2 = 17 vs DC 14 to search Watchpost Plains: success. You spot goblin scuffs, flattened grass, and the safest route through the watchpost lane.',
     });
   });
 
@@ -969,8 +999,8 @@ describe('shard runtime', () => {
     });
 
     const inventory = runtime.commandPlayer('cid-command-utility', 'inventory');
-    expect(inventory.snapshot.activityLog.at(-1)?.text).toContain('Inventory: Rusted Sword, Field Rations.');
-    expect(inventory.snapshot.activityLog.at(-1)?.text).toContain('Equipped: Rusted Sword.');
+    expect(inventory.snapshot.activityLog.at(-1)?.text).toContain('Inventory: Rusted Sword x1, Field Rations x1.');
+    expect(inventory.snapshot.activityLog.at(-1)?.text).toContain('Equipped: weapon Rusted Sword x1.');
 
     const sheet = runtime.commandPlayer('cid-command-utility', 'sheet');
     expect(sheet.snapshot.activityLog.at(-1)?.text).toContain('Mossblade: Fighter level 1');
@@ -985,6 +1015,47 @@ describe('shard runtime', () => {
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Fort 12');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Ref 13');
     expect(lore.snapshot.activityLog.at(-1)?.text).toContain('Will 11');
+  });
+
+  it('aggregates duplicate carried items and reports equipped weapon combat math on the character card', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const runtime = new ShardRuntime({ content });
+
+    const update = runtime.addPlayer({
+      cid: 'cid-inventory-counts',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Packward',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+        inventory: ['field-rations', 'field-rations', 'health-potion'],
+        equipment: { weapon: 'rusted-sword' },
+      }),
+    });
+
+    expect(update.snapshot.character.inventory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'field-rations', quantity: 2 }),
+        expect.objectContaining({ id: 'health-potion', quantity: 1 }),
+      ])
+    );
+    expect(update.snapshot.character.equipment).toEqual([
+      expect.objectContaining({
+        slot: 'weapon',
+        id: 'rusted-sword',
+        quantity: 1,
+        attackBonus: 3,
+        damageDice: '1d8',
+        damageBonus: 2,
+      }),
+    ]);
   });
 
   it('only accepts flee as a typed command during active combat', async () => {

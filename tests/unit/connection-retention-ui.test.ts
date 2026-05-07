@@ -22,4 +22,15 @@ describe('gameplay socket reconnect retention', () => {
     expect(hookSource).toContain('window.addEventListener');
     expect(hookSource).toContain('window.removeEventListener');
   });
+
+  it('routes terminal play sessions away from /play instead of leaving a depleted field view', () => {
+    const hookSource = readSource('src/client/useGameplaySocket.ts');
+    const shellSource = readSource('src/components/game/GameShell.tsx');
+
+    expect(hookSource).toContain("window.location.replace('/create-character?allocation=required')");
+    expect(hookSource).toContain("window.location.replace('/create-character')");
+    expect(shellSource).toContain("navigation.type === 'reload'");
+    expect(shellSource).toContain("window.location.replace('/')");
+    expect(shellSource).toContain("status === 'disconnected'");
+  });
 });

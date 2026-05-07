@@ -646,7 +646,8 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
 
       if (
         activeQuest === 'Burn the First Nest' &&
-        snapshot.currentTile.kind === 'mud'
+        snapshot.position.x === 6 &&
+        snapshot.position.y === 5
       ) {
         record(`burn-reset-west:from=${snapshot.position.x},${snapshot.position.y}`);
         await sendMoveWithRetry(session, snapshot, 'west', record);
@@ -655,7 +656,8 @@ async function runQuestLoop(session: LiveShardSession, maxDefeats: number) {
 
       if (
         activeQuest === 'Secure the Shrine Road' &&
-        snapshot.currentTile.kind === 'mud' &&
+        snapshot.position.x === 7 &&
+        snapshot.position.y === 5 &&
         focus.stateLabel === 'Break the grove wolf'
       ) {
         record(`secure-reset-south:from=${snapshot.position.x},${snapshot.position.y}`);

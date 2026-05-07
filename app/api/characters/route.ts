@@ -1,4 +1,9 @@
-import { createCharacterForAccount, AccountServiceError } from '../../../src/server/auth/account-service';
+import {
+  AccountServiceError,
+  createCharacterForAccount,
+  getAccountById,
+  resetCharacterForAccount,
+} from '../../../src/server/auth/account-service';
 import { createSessionCookieValue, readSessionFromRequest } from '../../../src/server/auth/session';
 import { validatePointBuy } from '../../../src/shared/domain/point-buy';
 import { characterClasses, type AttributeSet, type CharacterClass } from '../../../src/shared/domain/types';
@@ -70,12 +75,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const account = await createCharacterForAccount({
-      accountId: session.accountId,
-      characterName: body.name,
-      classId: body.classId,
-      attributes: pointBuy.attributes,
-    });
+    const currentAccount = await getAccountById(session.accountId);
+    const allocationRequired = Boolean(currentAccount?.characterId && currentAccount.pointBuyRequired);
+    const account = allocationRequired
+      ? await resetCharacterForAccount({
+          accountId: session.accountId,
+          characterName: body.name,
+          classId: body.classId,
+          attributes: pointBuy.attributes,
+        })
+      : await createCharacterForAccount({
+          accountId: session.accountId,
+          characterName: body.name,
+          classId: body.classId,
+          attributes: pointBuy.attributes,
+        });
     const response = Response.json(
       {
         character: {
@@ -84,9 +98,10 @@ export async function POST(request: Request) {
           cid: account.characterId,
           classId: body.classId,
           attributes: pointBuy.attributes,
+          pointBuyAllocated: allocationRequired,
         },
       },
-      { status: 201 }
+      { status: allocationRequired ? 200 : 201 }
     );
 
     response.headers.set(

@@ -37,10 +37,14 @@ export interface GameplayInventoryItem {
   id: string;
   label: string;
   effect: string;
+  quantity: number;
 }
 
 export interface GameplayEquipmentItem extends GameplayInventoryItem {
   slot: string;
+  attackBonus?: number;
+  damageDice?: string;
+  damageBonus?: number;
 }
 
 export interface GameplayQuestEntry {

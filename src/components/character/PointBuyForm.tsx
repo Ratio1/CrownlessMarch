@@ -15,7 +15,7 @@ function formatLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export function PointBuyForm() {
+export function PointBuyForm({ allocationRequired = false }: { allocationRequired?: boolean }) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [classId, setClassId] = useState<CharacterClass>('fighter');
@@ -61,7 +61,7 @@ export function PointBuyForm() {
   return (
     <section className="panel character-card">
       <div className="eyebrow">Character creation</div>
-      <h1>Create Character</h1>
+      <h1>{allocationRequired ? 'Allocate Character' : 'Create Character'}</h1>
       <p className="lede">
         Start at 8 in each ability, then allocate up to {POINT_BUY_BUDGET} points using the simplified D20 rules,
         choose a class, and step into the Briar March.
@@ -127,11 +127,11 @@ export function PointBuyForm() {
 
         {error ? <p className="error">{error}</p> : null}
         {!error && !pointBuy.valid ? (
-          <p className="error">This point-buy spread exceeds the 22 point budget.</p>
+          <p className="error">This point-buy spread exceeds the {POINT_BUY_BUDGET} point budget.</p>
         ) : null}
 
         <button className="primary-button" disabled={!canSubmit} type="submit">
-          {pending ? 'Forging hero...' : 'Create Character'}
+          {pending ? 'Forging hero...' : allocationRequired ? 'Apply Allocation' : 'Create Character'}
         </button>
       </form>
     </section>

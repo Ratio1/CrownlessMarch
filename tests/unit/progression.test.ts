@@ -5,7 +5,9 @@ import {
   buildInitialCharacterSnapshot,
   changeCurrency,
   levelForExperience,
+  markPointBuyAllocationComplete,
   normalizeDurableProgression,
+  requiresPointBuyAllocation,
   setLevel,
 } from '../../src/shared/domain/progression';
 
@@ -208,6 +210,49 @@ describe('progression helpers', () => {
       wisdom: 8,
       charisma: 8,
     });
+  });
+
+  it('marks fresh point-buy allocations and forces legacy snapshots without the marker back through allocation', () => {
+    const fresh = buildInitialCharacterSnapshot({
+      name: 'Fresh',
+      classId: 'fighter',
+      attributes: {
+        strength: 15,
+        dexterity: 14,
+        constitution: 11,
+        intelligence: 10,
+        wisdom: 9,
+        charisma: 8,
+      },
+    });
+
+    expect(fresh).toMatchObject({
+      pointBuyComplete: true,
+      pointBuyVersion: 2,
+      pointBuyBudget: 30,
+      pointBuySpent: 20,
+    });
+    expect(requiresPointBuyAllocation(fresh)).toBe(false);
+    expect(
+      requiresPointBuyAllocation({
+        ...fresh,
+        pointBuyComplete: undefined,
+        pointBuyVersion: undefined,
+      })
+    ).toBe(true);
+
+    const allocated = markPointBuyAllocationComplete({
+      ...fresh,
+      pointBuyComplete: undefined,
+      pointBuyVersion: undefined,
+    });
+
+    expect(allocated).toMatchObject({
+      pointBuyComplete: true,
+      pointBuyVersion: 2,
+      pointBuySpent: 20,
+    });
+    expect(requiresPointBuyAllocation(allocated)).toBe(false);
   });
 
   it('separates XP-derived real level from current level effects', () => {

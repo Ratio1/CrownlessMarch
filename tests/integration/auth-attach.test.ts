@@ -200,8 +200,9 @@ describe('auth attach flow', () => {
     );
 
     expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
       error: 'Character creation required',
+      needsCharacterCreation: true,
     });
   });
 });

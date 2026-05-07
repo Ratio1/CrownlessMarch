@@ -10,6 +10,7 @@ interface LoginCardProps {
 interface LoginResponseBody {
   error?: string;
   needsCharacterCreation?: boolean;
+  needsPointBuyAllocation?: boolean;
 }
 
 async function postJson(url: string, body: Record<string, string>) {
@@ -56,7 +57,13 @@ export function LoginCard({ message = null }: LoginCardProps) {
         throw new Error(body.error ?? 'Unable to enter Thornwrithe.');
       }
 
-      router.replace(body.needsCharacterCreation ? '/create-character' : '/play');
+      router.replace(
+        body.needsCharacterCreation
+          ? '/create-character'
+          : body.needsPointBuyAllocation
+            ? '/create-character?allocation=required'
+            : '/play'
+      );
       router.refresh();
     } catch (submitError) {
       setError(

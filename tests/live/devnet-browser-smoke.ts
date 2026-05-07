@@ -753,7 +753,7 @@ async function runBrowserSmoke(
 
     const moveDirection = options.combat ? 'East' : 'North';
     const expectedMoveText = options.combat
-      ? `${activeCharacterName} moves east into Mud (6,5).`
+      ? `${activeCharacterName} moves east into Grass (6,5).`
       : `${activeCharacterName} moves north into Grass (5,4).`;
 
     const movementSmoke = await clickMovementAndWait(page, moveDirection, expectedMoveText, options.combat);

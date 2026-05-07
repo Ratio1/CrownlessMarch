@@ -190,6 +190,23 @@ export function useGameplaySocket(gameplayPath: string) {
             return;
           }
 
+          if (response.status === 409) {
+            const body = (await response.json().catch(() => ({}))) as {
+              needsCharacterCreation?: boolean;
+              needsPointBuyAllocation?: boolean;
+            };
+
+            if (body.needsPointBuyAllocation) {
+              window.location.replace('/create-character?allocation=required');
+              return;
+            }
+
+            if (body.needsCharacterCreation) {
+              window.location.replace('/create-character');
+              return;
+            }
+          }
+
           scheduleReconnect('Attach minting failed. Retrying shortly.');
           return;
         }

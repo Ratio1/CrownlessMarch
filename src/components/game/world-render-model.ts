@@ -34,14 +34,14 @@ export const WORLD_TERRAIN_DETAILS: Record<GameplayTileSnapshot['kind'], WorldTe
     },
   },
   mud: {
-    code: 'MD',
-    label: 'Mud',
-    summary: 'Brown mud and dungeon ground. You can walk here.',
+    code: 'GR',
+    label: 'Grass',
+    summary: 'Legacy mud is rendered as normal grass-green ground.',
     palette: {
-      fill: 0x765033,
-      edge: 0xb88958,
-      detail: 0xd1a36f,
-      glow: 0xc17a4d,
+      fill: 0x3f7d45,
+      edge: 0x91c96f,
+      detail: 0xb8e08a,
+      glow: 0x8fd36d,
     },
   },
   forest: {
@@ -68,7 +68,6 @@ export const WORLD_TERRAIN_DETAILS: Record<GameplayTileSnapshot['kind'], WorldTe
 
 export const WORLD_LEGEND_ORDER: Array<keyof typeof WORLD_TERRAIN_DETAILS> = [
   'grass',
-  'mud',
   'forest',
   'stone',
 ];

@@ -17,7 +17,14 @@ export async function POST(request: Request) {
     }
 
     if (!account.characterId) {
-      return Response.json({ error: 'Character creation required' }, { status: 409 });
+      return Response.json({ error: 'Character creation required', needsCharacterCreation: true }, { status: 409 });
+    }
+
+    if (account.pointBuyRequired) {
+      return Response.json(
+        { error: 'Point-buy allocation required', needsPointBuyAllocation: true },
+        { status: 409 }
+      );
     }
 
     const { token } = await issueAttachToken({

@@ -8,6 +8,7 @@ import { CharacterPanel } from './CharacterPanel';
 import { CharacterResetPanel } from './CharacterResetPanel';
 import { CommandPanel } from './CommandPanel';
 import { CombatLogPanel } from './CombatLogPanel';
+import { FieldNotesPanel } from './FieldNotesPanel';
 import { MovementPad } from './MovementPad';
 import { QuestPanel } from './QuestPanel';
 import { WorldField } from './WorldField';
@@ -25,6 +26,30 @@ function describeStatus(status: ReturnType<typeof useGameplaySocket>['status']) 
     case 'disconnected':
       return 'disconnected';
   }
+}
+
+function CharacterVitalsBar({ snapshot }: { snapshot: ReturnType<typeof useGameplaySocket>['snapshot'] }) {
+  const card = snapshot?.character;
+
+  if (!card) {
+    return (
+      <section className="panel play-vitals" aria-label="Character vitals">
+        <span className="muted">Awaiting character sheet.</span>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel play-vitals" aria-label="Character vitals">
+      <strong>{card.name}</strong>
+      <span>{card.classLabel}</span>
+      <span>Level {card.level}</span>
+      <span>
+        HP {card.hitPoints.current}/{card.hitPoints.max}
+      </span>
+      <span>AC {card.defenses.armorClass}</span>
+    </section>
+  );
 }
 
 export function GameShell({
@@ -46,6 +71,20 @@ export function GameShell({
     { id: 'character', label: 'Character Sheet' },
     { id: 'quests', label: 'Quests' },
   ];
+
+  useEffect(() => {
+    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+
+    if (navigation && navigation.type === 'reload') {
+      window.location.replace('/');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'disconnected') {
+      window.location.replace('/');
+    }
+  }, [status]);
 
   useEffect(() => {
     if (activeView !== 'field' || !canMove) {
@@ -138,17 +177,22 @@ export function GameShell({
       </header>
 
       {activeView === 'field' ? (
-        <section className="play-layout" role="tabpanel">
-          <WorldField snapshot={snapshot} revealFog={revealFog} />
+        <>
+          <CharacterVitalsBar snapshot={snapshot} />
+          <section className="play-layout" role="tabpanel">
+            <WorldField snapshot={snapshot} revealFog={revealFog} />
 
-          <aside className="play-sidebar">
-            <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
+            <aside className="play-sidebar">
+              <FieldNotesPanel snapshot={snapshot} />
+              <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
+            </aside>
+
             <div className="play-controls">
-              <MovementPad disabled={!canMove} onMove={sendMove} />
               <CommandPanel disabled={!canCommand} combatMode={fightActive} onCommand={sendCommand} />
+              <MovementPad disabled={!canMove} onMove={sendMove} />
             </div>
-          </aside>
-        </section>
+          </section>
+        </>
       ) : null}
 
       {activeView === 'character' ? (

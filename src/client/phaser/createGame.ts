@@ -27,17 +27,15 @@ const MIN_HEIGHT = 420;
 const BOARD_PADDING = 34;
 const TILE_GAP = 0;
 const TEXTURE_FILTER_NEAREST = 1 as PhaserType.Textures.FilterMode;
-const WORLD_GRASS_BASE_FILL = 0x3f7d45;
-const WORLD_GRASS_BASE_DARK = 0x254b30;
-const WORLD_MUD_PATCH_FILL = 0x765033;
-const HERO_SPRITE_TILE_RATIO = 0.42;
-const ALLY_SPRITE_TILE_RATIO = 0.37;
-const MONSTER_SPRITE_TILE_RATIO = 0.4;
-const ACTIVE_MONSTER_SPRITE_TILE_RATIO = 0.46;
+const WORLD_GRASS_BASE_FILL = 0x4c9a45;
+const WORLD_GRASS_BASE_DARK = 0x2f6a35;
+const HERO_SPRITE_TILE_RATIO = 0.34;
+const ALLY_SPRITE_TILE_RATIO = 0.31;
+const MONSTER_SPRITE_TILE_RATIO = 0.32;
+const ACTIVE_MONSTER_SPRITE_TILE_RATIO = 0.37;
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
 type WorldRenderBounds = ReturnType<typeof buildWorldRenderModel>['bounds'];
-type CellMap = Map<string, WorldRenderCell>;
 type RuntimeGameObject = PhaserType.GameObjects.GameObject;
 
 export async function createGame(container: HTMLElement): Promise<ThornwritheGameBridge> {
@@ -140,14 +138,6 @@ function clearLabels(labels: RuntimeGameObject[]) {
   labels.length = 0;
 }
 
-function cellKey(x: number, y: number) {
-  return `${x}:${y}`;
-}
-
-function cellAt(cellMap: CellMap, x: number, y: number) {
-  return cellMap.get(cellKey(x, y)) ?? null;
-}
-
 function drawSnapshot(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
@@ -156,7 +146,6 @@ function drawSnapshot(
   options: ThornwritheRenderOptions = {}
 ) {
   const model = buildWorldRenderModel(snapshot, { revealFog: options.revealFog });
-  const cellMap = new Map(model.cells.map((cell) => [cell.key, cell]));
   clearLabels(labels);
   graphics.clear();
 
@@ -181,7 +170,7 @@ function drawSnapshot(
     const x = originX + (cell.x - model.bounds.minX) * (tileSize + gap);
     const y = originY + (cell.y - model.bounds.minY) * (tileSize + gap);
 
-    drawTile(graphics, snapshot, cellMap, cell, x, y, tileSize, pulse);
+    drawTile(graphics, snapshot, cell, x, y, tileSize, pulse);
   }
 
   drawContinuousFogLayer(graphics, model.cells, model.bounds, originX, originY, tileSize, gap, pulse);
@@ -386,7 +375,6 @@ function drawBackdrop(
 function drawTile(
   graphics: PhaserType.GameObjects.Graphics,
   snapshot: GameplayShardSnapshot,
-  cellMap: CellMap,
   cell: WorldRenderCell,
   x: number,
   y: number,
@@ -397,7 +385,6 @@ function drawTile(
     return;
   }
 
-  drawSeamlessTerrainPatch(graphics, cellMap, cell, x, y, tileSize);
   drawPixelTerrainDetail(graphics, cell, x, y, tileSize);
 
   if (cell.tile.blocked) {
@@ -530,47 +517,6 @@ function drawFogWisps(
   }
 }
 
-function drawSeamlessTerrainPatch(
-  graphics: PhaserType.GameObjects.Graphics,
-  cellMap: CellMap,
-  cell: WorldRenderCell,
-  x: number,
-  y: number,
-  tileSize: number
-) {
-  if (cell.tile.kind === 'mud') {
-    drawMudGroundPatch(graphics, cellMap, cell, x, y, tileSize);
-  }
-}
-
-function drawMudGroundPatch(
-  graphics: PhaserType.GameObjects.Graphics,
-  cellMap: CellMap,
-  cell: WorldRenderCell,
-  x: number,
-  y: number,
-  tileSize: number
-) {
-  const northMud = cellAt(cellMap, cell.x, cell.y - 1)?.tile.kind === 'mud';
-  const southMud = cellAt(cellMap, cell.x, cell.y + 1)?.tile.kind === 'mud';
-  const westMud = cellAt(cellMap, cell.x - 1, cell.y)?.tile.kind === 'mud';
-  const eastMud = cellAt(cellMap, cell.x + 1, cell.y)?.tile.kind === 'mud';
-
-  graphics.fillStyle(WORLD_MUD_PATCH_FILL, 0.78);
-  graphics.fillRect(
-    x + (westMud ? 0 : tileSize * 0.08),
-    y + (northMud ? 0 : tileSize * 0.1),
-    tileSize * (0.84 + (westMud ? 0.08 : 0) + (eastMud ? 0.08 : 0)),
-    tileSize * (0.8 + (northMud ? 0.1 : 0) + (southMud ? 0.1 : 0))
-  );
-  graphics.fillStyle(0x5b3b27, 0.34);
-  graphics.fillEllipse(x + tileSize * 0.36, y + tileSize * 0.62, tileSize * 0.48, tileSize * 0.14);
-  graphics.fillEllipse(x + tileSize * 0.68, y + tileSize * 0.34, tileSize * 0.34, tileSize * 0.12);
-  graphics.fillStyle(0xd1a36f, 0.28);
-  graphics.fillRect(x + tileSize * 0.18, y + tileSize * 0.62, tileSize * 0.22, Math.max(2, tileSize * 0.03));
-  graphics.fillRect(x + tileSize * 0.56, y + tileSize * 0.34, tileSize * 0.24, Math.max(2, tileSize * 0.03));
-}
-
 function drawPixelTerrainDetail(
   graphics: PhaserType.GameObjects.Graphics,
   cell: WorldRenderCell,
@@ -584,25 +530,9 @@ function drawPixelTerrainDetail(
 
   switch (cell.tile.kind) {
     case 'grass': {
-      graphics.fillStyle(detail, 0.16);
-      graphics.fillRect(x + tileSize * 0.24, y + tileSize * 0.28, 3, 3);
-      graphics.fillRect(x + tileSize * 0.62, y + tileSize * 0.34, 2, 2);
-      graphics.fillRect(x + tileSize * 0.46, y + tileSize * 0.68, 3, 2);
-      graphics.fillStyle(edge, 0.22);
-      graphics.fillCircle(centerX - tileSize * 0.22, centerY - tileSize * 0.14, 2);
-      graphics.fillCircle(centerX + tileSize * 0.2, centerY + tileSize * 0.18, 2);
       break;
     }
     case 'mud':
-      graphics.fillStyle(edge, 0.16);
-      graphics.fillEllipse(centerX - tileSize * 0.14, centerY + tileSize * 0.12, tileSize * 0.32, tileSize * 0.15);
-      graphics.fillEllipse(centerX + tileSize * 0.2, centerY - tileSize * 0.12, tileSize * 0.24, tileSize * 0.12);
-      graphics.lineStyle(3, detail, 0.46);
-      graphics.beginPath();
-      graphics.moveTo(x + tileSize * 0.18, y + tileSize * 0.72);
-      graphics.lineTo(centerX - 4, centerY + 5);
-      graphics.lineTo(x + tileSize * 0.76, y + tileSize * 0.28);
-      graphics.strokePath();
       break;
     case 'forest':
       graphics.fillStyle(detail, 0.88);
