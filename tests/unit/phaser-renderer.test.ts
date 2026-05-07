@@ -30,6 +30,8 @@ describe('Phaser renderer configuration', () => {
     const source = readSource('src/client/phaser/createGame.ts');
 
     expect(source).toContain('const TILE_GAP = 0;');
+    expect(source).toContain('WORLD_GRASS_BASE_FILL');
+    expect(source).toContain('drawIrregularMudPatch');
     expect(source).toContain('drawSeamlessTerrainPatch');
     expect(source).toContain('drawPixelTerrainDetail');
     expect(source).not.toContain('drawObjectiveTrail');

@@ -23,6 +23,9 @@ const MIN_HEIGHT = 420;
 const BOARD_PADDING = 34;
 const TILE_GAP = 0;
 const TEXTURE_FILTER_NEAREST = 1 as PhaserType.Textures.FilterMode;
+const WORLD_GRASS_BASE_FILL = 0x3f7d45;
+const WORLD_GRASS_BASE_DARK = 0x254b30;
+const WORLD_MUD_PATCH_FILL = 0x765033;
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
 type CellMap = Map<string, WorldRenderCell>;
@@ -397,44 +400,60 @@ function drawTile(
 
 function drawSeamlessTerrainPatch(
   graphics: PhaserType.GameObjects.Graphics,
-  cellMap: CellMap,
+  _cellMap: CellMap,
   cell: WorldRenderCell,
   x: number,
   y: number,
   tileSize: number
 ) {
-  const { palette } = cell.terrain;
-  const topFill = blendHexColor(palette.fill, 0xf3dca6, 0.07);
-  const bottomFill = blendHexColor(palette.fill, 0x030504, 0.24);
   const patchX = Math.floor(x) - 1;
   const patchY = Math.floor(y) - 1;
   const patchSize = Math.ceil(tileSize) + 2;
 
-  graphics.fillGradientStyle(topFill, topFill, bottomFill, bottomFill, 1, 1, 1, 1);
+  graphics.fillGradientStyle(
+    blendHexColor(WORLD_GRASS_BASE_FILL, 0xf3dca6, 0.05),
+    blendHexColor(WORLD_GRASS_BASE_FILL, 0xf3dca6, 0.05),
+    WORLD_GRASS_BASE_DARK,
+    WORLD_GRASS_BASE_DARK,
+    1,
+    1,
+    1,
+    1
+  );
   graphics.fillRect(patchX, patchY, patchSize, patchSize);
 
-  const north = cellAt(cellMap, cell.x, cell.y - 1);
-  const east = cellAt(cellMap, cell.x + 1, cell.y);
-  const south = cellAt(cellMap, cell.x, cell.y + 1);
-  const west = cellAt(cellMap, cell.x - 1, cell.y);
-  const edgeWidth = Math.max(3, Math.floor(tileSize * 0.08));
+  if (cell.tile.kind === 'mud') {
+    drawIrregularMudPatch(graphics, x, y, tileSize);
+  }
+}
 
-  if (north && north.tile.kind !== cell.tile.kind) {
-    graphics.fillStyle(blendHexColor(palette.fill, north.terrain.palette.fill, 0.38), 0.34);
-    graphics.fillRect(patchX, patchY, patchSize, edgeWidth);
-  }
-  if (east && east.tile.kind !== cell.tile.kind) {
-    graphics.fillStyle(blendHexColor(palette.fill, east.terrain.palette.fill, 0.38), 0.34);
-    graphics.fillRect(patchX + patchSize - edgeWidth, patchY, edgeWidth, patchSize);
-  }
-  if (south && south.tile.kind !== cell.tile.kind) {
-    graphics.fillStyle(blendHexColor(palette.fill, south.terrain.palette.fill, 0.38), 0.34);
-    graphics.fillRect(patchX, patchY + patchSize - edgeWidth, patchSize, edgeWidth);
-  }
-  if (west && west.tile.kind !== cell.tile.kind) {
-    graphics.fillStyle(blendHexColor(palette.fill, west.terrain.palette.fill, 0.38), 0.34);
-    graphics.fillRect(patchX, patchY, edgeWidth, patchSize);
-  }
+function drawIrregularMudPatch(graphics: PhaserType.GameObjects.Graphics, x: number, y: number, tileSize: number) {
+  const centerX = x + tileSize * 0.5;
+  const centerY = y + tileSize * 0.53;
+
+  graphics.fillStyle(WORLD_MUD_PATCH_FILL, 0.86);
+  graphics.fillEllipse(centerX, centerY, tileSize * 0.82, tileSize * 0.64);
+  graphics.fillTriangle(
+    x + tileSize * 0.18,
+    y + tileSize * 0.5,
+    x + tileSize * 0.42,
+    y + tileSize * 0.18,
+    x + tileSize * 0.72,
+    y + tileSize * 0.58
+  );
+  graphics.fillTriangle(
+    x + tileSize * 0.24,
+    y + tileSize * 0.76,
+    x + tileSize * 0.66,
+    y + tileSize * 0.28,
+    x + tileSize * 0.84,
+    y + tileSize * 0.72
+  );
+  graphics.fillStyle(0x4f3422, 0.5);
+  graphics.fillEllipse(centerX - tileSize * 0.16, centerY + tileSize * 0.12, tileSize * 0.34, tileSize * 0.14);
+  graphics.fillStyle(0xd1a36f, 0.28);
+  graphics.fillRect(x + tileSize * 0.22, y + tileSize * 0.63, tileSize * 0.18, Math.max(2, tileSize * 0.035));
+  graphics.fillRect(x + tileSize * 0.58, y + tileSize * 0.34, tileSize * 0.2, Math.max(2, tileSize * 0.035));
 }
 
 function drawPixelTerrainDetail(
