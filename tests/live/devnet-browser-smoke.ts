@@ -450,6 +450,32 @@ async function runResetSmoke(page: Page, characterName: string) {
   };
 }
 
+async function runFogToggleSmoke(page: Page) {
+  await waitForConnectedPlayfield(page);
+  const before = await readCanvasDiagnostics(page);
+  const button = page.getByRole('button', { name: 'Beta Max View' });
+
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
+  await page.waitForFunction(
+    () => document.querySelector('button[aria-pressed="true"]')?.textContent?.includes('Beta Max View') ?? false,
+    null,
+    { timeout: 10_000 }
+  );
+  const after = await waitForCanvasInk(page);
+  const ariaPressed = await button.evaluate((element) => element.getAttribute('aria-pressed'));
+
+  if (ariaPressed !== 'true') {
+    throw new Error(`Beta Max View did not stay pressed after click: ${ariaPressed}`);
+  }
+
+  return {
+    beforeInkRatio: before.canvasInkRatio,
+    afterInkRatio: after.canvasInkRatio,
+    ariaPressed,
+  };
+}
+
 async function readPlayfieldRetentionDiagnostics(page: Page, characterName: string) {
   return page.evaluate((input) => {
     const bodyText = document.body.innerText;
@@ -718,6 +744,8 @@ async function runBrowserSmoke(
       activeCharacterName = resetSmoke.characterName;
     }
 
+    const fogToggleSmoke = await runFogToggleSmoke(page);
+
     const reconnectProbe =
       options.reconnectProbeMs > 0
         ? await runReconnectProbe(context, page, activeCharacterName, options.reconnectProbeMs)
@@ -759,6 +787,9 @@ async function runBrowserSmoke(
       const moveEntry = Array.from(document.querySelectorAll('.combat-log__entry--move')).find((node) =>
         node.textContent?.includes(moveText)
       );
+      const fieldNotesText = Array.from(document.querySelectorAll('.field-notes li'))
+        .map((node) => node.textContent?.toLowerCase() ?? '')
+        .join(' | ');
       const movementPad = document.querySelector('[aria-label="Movement controls"]');
       const movementPadRect = movementPad?.getBoundingClientRect();
       const commandInput = document.querySelector('#mud-command');
@@ -774,6 +805,7 @@ async function runBrowserSmoke(
             .map((node) => node.textContent)
             .filter(Boolean)
             .join(' | ') || null,
+        blockedHostileTextVisible: fieldNotesText.includes(' on rock') || fieldNotesText.includes(' on trees'),
         moveText,
         moveTextVisible: bodyText.includes(moveText),
         moveEntryText: moveEntry?.textContent ?? null,
@@ -818,6 +850,10 @@ async function runBrowserSmoke(
       throw new Error(`${profile.name} profile canvas rendered blank (ink ratio ${diagnostics.canvasInkRatio.toFixed(4)})`);
     }
 
+    if (diagnostics.blockedHostileTextVisible) {
+      throw new Error(`${profile.name} profile field notes rendered a hostile on blocked terrain: ${diagnostics.fieldNotes}`);
+    }
+
     if (!diagnostics.movementPadVisible || !diagnostics.commandInputVisible) {
       throw new Error(`${profile.name} profile did not render the command and movement controls`);
     }
@@ -832,6 +868,7 @@ async function runBrowserSmoke(
       websocketSeen,
       consoleErrors,
       resetSmoke,
+      fogToggleSmoke,
       reconnectProbe,
       movementSmoke,
       diagnostics,

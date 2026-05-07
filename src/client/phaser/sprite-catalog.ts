@@ -74,11 +74,12 @@ export interface ActorSpritePixelArt {
   blocks: readonly ActorSpritePixelBlock[];
 }
 
-const BASE_FRAME = { width: 32, height: 32 } as const;
+const BASE_FRAME = { width: 48, height: 48 } as const;
 const BOTTOM_CENTER_ANCHOR = { x: 0.5, y: 1 } as const;
 const PIXEL_STYLE = 'old-school-fantasy-rpg' as const;
 export const ACTOR_SPRITE_POSES = ['idle', 'step-left', 'step-right', 'strike'] as const;
 const DEFAULT_ACTOR_ANIMATION = { poses: ACTOR_SPRITE_POSES, fps: 5 } as const;
+const SPRITE_SCALE_32_TO_48 = 1.5;
 
 const px = (
   color: ActorSpritePaletteSlot,
@@ -88,6 +89,41 @@ const px = (
   height: number,
   alpha?: number,
 ): ActorSpritePixelBlock => (alpha === undefined ? { color, x, y, width, height } : { color, x, y, width, height, alpha });
+
+function splitPixelBlock(block: ActorSpritePixelBlock): ActorSpritePixelBlock[] {
+  const chunks: ActorSpritePixelBlock[] = [];
+  const maxChunk = 8;
+
+  for (let y = block.y; y < block.y + block.height; y += maxChunk) {
+    for (let x = block.x; x < block.x + block.width; x += maxChunk) {
+      chunks.push(
+        px(
+          block.color,
+          x,
+          y,
+          Math.min(maxChunk, block.x + block.width - x),
+          Math.min(maxChunk, block.y + block.height - y),
+          block.alpha,
+        )
+      );
+    }
+  }
+
+  return chunks;
+}
+
+function upscalePixelBlock(block: ActorSpritePixelBlock): ActorSpritePixelBlock[] {
+  const x = Math.min(BASE_FRAME.width - 1, Math.round(block.x * SPRITE_SCALE_32_TO_48));
+  const y = Math.min(BASE_FRAME.height - 1, Math.round(block.y * SPRITE_SCALE_32_TO_48));
+  const right = Math.min(BASE_FRAME.width, Math.round((block.x + block.width) * SPRITE_SCALE_32_TO_48));
+  const bottom = Math.min(BASE_FRAME.height, Math.round((block.y + block.height) * SPRITE_SCALE_32_TO_48));
+
+  return splitPixelBlock(px(block.color, x, y, Math.max(1, right - x), Math.max(1, bottom - y), block.alpha));
+}
+
+function spriteBlocks(baseBlocks: ActorSpritePixelBlock[], detailBlocks: ActorSpritePixelBlock[] = []): ActorSpritePixelBlock[] {
+  return [...baseBlocks.flatMap(upscalePixelBlock), ...detailBlocks.flatMap(splitPixelBlock)];
+}
 
 export function actorSpriteTextureKey(spriteKey: ActorSpriteKey, pose: ActorSpritePose) {
   return `${spriteKey}:${pose}`;
@@ -109,7 +145,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['mail shirt', 'heater shield', 'short sword'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 13, 5, 8, 3),
         px('shade', 12, 8, 10, 3),
         px('skin', 13, 9, 8, 5),
@@ -129,7 +165,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('shade', 18, 24, 4, 5),
         px('edge', 10, 29, 6, 2),
         px('edge', 18, 29, 6, 2),
-      ],
+      ], [
+        px('accent', 17, 20, 2, 2),
+        px('accent', 25, 20, 2, 2),
+        px('edge', 12, 25, 4, 3),
+        px('fill', 14, 26, 5, 3),
+        px('accent', 30, 12, 2, 18),
+        px('edge', 27, 11, 7, 2),
+      ]),
     },
   },
   'pc-rogue': {
@@ -142,8 +185,8 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
-      hints: ['deep hood', 'leather vest', 'twin knives'],
-      blocks: [
+      hints: ['deep hood', 'leather vest', 'twin dagger knives'],
+      blocks: spriteBlocks([
         px('edge', 12, 5, 8, 3),
         px('edge', 10, 8, 12, 4),
         px('fill', 12, 8, 8, 4),
@@ -162,7 +205,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('shade', 18, 25, 4, 4),
         px('edge', 10, 29, 6, 2),
         px('edge', 18, 29, 6, 2),
-      ],
+      ], [
+        px('shade', 18, 17, 8, 3),
+        px('skin', 20, 18, 5, 3),
+        px('accent', 7, 25, 9, 2),
+        px('accent', 32, 25, 9, 2),
+        px('edge', 6, 24, 4, 4),
+        px('edge', 38, 24, 4, 4),
+      ]),
     },
   },
   'pc-wizard': {
@@ -176,7 +226,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['pointed hat', 'star staff', 'stepped robe'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 15, 2, 4, 2),
         px('fill', 14, 4, 6, 3),
         px('edge', 13, 7, 8, 3),
@@ -195,7 +245,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('accent', 24, 6, 4, 4),
         px('accent', 23, 7, 6, 2),
         px('edge', 24, 5, 4, 1),
-      ],
+      ], [
+        px('accent', 24, 7, 3, 3),
+        px('skin', 20, 18, 8, 3),
+        px('shade', 19, 21, 10, 2),
+        px('accent', 24, 25, 3, 14),
+        px('accent', 36, 8, 8, 2),
+        px('edge', 39, 5, 3, 27),
+      ]),
     },
   },
   'pc-cleric': {
@@ -208,8 +265,8 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     animation: DEFAULT_ACTOR_ANIMATION,
     pixelArt: {
       style: PIXEL_STYLE,
-      hints: ['square coif', 'sun badge', 'pilgrim mace'],
-      blocks: [
+      hints: ['square coif', 'sun symbol badge', 'pilgrim mace'],
+      blocks: spriteBlocks([
         px('edge', 12, 5, 10, 4),
         px('fill', 13, 6, 8, 4),
         px('edge', 11, 9, 12, 5),
@@ -228,7 +285,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('shade', 18, 26, 4, 3),
         px('edge', 10, 29, 6, 2),
         px('edge', 18, 29, 6, 2),
-      ],
+      ], [
+        px('accent', 23, 23, 3, 9),
+        px('accent', 20, 26, 9, 3),
+        px('skin', 20, 16, 8, 3),
+        px('fill', 10, 29, 6, 8),
+        px('accent', 35, 20, 6, 6),
+        px('edge', 38, 15, 3, 23),
+      ]),
     },
   },
   'pc-ally': {
@@ -242,7 +306,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['travel cloak', 'round cap', 'small lantern'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 12, 6, 9, 3),
         px('fill', 13, 7, 7, 3),
         px('edge', 11, 9, 11, 5),
@@ -259,7 +323,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('shade', 18, 26, 4, 3),
         px('edge', 10, 29, 6, 2),
         px('edge', 18, 29, 6, 2),
-      ],
+      ], [
+        px('accent', 11, 30, 5, 8),
+        px('accent', 12, 28, 3, 3),
+        px('skin', 20, 16, 7, 3),
+        px('detail', 22, 25, 5, 12),
+        px('fill', 16, 22, 4, 16),
+        px('edge', 32, 25, 3, 13),
+      ]),
     },
   },
   'mob-briar-goblin': {
@@ -273,7 +344,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['pointed ears', 'briar spear', 'crouched stance'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 8, 10, 6, 4),
         px('edge', 20, 10, 6, 4),
         px('skin', 9, 11, 5, 3),
@@ -293,7 +364,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('shade', 19, 24, 4, 4),
         px('edge', 10, 28, 6, 2),
         px('edge', 18, 28, 6, 2),
-      ],
+      ], [
+        px('shade', 21, 18, 2, 2),
+        px('shade', 28, 18, 2, 2),
+        px('skin', 10, 19, 7, 3),
+        px('skin', 31, 19, 7, 3),
+        px('accent', 37, 8, 2, 28),
+        px('detail', 35, 7, 6, 5),
+      ]),
     },
   },
   'mob-sap-wolf': {
@@ -307,7 +385,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['low wolf body', 'sap-streak muzzle', 'raised tail'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 5, 16, 6, 4),
         px('shade', 6, 17, 5, 3),
         px('edge', 9, 17, 14, 7),
@@ -325,7 +403,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('shade', 20, 24, 2, 5),
         px('edge', 9, 29, 5, 2),
         px('edge', 18, 29, 5, 2),
-      ],
+      ], [
+        px('accent', 40, 24, 2, 2),
+        px('shade', 14, 28, 14, 3),
+        px('detail', 18, 29, 14, 2),
+        px('edge', 35, 17, 7, 7),
+        px('fill', 36, 19, 5, 5),
+        px('skin', 38, 29, 5, 2),
+      ]),
     },
   },
   'mob-root-troll': {
@@ -339,7 +424,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['broad root body', 'branch horns', 'heavy fists'],
-      blocks: [
+      blocks: spriteBlocks([
         px('detail', 10, 3, 3, 5),
         px('detail', 20, 3, 3, 5),
         px('edge', 11, 7, 12, 6),
@@ -359,7 +444,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('detail', 21, 25, 5, 4),
         px('edge', 7, 29, 7, 2),
         px('edge', 20, 29, 7, 2),
-      ],
+      ], [
+        px('detail', 15, 4, 4, 9),
+        px('detail', 30, 4, 4, 9),
+        px('shade', 20, 19, 4, 3),
+        px('shade', 28, 19, 4, 3),
+        px('accent', 17, 26, 5, 4),
+        px('accent', 27, 26, 5, 4),
+      ]),
     },
   },
   'mob-vampire-lord': {
@@ -373,7 +465,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['high collar', 'dark cape', 'pale noble face'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 11, 6, 12, 4),
         px('fill', 12, 7, 10, 5),
         px('skin', 14, 8, 6, 6),
@@ -392,7 +484,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('edge', 18, 29, 6, 2),
         px('accent', 15, 10, 1, 1),
         px('accent', 19, 10, 1, 1),
-      ],
+      ], [
+        px('edge', 15, 8, 18, 3),
+        px('detail', 11, 22, 6, 18),
+        px('detail', 31, 22, 6, 18),
+        px('accent', 22, 17, 2, 2),
+        px('accent', 29, 17, 2, 2),
+        px('shade', 18, 25, 14, 10),
+      ]),
     },
   },
   'mob-generic': {
@@ -406,7 +505,7 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
     pixelArt: {
       style: PIXEL_STYLE,
       hints: ['lumpy brute', 'single eye glint', 'claw hands'],
-      blocks: [
+      blocks: spriteBlocks([
         px('edge', 12, 7, 9, 5),
         px('fill', 13, 8, 7, 5),
         px('accent', 16, 10, 2, 2),
@@ -424,7 +523,14 @@ export const ACTOR_SPRITES: Record<ActorSpriteKey, ActorSpriteSpec> = {
         px('edge', 18, 29, 7, 2),
         px('accent', 12, 6, 2, 2),
         px('accent', 20, 6, 2, 2),
-      ],
+      ], [
+        px('accent', 18, 10, 3, 3),
+        px('accent', 30, 10, 3, 3),
+        px('skin', 19, 14, 10, 3),
+        px('shade', 19, 28, 12, 6),
+        px('skin', 7, 31, 6, 4),
+        px('skin', 36, 31, 6, 4),
+      ]),
     },
   },
 };

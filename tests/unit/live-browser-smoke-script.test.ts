@@ -39,6 +39,12 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('document.elementFromPoint');
     expect(script).toContain('navigator.maxTouchPoints');
     expect(script).toContain('await button.tap()');
+    expect(script).toContain('async function runFogToggleSmoke');
+    expect(script).toContain("getByRole('button', { name: 'Beta Max View' })");
+    expect(script).toContain('fogToggleSmoke');
+    expect(script).toContain('blockedHostileTextVisible');
+    expect(script).toContain("includes(' on rock')");
+    expect(script).toContain("includes(' on trees')");
     expect(script).toContain('context.setOffline(true)');
     expect(script).toContain('context.setOffline(false)');
     expect(script).toContain('idleStable');

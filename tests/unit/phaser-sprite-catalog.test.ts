@@ -25,16 +25,19 @@ describe('Phaser actor sprite catalog', () => {
     );
 
     for (const spec of Object.values(ACTOR_SPRITES)) {
-      expect([32, 48]).toContain(spec.frame.width);
+      expect(spec.frame.width).toBe(48);
       expect(spec.frame.height).toBe(spec.frame.width);
       expect(spec.anchor).toEqual({ x: 0.5, y: 1 });
       expect(Object.keys(spec.palette).length).toBeLessThanOrEqual(6);
       expect(spec.pixelArt.style).toBe('old-school-fantasy-rpg');
       expect(spec.pixelArt.hints.length).toBeGreaterThanOrEqual(2);
-      expect(spec.pixelArt.blocks.length).toBeGreaterThanOrEqual(8);
+      expect(spec.pixelArt.blocks.length).toBeGreaterThanOrEqual(spec.key.startsWith('pc-') ? 28 : 24);
       expect(spec.animation.poses).toEqual(ACTOR_SPRITE_POSES);
       expect(spec.animation.fps).toBeGreaterThanOrEqual(3);
       expect(spec.animation.fps).toBeLessThanOrEqual(8);
+
+      const usedPaletteSlots = new Set(spec.pixelArt.blocks.map((block) => block.color));
+      expect(usedPaletteSlots.size).toBeGreaterThanOrEqual(5);
 
       for (const block of spec.pixelArt.blocks) {
         expect(Object.prototype.hasOwnProperty.call(spec.palette, block.color)).toBe(true);
@@ -48,8 +51,20 @@ describe('Phaser actor sprite catalog', () => {
         expect(block.y).toBeGreaterThanOrEqual(0);
         expect(block.x + block.width).toBeLessThanOrEqual(spec.frame.width);
         expect(block.y + block.height).toBeLessThanOrEqual(spec.frame.height);
+        expect(block.width * block.height).toBeLessThanOrEqual(96);
       }
     }
+  });
+
+  it('keeps each player class visually distinguishable through old-school equipment silhouettes', () => {
+    expect(ACTOR_SPRITES['pc-fighter'].pixelArt.hints.join(' ')).toMatch(/shield/i);
+    expect(ACTOR_SPRITES['pc-fighter'].pixelArt.hints.join(' ')).toMatch(/sword/i);
+    expect(ACTOR_SPRITES['pc-rogue'].pixelArt.hints.join(' ')).toMatch(/hood/i);
+    expect(ACTOR_SPRITES['pc-rogue'].pixelArt.hints.join(' ')).toMatch(/knife|dagger/i);
+    expect(ACTOR_SPRITES['pc-wizard'].pixelArt.hints.join(' ')).toMatch(/hat/i);
+    expect(ACTOR_SPRITES['pc-wizard'].pixelArt.hints.join(' ')).toMatch(/staff/i);
+    expect(ACTOR_SPRITES['pc-cleric'].pixelArt.hints.join(' ')).toMatch(/badge|symbol/i);
+    expect(ACTOR_SPRITES['pc-cleric'].pixelArt.hints.join(' ')).toMatch(/mace/i);
   });
 
   it('resolves class and monster labels to stable sprite keys', () => {

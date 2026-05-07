@@ -30,12 +30,13 @@ const TEXTURE_FILTER_NEAREST = 1 as PhaserType.Textures.FilterMode;
 const WORLD_GRASS_BASE_FILL = 0x3f7d45;
 const WORLD_GRASS_BASE_DARK = 0x254b30;
 const WORLD_MUD_PATCH_FILL = 0x765033;
-const HERO_SPRITE_TILE_RATIO = 0.46;
-const ALLY_SPRITE_TILE_RATIO = 0.4;
-const MONSTER_SPRITE_TILE_RATIO = 0.44;
-const ACTIVE_MONSTER_SPRITE_TILE_RATIO = 0.5;
+const HERO_SPRITE_TILE_RATIO = 0.42;
+const ALLY_SPRITE_TILE_RATIO = 0.37;
+const MONSTER_SPRITE_TILE_RATIO = 0.4;
+const ACTIVE_MONSTER_SPRITE_TILE_RATIO = 0.46;
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
+type WorldRenderBounds = ReturnType<typeof buildWorldRenderModel>['bounds'];
 type CellMap = Map<string, WorldRenderCell>;
 type RuntimeGameObject = PhaserType.GameObjects.GameObject;
 
@@ -181,8 +182,15 @@ function drawSnapshot(
     const y = originY + (cell.y - model.bounds.minY) * (tileSize + gap);
 
     drawTile(graphics, snapshot, cellMap, cell, x, y, tileSize, pulse);
+  }
 
-    if (cell.character || cell.monster) {
+  drawContinuousFogLayer(graphics, model.cells, model.bounds, originX, originY, tileSize, gap, pulse);
+
+  for (const cell of model.cells) {
+    const x = originX + (cell.x - model.bounds.minX) * (tileSize + gap);
+    const y = originY + (cell.y - model.bounds.minY) * (tileSize + gap);
+
+    if (!cell.fogged && (cell.character || cell.monster)) {
       drawOccupants(scene, graphics, labels, snapshot, cell, x, y, tileSize);
     }
   }
@@ -296,11 +304,11 @@ function drawActorSpriteTexture(graphics: PhaserType.GameObjects.Graphics, spec:
 
 function poseActorSpriteBlock(spec: ActorSpriteSpec, block: ActorSpritePixelBlock, pose: ActorSpritePose) {
   const middleX = spec.frame.width / 2;
-  const isHead = block.y < 14;
-  const isBody = block.y >= 14 && block.y < 25;
+  const isHead = block.y < spec.frame.height * 0.45;
+  const isBody = block.y >= spec.frame.height * 0.36 && block.y < spec.frame.height * 0.8;
   const isFoot = block.y >= spec.frame.height - 8;
   const isRightSide = block.x >= middleX;
-  const isWeaponOrHand = (isRightSide && block.y >= 7 && block.y <= 25) || block.width <= 3;
+  const isWeaponOrHand = (isRightSide && block.y >= spec.frame.height * 0.16 && block.y <= spec.frame.height * 0.8) || block.width <= 3;
   let x = block.x;
   let y = block.y;
 
@@ -386,7 +394,6 @@ function drawTile(
   pulse: number
 ) {
   if (cell.fogged) {
-    drawFogVeil(graphics, x, y, tileSize, pulse);
     return;
   }
 
@@ -442,24 +449,81 @@ function drawTile(
   }
 }
 
-function drawFogVeil(
+function drawContinuousFogLayer(
   graphics: PhaserType.GameObjects.Graphics,
-  x: number,
-  y: number,
+  cells: WorldRenderCell[],
+  bounds: WorldRenderBounds,
+  originX: number,
+  originY: number,
   tileSize: number,
+  gap: number,
   pulse: number
 ) {
-  graphics.fillStyle(0x020605, 0.88);
-  graphics.fillRect(x - 1, y - 1, tileSize + 2, tileSize + 2);
-  graphics.fillStyle(0x0d1715, 0.78);
-  graphics.fillEllipse(x + tileSize * 0.45, y + tileSize * 0.42, tileSize * 0.88, tileSize * 0.72);
-  graphics.fillStyle(0x111f1c, 0.48 + pulse * 0.12);
-  graphics.fillEllipse(x + tileSize * 0.68, y + tileSize * 0.68, tileSize * 0.74, tileSize * 0.5);
-  graphics.fillStyle(0x60705b, 0.1);
-  for (let index = 0; index < 4; index += 1) {
+  const foggedCells = cells.filter((cell) => cell.fogged);
+
+  if (foggedCells.length === 0) {
+    return;
+  }
+
+  for (const cell of foggedCells) {
+    drawFogCellMask(graphics, cell, bounds, originX, originY, tileSize, gap, pulse);
+  }
+
+  drawFogWisps(graphics, foggedCells, bounds, originX, originY, tileSize, gap, pulse);
+}
+
+function drawFogCellMask(
+  graphics: PhaserType.GameObjects.Graphics,
+  cell: WorldRenderCell,
+  bounds: WorldRenderBounds,
+  originX: number,
+  originY: number,
+  tileSize: number,
+  gap: number,
+  pulse: number
+) {
+  const left = originX + (cell.x - bounds.minX) * (tileSize + gap);
+  const top = originY + (cell.y - bounds.minY) * (tileSize + gap);
+  const edgeAlpha = 0.72 + pulse * 0.08;
+
+  graphics.fillGradientStyle(0x020605, 0x06100e, 0x091511, 0x020504, edgeAlpha, 0.84, 0.86, edgeAlpha);
+  graphics.fillRect(left - 1, top - 1, tileSize + 2, tileSize + 2);
+}
+
+function drawFogWisps(
+  graphics: PhaserType.GameObjects.Graphics,
+  foggedCells: WorldRenderCell[],
+  bounds: WorldRenderBounds,
+  originX: number,
+  originY: number,
+  tileSize: number,
+  gap: number,
+  pulse: number
+) {
+  const wispCount = Math.min(18, Math.max(8, Math.ceil(foggedCells.length / 5)));
+
+  for (let index = 0; index < wispCount; index += 1) {
+    const cell = foggedCells[(index * 7) % foggedCells.length];
+    const left = originX + (cell.x - bounds.minX) * (tileSize + gap);
+    const top = originY + (cell.y - bounds.minY) * (tileSize + gap);
+    const centerX = left + tileSize * (((index * 37) % 80) / 100 + 0.1);
+    const centerY = top + tileSize * (((index * 53) % 80) / 100 + 0.1);
+    const width = tileSize * (1.35 + ((index % 3) * 0.22));
+    const height = tileSize * (0.58 + ((index % 4) * 0.1));
+
+    graphics.fillStyle(index % 2 === 0 ? 0x13211f : 0x0b1816, 0.24 + pulse * 0.08);
+    graphics.fillEllipse(centerX, centerY, width, height);
+  }
+
+  graphics.fillStyle(0x758568, 0.08);
+  for (let index = 0; index < Math.min(64, foggedCells.length * 2); index += 1) {
+    const cell = foggedCells[(index * 11) % foggedCells.length];
+    const left = originX + (cell.x - bounds.minX) * (tileSize + gap);
+    const top = originY + (cell.y - bounds.minY) * (tileSize + gap);
+
     graphics.fillRect(
-      x + ((index * 17 + 9) % Math.max(1, Math.floor(tileSize - 3))),
-      y + ((index * 23 + 13) % Math.max(1, Math.floor(tileSize - 3))),
+      left + ((index * 17 + 9) % Math.max(1, Math.floor(tileSize - 3))),
+      top + ((index * 23 + 13) % Math.max(1, Math.floor(tileSize - 3))),
       2,
       2
     );
