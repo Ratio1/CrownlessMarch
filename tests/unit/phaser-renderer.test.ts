@@ -32,11 +32,22 @@ describe('Phaser renderer configuration', () => {
     expect(source).toContain('const TILE_GAP = 0;');
     expect(source).toContain('WORLD_GRASS_BASE_FILL');
     expect(source).toContain('drawWorldGroundBase');
-    expect(source).toContain('drawIrregularMudPatch');
+    expect(source).toContain('drawMudGroundPatch');
     expect(source).toContain('drawSeamlessTerrainPatch');
     expect(source).toContain('drawPixelTerrainDetail');
+    expect(source).toContain('drawFogVeil');
     expect(source).not.toContain('drawObjectiveTrail');
+    expect(source).not.toContain('bladeX');
     expect(source).not.toContain('strokeRoundedRect(x, y, tileSize, tileSize');
     expect(source).not.toContain('fillRoundedRect(x, y, tileSize, tileSize');
+  });
+
+  it('keeps actor sprites smaller and unobstructed by marker initials', () => {
+    const source = readSource('src/client/phaser/createGame.ts');
+
+    expect(source).toContain('const HERO_SPRITE_TILE_RATIO = 0.46;');
+    expect(source).toContain('const MONSTER_SPRITE_TILE_RATIO = 0.44;');
+    expect(source).not.toContain('shortMarkerLabel(cell.character');
+    expect(source).not.toContain('shortMarkerLabel(monster.label');
   });
 });

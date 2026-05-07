@@ -6,13 +6,19 @@ import type { GameplayShardSnapshot } from '@/shared/gameplay';
 
 interface WorldCanvasProps {
   snapshot: GameplayShardSnapshot | null;
+  revealFog: boolean;
 }
 
-export function WorldCanvas({ snapshot }: WorldCanvasProps) {
+export function WorldCanvas({ snapshot, revealFog }: WorldCanvasProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<ThornwritheGameBridge | null>(null);
   const latestSnapshotRef = useRef<GameplayShardSnapshot | null>(null);
+  const latestRevealFogRef = useRef(revealFog);
   const encounter = snapshot?.encounter ?? null;
+
+  useEffect(() => {
+    latestRevealFogRef.current = revealFog;
+  }, [revealFog]);
 
   useEffect(() => {
     let disposed = false;
@@ -48,7 +54,7 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
       const queuedSnapshot = latestSnapshotRef.current;
 
       if (queuedSnapshot) {
-        game.render(queuedSnapshot);
+        game.render(queuedSnapshot, { revealFog: latestRevealFogRef.current });
       }
     });
 
@@ -67,8 +73,8 @@ export function WorldCanvas({ snapshot }: WorldCanvasProps) {
       return;
     }
 
-    gameRef.current.render(snapshot);
-  }, [snapshot]);
+    gameRef.current.render(snapshot, { revealFog });
+  }, [revealFog, snapshot]);
 
   return (
     <section className="world-canvas" aria-label="World canvas">

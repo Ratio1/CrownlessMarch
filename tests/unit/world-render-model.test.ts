@@ -26,6 +26,37 @@ function createSnapshot(): GameplayShardSnapshot {
       { x: 5, y: 6, kind: 'grass', blocked: false },
       { x: 6, y: 6, kind: 'grass', blocked: false },
     ],
+    maximumVision: {
+      radius: 2,
+      size: 5,
+    },
+    maximumVisibleTiles: [
+      { x: 3, y: 3, kind: 'grass', blocked: false },
+      { x: 4, y: 3, kind: 'grass', blocked: false },
+      { x: 5, y: 3, kind: 'grass', blocked: false },
+      { x: 6, y: 3, kind: 'forest', blocked: true },
+      { x: 7, y: 3, kind: 'mud', blocked: false },
+      { x: 3, y: 4, kind: 'grass', blocked: false },
+      { x: 4, y: 4, kind: 'forest', blocked: true },
+      { x: 5, y: 4, kind: 'grass', blocked: false },
+      { x: 6, y: 4, kind: 'mud', blocked: false },
+      { x: 7, y: 4, kind: 'grass', blocked: false },
+      { x: 3, y: 5, kind: 'grass', blocked: false },
+      { x: 4, y: 5, kind: 'forest', blocked: true },
+      { x: 5, y: 5, kind: 'grass', blocked: false },
+      { x: 6, y: 5, kind: 'stone', blocked: true },
+      { x: 7, y: 5, kind: 'mud', blocked: false },
+      { x: 3, y: 6, kind: 'stone', blocked: true },
+      { x: 4, y: 6, kind: 'stone', blocked: true },
+      { x: 5, y: 6, kind: 'grass', blocked: false },
+      { x: 6, y: 6, kind: 'grass', blocked: false },
+      { x: 7, y: 6, kind: 'grass', blocked: false },
+      { x: 3, y: 7, kind: 'grass', blocked: false },
+      { x: 4, y: 7, kind: 'grass', blocked: false },
+      { x: 5, y: 7, kind: 'grass', blocked: false },
+      { x: 6, y: 7, kind: 'stone', blocked: true },
+      { x: 7, y: 7, kind: 'grass', blocked: false },
+    ],
     characters: {
       hero: {
         cid: 'hero-cid',
@@ -47,6 +78,22 @@ function createSnapshot(): GameplayShardSnapshot {
         position: { x: 6, y: 4 },
         behavior: 'ambush',
         level: 1,
+      },
+    },
+    maximumMonsters: {
+      goblin: {
+        id: 'goblin-1',
+        label: 'Briar Goblin',
+        position: { x: 6, y: 4 },
+        behavior: 'ambush',
+        level: 1,
+      },
+      wolf: {
+        id: 'wolf-1',
+        label: 'Sap Wolf',
+        position: { x: 7, y: 5 },
+        behavior: 'skirmisher',
+        level: 2,
       },
     },
     character: {
@@ -103,29 +150,38 @@ function createSnapshot(): GameplayShardSnapshot {
 }
 
 describe('world render model', () => {
-  it('builds stable bounds and row-major cells for the visible fog window', () => {
+  it('builds stable bounds and row-major cells for the max fog frame', () => {
     const model = buildWorldRenderModel(createSnapshot());
 
     expect(model.bounds).toEqual({
-      minX: 4,
-      maxX: 6,
-      minY: 4,
-      maxY: 6,
-      columns: 3,
-      rows: 3,
+      minX: 3,
+      maxX: 7,
+      minY: 3,
+      maxY: 7,
+      columns: 5,
+      rows: 5,
     });
     expect(model.activeQuest?.id).toBe('survey-the-briar-edge');
     expect(model.currentTerrain.label).toBe('Grass');
-    expect(model.cells).toHaveLength(9);
-    expect(model.cells[0]?.key).toBe('4:4');
-    expect(model.cells[4]?.isCurrent).toBe(true);
-    expect(model.cells[8]?.isObjectiveTarget).toBe(true);
-    expect(model.cells[5]?.tile.blocked).toBe(true);
-    expect(model.cells[2]?.monster?.label).toBe('Briar Goblin');
-    expect(model.cells[2]?.monsterRole).toBe('visible-threat');
-    expect(model.cells[1]?.character?.name).toBe('Reed Warden');
-    expect(model.cells[1]?.characterRole).toBe('ally');
-    expect(model.cells[4]?.characterRole).toBe('hero');
+    expect(model.cells).toHaveLength(25);
+    expect(model.cells[0]?.key).toBe('3:3');
+    expect(model.cells.find((cell) => cell.key === '5:5')?.isCurrent).toBe(true);
+    expect(model.cells.find((cell) => cell.key === '6:6')?.isObjectiveTarget).toBe(true);
+    expect(model.cells.find((cell) => cell.key === '6:5')?.tile.blocked).toBe(true);
+    expect(model.cells.find((cell) => cell.key === '6:4')?.monster?.label).toBe('Briar Goblin');
+    expect(model.cells.find((cell) => cell.key === '6:4')?.monsterRole).toBe('visible-threat');
+    expect(model.cells.find((cell) => cell.key === '5:4')?.character?.name).toBe('Reed Warden');
+    expect(model.cells.find((cell) => cell.key === '5:4')?.characterRole).toBe('ally');
+    expect(model.cells.find((cell) => cell.key === '5:5')?.characterRole).toBe('hero');
+    expect(model.cells.find((cell) => cell.key === '3:3')?.fogged).toBe(true);
+    expect(model.cells.find((cell) => cell.key === '5:5')?.fogged).toBe(false);
+  });
+
+  it('reveals max-view monsters when the beta fog override is active', () => {
+    const model = buildWorldRenderModel(createSnapshot(), { revealFog: true });
+
+    expect(model.cells.find((cell) => cell.key === '7:5')?.fogged).toBe(false);
+    expect(model.cells.find((cell) => cell.key === '7:5')?.monster?.label).toBe('Sap Wolf');
   });
 
   it('marks the current encounter monster as the active threat for stronger rendering', () => {

@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { pointBuyBudgetForLevel, validatePointBuy } from '@/shared/domain/point-buy';
+import {
+  POINT_BUY_BUDGET,
+  POINT_BUY_MAX_SCORE,
+  POINT_BUY_MIN_SCORE,
+  getDefaultAttributes,
+  levelUpAttributePoints,
+  validatePointBuy,
+} from '@/shared/domain/point-buy';
 import { attributes, characterClasses, type AttributeSet, type CharacterClass } from '@/shared/domain/types';
 import type { GameplayShardSnapshot } from '@/shared/gameplay';
 
@@ -27,20 +34,13 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
   const cardAttributes = card?.attributes ?? null;
   const [name, setName] = useState(card?.name ?? '');
   const [classId, setClassId] = useState<CharacterClass>((card?.classId as CharacterClass | undefined) ?? 'fighter');
-  const [values, setValues] = useState<AttributeSet>(card ? cloneAttributes(card.attributes) : {
-    strength: 10,
-    dexterity: 10,
-    constitution: 10,
-    intelligence: 10,
-    wisdom: 10,
-    charisma: 10,
-  });
+  const [values, setValues] = useState<AttributeSet>(card ? cloneAttributes(card.attributes) : getDefaultAttributes());
   const [showResetForm, setShowResetForm] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const budget = pointBuyBudgetForLevel(card?.realLevel ?? 1);
-  const pointBuy = validatePointBuy(values, budget);
+  const abilityRaises = levelUpAttributePoints(card?.realLevel ?? 1);
+  const pointBuy = validatePointBuy(values, { abilityRaises });
   const canSubmit = Boolean(card) && name.trim().length >= 3 && pointBuy.valid && !pending;
 
   useEffect(() => {
@@ -124,9 +124,15 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
             </select>
           </label>
           <div className="point-buy-summary">
-            <span>Points spent</span>
+            <span>Point-buy spent</span>
             <strong>
-              {pointBuy.spent}/{budget}
+              {pointBuy.spent}/{POINT_BUY_BUDGET}
+            </strong>
+            <span>Remaining</span>
+            <strong>{pointBuy.remaining}</strong>
+            <span>Ability raises used</span>
+            <strong>
+              {pointBuy.usedAbilityRaises}/{abilityRaises}
             </strong>
           </div>
           <div className="attribute-grid character-reset-panel__attrs">
@@ -134,8 +140,8 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
               <label className="field" key={attribute}>
                 <span>{attribute === 'constitution' ? 'Endurance' : formatLabel(attribute)}</span>
                 <input
-                  min={8}
-                  max={18}
+                  min={POINT_BUY_MIN_SCORE}
+                  max={POINT_BUY_MAX_SCORE}
                   step={1}
                   type="number"
                   value={values[attribute]}
@@ -161,7 +167,11 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
             </span>
           </label>
           {error ? <p className="error">{error}</p> : null}
-          {!error && !pointBuy.valid ? <p className="error">This spread exceeds the level {card.realLevel} reset budget.</p> : null}
+          {!error && !pointBuy.valid ? (
+            <p className="error">
+              This spread exceeds the 30-point pool plus {abilityRaises} level ability raise{abilityRaises === 1 ? '' : 's'}.
+            </p>
+          ) : null}
           <div className="character-reset-panel__actions">
             <button className="secondary-button" disabled={pending} onClick={() => setShowResetForm(false)} type="button">
               Cancel

@@ -371,6 +371,98 @@ describe('shard runtime', () => {
     });
   });
 
+  it('never exposes or starts a hostile encounter on blocked terrain', async () => {
+    const content = await loadContentBundle(process.cwd());
+    const blockedContent = JSON.parse(JSON.stringify(content)) as typeof content;
+    const laneTile = blockedContent.region.tiles.find((tile) => tile.x === 6 && tile.y === 5);
+
+    if (!laneTile) {
+      throw new Error('Expected watchpost lane tile in test content.');
+    }
+
+    laneTile.kind = 'stone';
+    laneTile.blocked = true;
+
+    const runtime = new ShardRuntime({ content: blockedContent });
+    const initial = runtime.addPlayer({
+      cid: 'cid-blocked-hostile',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Basalt',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+        activeQuestIds: ['burn-the-first-nest'],
+      }),
+    });
+
+    expect(Object.values(initial.snapshot.monsters).some((monster) => monster.position.x === 6 && monster.position.y === 5)).toBe(false);
+    expect(Object.values(initial.snapshot.maximumMonsters ?? {}).some((monster) => monster.position.x === 6 && monster.position.y === 5)).toBe(false);
+
+    const blocked = runtime.movePlayer('cid-blocked-hostile', 'east');
+
+    expect(blocked.snapshot.position).toEqual({ x: 5, y: 5 });
+    expect(blocked.snapshot.encounter).toBeNull();
+    expect(blocked.snapshot.currentTile.kind).toBe('grass');
+  });
+
+  it('keeps a defeated hostile cleared when the next move bumps into an obstacle', async () => {
+    const content = await loadContentBundle(process.cwd());
+    let now = Date.parse('2026-05-07T06:00:00.000Z');
+    const runtime = new ShardRuntime({
+      content,
+      now: () => now,
+      random: makeRandom([
+        0.9,
+        0.1,
+        0.95,
+        0.9,
+        0.0,
+        0.95,
+        0.8,
+      ]),
+    });
+
+    runtime.addPlayer({
+      cid: 'cid-cleared-after-win',
+      position: { x: 5, y: 5 },
+      ...buildInitialCharacterSnapshot({
+        name: 'Clearblade',
+        classId: 'fighter',
+        attributes: {
+          strength: 15,
+          dexterity: 13,
+          constitution: 12,
+          intelligence: 10,
+          wisdom: 10,
+          charisma: 8,
+        },
+        activeQuestIds: ['burn-the-first-nest'],
+      }),
+    });
+
+    const encounterStart = runtime.movePlayer('cid-cleared-after-win', 'east');
+    expect(encounterStart.snapshot.encounter?.status).toBe('active');
+
+    now += 4_100;
+    const resolved = runtime.tickPlayer('cid-cleared-after-win');
+    expect(resolved.snapshot.encounter?.status).toBe('won');
+    expect(Object.values(resolved.snapshot.monsters).some((monster) => monster.position.x === 6 && monster.position.y === 5)).toBe(false);
+
+    const blocked = runtime.movePlayer('cid-cleared-after-win', 'north');
+
+    expect(blocked.snapshot.position).toEqual({ x: 6, y: 5 });
+    expect(blocked.snapshot.currentTile.kind).toBe('mud');
+    expect(blocked.snapshot.encounter).toBeNull();
+    expect(Object.values(blocked.snapshot.monsters).some((monster) => monster.position.x === 6 && monster.position.y === 5)).toBe(false);
+  });
+
   it('starts combat on hostile movement and produces a durable progression write once the fight resolves', async () => {
     const content = await loadContentBundle(process.cwd());
     let now = Date.parse('2026-04-22T06:00:00.000Z');
@@ -649,7 +741,7 @@ describe('shard runtime', () => {
 
     runtime.addPlayer({
       cid: 'cid-loss-1',
-      position: { x: 6, y: 4 },
+      position: { x: 6, y: 6 },
       ...snapshot,
       hitPoints: {
         ...snapshot.hitPoints,
@@ -657,7 +749,7 @@ describe('shard runtime', () => {
       },
     });
 
-    runtime.movePlayer('cid-loss-1', 'south');
+    runtime.movePlayer('cid-loss-1', 'north');
     now += 4_100;
     const resolved = runtime.tickPlayer('cid-loss-1');
 
@@ -707,7 +799,7 @@ describe('shard runtime', () => {
 
     runtime.addPlayer({
       cid: 'cid-loss-2',
-      position: { x: 6, y: 4 },
+      position: { x: 6, y: 6 },
       ...snapshot,
       hitPoints: {
         ...snapshot.hitPoints,
@@ -720,7 +812,7 @@ describe('shard runtime', () => {
       },
     });
 
-    runtime.movePlayer('cid-loss-2', 'south');
+    runtime.movePlayer('cid-loss-2', 'north');
     now += 4_100;
     const resolved = runtime.tickPlayer('cid-loss-2');
 

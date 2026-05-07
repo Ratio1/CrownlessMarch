@@ -1,7 +1,7 @@
 import type { ContentBundle } from '../content/load-content';
 import type { ItemRecord, MonsterRecord } from '../../shared/content/schema';
 import { DEFAULT_GAME_RULES, getWeaponRule, isEvilAlignment } from '../../shared/content/game-rules';
-import { getVisionWindow } from '../../shared/domain/fog';
+import { getMaximumVisionWindow, getVisionWindow } from '../../shared/domain/fog';
 import { getDefaultAttributes } from '../../shared/domain/point-buy';
 import {
   addInventoryItem,
@@ -669,8 +669,12 @@ function toObjectiveFocus(snapshot: Record<string, unknown>, content: ContentBun
 
 function resolveHostileMonsterId(
   snapshot: Record<string, unknown>,
-  tile: { x: number; y: number; kind: GameplayTileSnapshot['kind'] }
+  tile: { x: number; y: number; kind: GameplayTileSnapshot['kind']; blocked?: boolean }
 ) {
+  if (tile.blocked) {
+    return null;
+  }
+
   if (isTilePosition(tile, WATCHPOST_LANE_TILE)) {
     return 'briar-goblin';
   }
@@ -822,7 +826,11 @@ export class ShardRuntime implements ShardRuntimeLike {
 
   addPlayer(character: CharacterSnapshot): ShardRuntimeUpdate {
     const normalizedSnapshot = normalizeDurableProgression(character, this.content.rules);
-    const position = isPosition(character.position) ? clone(character.position) : clone(this.content.region.spawn);
+    const requestedPosition = isPosition(character.position) ? clone(character.position) : clone(this.content.region.spawn);
+    const position =
+      this.isWithinBounds(requestedPosition) && !this.getTileAt(requestedPosition.x, requestedPosition.y).blocked
+        ? requestedPosition
+        : clone(this.content.region.spawn);
     const nextPlayer: RuntimePlayerState = {
       cid: character.cid,
       snapshot: normalizedSnapshot,
@@ -862,7 +870,6 @@ export class ShardRuntime implements ShardRuntimeLike {
 
     if (player.activeEncounter) {
       player.activeEncounter = null;
-      player.clearedHostileTiles.clear();
     }
 
     const delta = DIRECTION_DELTAS[direction];
@@ -1080,7 +1087,9 @@ export class ShardRuntime implements ShardRuntimeLike {
       (x, y) => this.getTileAt(x, y),
       (position) => this.isWithinBounds(position)
     );
-    const hostileId = resolveHostileMonsterId(player.snapshot, tile);
+    const hostileId = player.clearedHostileTiles.has(cellKey(tile.x, tile.y))
+      ? null
+      : resolveHostileMonsterId(player.snapshot, tile);
     const hostile = hostileId ? this.content.monsters.find((entry) => entry.id === hostileId) : null;
     const hostileText = hostile ? ` Threat: ${hostile.label}.` : '';
 
@@ -1125,7 +1134,7 @@ export class ShardRuntime implements ShardRuntimeLike {
       return `${card.name}: ${card.classLabel} level ${card.level}, HP ${card.hitPoints.current}/${card.hitPoints.max}, AC ${card.defenses.armorClass}.`;
     }
 
-    const visibleMonster = Object.values(this.getVisibleMonsters(player.snapshot, player.position, 0))[0] ?? null;
+    const visibleMonster = Object.values(this.getVisibleMonsters(player.snapshot, player.position, 0, player.clearedHostileTiles))[0] ?? null;
     if (visibleMonster && (target.includes('monster') || target.includes('goblin') || target.includes('wolf'))) {
       return `${visibleMonster.label}: level ${visibleMonster.level} ${visibleMonster.behavior}, close enough to force the next exchange.`;
     }
@@ -1302,14 +1311,23 @@ export class ShardRuntime implements ShardRuntimeLike {
     const player = this.players.get(characterId);
     const fallbackPosition = clone(this.content.region.spawn);
     const vision = getVisionWindow(player ? getCurrentLevel(player.snapshot) : 1);
+    const maximumVision = getMaximumVisionWindow();
     const position = player ? clone(player.position) : fallbackPosition;
     const currentTile = this.toGameplayTileSnapshot(this.getTileAt(position.x, position.y));
     const visibleTiles = this.getVisibleTiles(position, vision.radius);
+    const maximumVisibleTiles = this.getVisibleTiles(position, maximumVision.radius);
     const visibleCharacters = this.getVisibleCharacters(characterId, position, vision.radius);
+    const maximumCharacters = this.getVisibleCharacters(characterId, position, maximumVision.radius);
     const visibleMonsters = this.getVisibleMonsters(
       player?.snapshot ?? {},
       position,
       vision.radius,
+      player?.clearedHostileTiles
+    );
+    const maximumMonsters = this.getVisibleMonsters(
+      player?.snapshot ?? {},
+      position,
+      maximumVision.radius,
       player?.clearedHostileTiles
     );
     const fallbackCard = player
@@ -1343,10 +1361,14 @@ export class ShardRuntime implements ShardRuntimeLike {
       regionId: this.content.region.id,
       position,
       vision,
+      maximumVision,
       currentTile,
       visibleTiles,
+      maximumVisibleTiles,
       characters: visibleCharacters,
+      maximumCharacters,
       monsters: visibleMonsters,
+      maximumMonsters,
       character: fallbackCard,
       objectiveFocus: player ? toObjectiveFocus(player.snapshot, this.content) : null,
       encounter: player?.activeEncounter ? clone(player.activeEncounter) : null,
@@ -1413,6 +1435,10 @@ export class ShardRuntime implements ShardRuntimeLike {
         }
 
         const tile = this.getTileAt(x, y);
+        if (tile.blocked) {
+          continue;
+        }
+
         if (clearedHostileTiles.has(cellKey(tile.x, tile.y))) {
           continue;
         }

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   if (!pointBuy.valid) {
     return Response.json(
       {
-        error: `Invalid point-buy allocation (${pointBuy.spent}/22).`,
+        error: `Invalid point-buy allocation (${pointBuy.spent}/30).`,
         spent: pointBuy.spent,
       },
       { status: 400 }

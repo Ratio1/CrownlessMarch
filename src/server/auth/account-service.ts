@@ -3,7 +3,7 @@ import type { PublicUser } from '@ratio1/cstore-auth-ts';
 import { createInitialCharacterCheckpoint, loadCharacterByCid, saveCharacterCheckpoint } from '../platform/r1fs-characters';
 import { readRosterEntry, writeRosterEntry, type ThornwritheRosterEntry } from '../platform/cstore-roster';
 import { buildInitialCharacterSnapshot, levelForExperience, normalizeDurableProgression } from '../../shared/domain/progression';
-import { pointBuyBudgetForLevel, validatePointBuy } from '../../shared/domain/point-buy';
+import { levelUpAttributePoints, validatePointBuy } from '../../shared/domain/point-buy';
 import type { AttributeSet, CharacterClass } from '../../shared/domain/types';
 import { ensureAuthInitialized, getAuthClient, isSharedAuthConfigured } from './cstore';
 import {
@@ -649,7 +649,7 @@ export async function resetCharacterForAccount(input: {
   const currentSnapshot = normalizeDurableProgression(checkpoint.snapshot);
   const xp = typeof currentSnapshot.xp === 'number' ? currentSnapshot.xp : 0;
   const realLevel = levelForExperience(xp);
-  const pointBuy = validatePointBuy(input.attributes, pointBuyBudgetForLevel(realLevel));
+  const pointBuy = validatePointBuy(input.attributes, { abilityRaises: levelUpAttributePoints(realLevel) });
 
   if (!pointBuy.valid) {
     throw new AccountServiceError(

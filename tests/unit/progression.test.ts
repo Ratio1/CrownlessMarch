@@ -2,6 +2,7 @@ import {
   MAX_CHARACTER_LEVEL,
   XP_LEVEL_TABLE,
   applyExperienceGain,
+  buildInitialCharacterSnapshot,
   changeCurrency,
   levelForExperience,
   normalizeDurableProgression,
@@ -158,6 +159,54 @@ describe('progression helpers', () => {
 
     expect(setLevel({ xp: 0 }, 99)).toMatchObject({
       level: 15,
+    });
+  });
+
+  it('normalizes missing loaded ability scores to the new 8-based point-buy baseline', () => {
+    expect(
+      normalizeDurableProgression({
+        name: 'Legacy',
+        classId: 'wizard',
+        xp: 0,
+        level: 1,
+        inventory: [],
+        equipment: {},
+        currency: 0,
+        quest_progress: {},
+        skills: [],
+        unlocks: [],
+      })
+    ).toMatchObject({
+      attributes: {
+        strength: 8,
+        dexterity: 8,
+        constitution: 8,
+        intelligence: 8,
+        wisdom: 8,
+        charisma: 8,
+      },
+    });
+
+    expect(
+      buildInitialCharacterSnapshot({
+        name: 'Fresh',
+        classId: 'fighter',
+        attributes: {
+          strength: 8,
+          dexterity: 8,
+          constitution: 8,
+          intelligence: 8,
+          wisdom: 8,
+          charisma: 8,
+        },
+      }).attributes
+    ).toEqual({
+      strength: 8,
+      dexterity: 8,
+      constitution: 8,
+      intelligence: 8,
+      wisdom: 8,
+      charisma: 8,
     });
   });
 

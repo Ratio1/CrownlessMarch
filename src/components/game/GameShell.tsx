@@ -36,6 +36,7 @@ export function GameShell({
 }) {
   const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendCommand } = useGameplaySocket(gameplayPath);
   const [activeView, setActiveView] = useState<GameView>('field');
+  const [revealFog, setRevealFog] = useState(false);
   const encounter = snapshot?.encounter ?? null;
   const fightActive = encounter?.status === 'active';
   const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
@@ -115,6 +116,14 @@ export function GameShell({
               {tab.label}
             </button>
           ))}
+          <button
+            aria-pressed={revealFog}
+            className={`secondary-button ${revealFog ? 'secondary-button--active' : ''}`}
+            onClick={() => setRevealFog((current) => !current)}
+            type="button"
+          >
+            Beta Max View
+          </button>
           <span className="status-pill">Release {versionLabel}</span>
         </nav>
 
@@ -130,7 +139,7 @@ export function GameShell({
 
       {activeView === 'field' ? (
         <section className="play-layout" role="tabpanel">
-          <WorldField snapshot={snapshot} />
+          <WorldField snapshot={snapshot} revealFog={revealFog} />
 
           <aside className="play-sidebar">
             <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />

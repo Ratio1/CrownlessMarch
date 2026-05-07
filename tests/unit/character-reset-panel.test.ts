@@ -15,6 +15,9 @@ describe('beta character reset panel', () => {
     expect(source).toContain('Accept & Apply Reset');
     expect(source).toContain('!accepted');
     expect(source).toContain('Beta testers can rebuild class and ability scores');
+    expect(source).toContain('Point-buy spent');
+    expect(source).toContain('Ability raises used');
+    expect(source).not.toContain('pointBuyBudgetForLevel');
   });
 
   it('forces a fresh playfield attach after reset so the live sheet and sprite class refresh', () => {

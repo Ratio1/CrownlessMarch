@@ -10,7 +10,7 @@ import {
   type CharacterModifiers,
   type DurableCharacterSnapshot,
 } from './types';
-import { buildAttributes, getDefaultAttributes } from './point-buy';
+import { POINT_BUY_MAX_SCORE, POINT_BUY_MIN_SCORE, buildAttributes, getDefaultAttributes } from './point-buy';
 import { DEFAULT_GAME_RULES, getClassRule } from '../content/game-rules';
 import type { GameRules } from '../content/schema';
 
@@ -147,9 +147,9 @@ function normalizeClassId(value: unknown): CharacterClass {
 }
 
 function normalizeAttributeValue(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 8 && value <= 18
+  return typeof value === 'number' && Number.isFinite(value) && value >= POINT_BUY_MIN_SCORE && value <= POINT_BUY_MAX_SCORE
     ? value
-    : 10;
+    : POINT_BUY_MIN_SCORE;
 }
 
 function normalizeAttributes(value: unknown): AttributeSet {

@@ -10,3 +10,7 @@ export function getVisionWindow(level: number) {
           : 2;
   return { radius, size: radius * 2 + 1 };
 }
+
+export function getMaximumVisionWindow() {
+  return getVisionWindow(14);
+}

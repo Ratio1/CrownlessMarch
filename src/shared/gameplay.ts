@@ -108,10 +108,17 @@ export interface GameplayShardSnapshot {
     radius: number;
     size: number;
   };
+  maximumVision?: {
+    radius: number;
+    size: number;
+  };
   currentTile: GameplayTileSnapshot;
   visibleTiles: GameplayTileSnapshot[];
+  maximumVisibleTiles?: GameplayTileSnapshot[];
   characters: Record<string, GameplayCharacterMarker>;
+  maximumCharacters?: Record<string, GameplayCharacterMarker>;
   monsters: Record<string, GameplayMonsterMarker>;
+  maximumMonsters?: Record<string, GameplayMonsterMarker>;
   character: GameplayCharacterCard;
   objectiveFocus: GameplayObjectiveFocus | null;
   encounter: EncounterSnapshot | null;

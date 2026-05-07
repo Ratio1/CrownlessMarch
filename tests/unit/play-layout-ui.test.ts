@@ -12,7 +12,7 @@ describe('play layout UI', () => {
     const combatLogSource = readSource('src/components/game/CombatLogPanel.tsx');
     const globalCss = readSource('app/globals.css');
 
-    expect(shellSource).toContain('<WorldField snapshot={snapshot} />');
+    expect(shellSource).toContain('<WorldField snapshot={snapshot} revealFog={revealFog} />');
     expect(shellSource).toContain('<CombatLogPanel');
     expect(shellSource).toContain('<CommandPanel');
     expect(shellSource).toContain('<MovementPad');
@@ -22,6 +22,8 @@ describe('play layout UI', () => {
     expect(shellSource).toContain('Character Sheet');
     expect(shellSource).toContain('aria-label="Primary play tabs"');
     expect(shellSource).toContain("ArrowUp: 'north'");
+    expect(shellSource).toContain('revealFog');
+    expect(shellSource).toContain('Beta Max View');
     expect(worldFieldSource).toContain('world-field__fight-banner');
     expect(worldFieldSource).toContain('FieldNotesPanel');
     expect(worldFieldSource).toContain('field-notes');

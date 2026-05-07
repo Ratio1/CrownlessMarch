@@ -1,6 +1,6 @@
 import type PhaserType from 'phaser';
 import type { GameplayShardSnapshot } from '@/shared/gameplay';
-import { buildWorldRenderModel, shortMarkerLabel } from '@/components/game/world-render-model';
+import { buildWorldRenderModel } from '@/components/game/world-render-model';
 import {
   ACTOR_SPRITES,
   actorSpriteAnimationKey,
@@ -13,9 +13,13 @@ import {
 } from './sprite-catalog';
 
 export interface ThornwritheGameBridge {
-  render(snapshot: GameplayShardSnapshot): void;
+  render(snapshot: GameplayShardSnapshot, options?: ThornwritheRenderOptions): void;
   resize(width: number, height: number): void;
   destroy(): void;
+}
+
+export interface ThornwritheRenderOptions {
+  revealFog?: boolean;
 }
 
 const MIN_WIDTH = 480;
@@ -26,6 +30,10 @@ const TEXTURE_FILTER_NEAREST = 1 as PhaserType.Textures.FilterMode;
 const WORLD_GRASS_BASE_FILL = 0x3f7d45;
 const WORLD_GRASS_BASE_DARK = 0x254b30;
 const WORLD_MUD_PATCH_FILL = 0x765033;
+const HERO_SPRITE_TILE_RATIO = 0.46;
+const ALLY_SPRITE_TILE_RATIO = 0.4;
+const MONSTER_SPRITE_TILE_RATIO = 0.44;
+const ACTIVE_MONSTER_SPRITE_TILE_RATIO = 0.5;
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
 type CellMap = Map<string, WorldRenderCell>;
@@ -44,6 +52,7 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
   let activeGraphics: PhaserType.GameObjects.Graphics | null = null;
   let activeLabels: RuntimeGameObject[] = [];
   let pendingSnapshot: GameplayShardSnapshot | null = null;
+  let pendingOptions: ThornwritheRenderOptions = {};
 
   const scene = {
     key: 'thornwrithe-world',
@@ -54,7 +63,7 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
       ensureActorSpriteAnimations(this);
 
       if (pendingSnapshot) {
-        drawSnapshot(this, activeGraphics, activeLabels, pendingSnapshot);
+        drawSnapshot(this, activeGraphics, activeLabels, pendingSnapshot, pendingOptions);
       }
     },
   };
@@ -73,14 +82,15 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
   });
 
   return {
-    render(snapshot) {
+    render(snapshot, options = {}) {
       pendingSnapshot = snapshot;
+      pendingOptions = options;
 
       if (!activeScene || !activeGraphics) {
         return;
       }
 
-      drawSnapshot(activeScene, activeGraphics, activeLabels, snapshot);
+      drawSnapshot(activeScene, activeGraphics, activeLabels, snapshot, options);
     },
     resize(nextWidth, nextHeight) {
       const widthValue = Math.max(Math.round(nextWidth), MIN_WIDTH);
@@ -92,7 +102,7 @@ export async function createGame(container: HTMLElement): Promise<ThornwritheGam
         return;
       }
 
-      drawSnapshot(activeScene, activeGraphics, activeLabels, pendingSnapshot);
+      drawSnapshot(activeScene, activeGraphics, activeLabels, pendingSnapshot, pendingOptions);
     },
     destroy() {
       clearLabels(activeLabels);
@@ -141,9 +151,10 @@ function drawSnapshot(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
   labels: RuntimeGameObject[],
-  snapshot: GameplayShardSnapshot
+  snapshot: GameplayShardSnapshot,
+  options: ThornwritheRenderOptions = {}
 ) {
-  const model = buildWorldRenderModel(snapshot);
+  const model = buildWorldRenderModel(snapshot, { revealFog: options.revealFog });
   const cellMap = new Map(model.cells.map((cell) => [cell.key, cell]));
   clearLabels(labels);
   graphics.clear();
@@ -374,6 +385,11 @@ function drawTile(
   tileSize: number,
   pulse: number
 ) {
+  if (cell.fogged) {
+    drawFogVeil(graphics, x, y, tileSize, pulse);
+    return;
+  }
+
   drawSeamlessTerrainPatch(graphics, cellMap, cell, x, y, tileSize);
   drawPixelTerrainDetail(graphics, cell, x, y, tileSize);
 
@@ -426,46 +442,69 @@ function drawTile(
   }
 }
 
+function drawFogVeil(
+  graphics: PhaserType.GameObjects.Graphics,
+  x: number,
+  y: number,
+  tileSize: number,
+  pulse: number
+) {
+  graphics.fillStyle(0x020605, 0.88);
+  graphics.fillRect(x - 1, y - 1, tileSize + 2, tileSize + 2);
+  graphics.fillStyle(0x0d1715, 0.78);
+  graphics.fillEllipse(x + tileSize * 0.45, y + tileSize * 0.42, tileSize * 0.88, tileSize * 0.72);
+  graphics.fillStyle(0x111f1c, 0.48 + pulse * 0.12);
+  graphics.fillEllipse(x + tileSize * 0.68, y + tileSize * 0.68, tileSize * 0.74, tileSize * 0.5);
+  graphics.fillStyle(0x60705b, 0.1);
+  for (let index = 0; index < 4; index += 1) {
+    graphics.fillRect(
+      x + ((index * 17 + 9) % Math.max(1, Math.floor(tileSize - 3))),
+      y + ((index * 23 + 13) % Math.max(1, Math.floor(tileSize - 3))),
+      2,
+      2
+    );
+  }
+}
+
 function drawSeamlessTerrainPatch(
   graphics: PhaserType.GameObjects.Graphics,
-  _cellMap: CellMap,
+  cellMap: CellMap,
   cell: WorldRenderCell,
   x: number,
   y: number,
   tileSize: number
 ) {
   if (cell.tile.kind === 'mud') {
-    drawIrregularMudPatch(graphics, x, y, tileSize);
+    drawMudGroundPatch(graphics, cellMap, cell, x, y, tileSize);
   }
 }
 
-function drawIrregularMudPatch(graphics: PhaserType.GameObjects.Graphics, x: number, y: number, tileSize: number) {
-  const centerX = x + tileSize * 0.5;
-  const centerY = y + tileSize * 0.53;
+function drawMudGroundPatch(
+  graphics: PhaserType.GameObjects.Graphics,
+  cellMap: CellMap,
+  cell: WorldRenderCell,
+  x: number,
+  y: number,
+  tileSize: number
+) {
+  const northMud = cellAt(cellMap, cell.x, cell.y - 1)?.tile.kind === 'mud';
+  const southMud = cellAt(cellMap, cell.x, cell.y + 1)?.tile.kind === 'mud';
+  const westMud = cellAt(cellMap, cell.x - 1, cell.y)?.tile.kind === 'mud';
+  const eastMud = cellAt(cellMap, cell.x + 1, cell.y)?.tile.kind === 'mud';
 
-  graphics.fillStyle(WORLD_MUD_PATCH_FILL, 0.86);
-  graphics.fillEllipse(centerX, centerY, tileSize * 0.82, tileSize * 0.64);
-  graphics.fillTriangle(
-    x + tileSize * 0.18,
-    y + tileSize * 0.5,
-    x + tileSize * 0.42,
-    y + tileSize * 0.18,
-    x + tileSize * 0.72,
-    y + tileSize * 0.58
+  graphics.fillStyle(WORLD_MUD_PATCH_FILL, 0.78);
+  graphics.fillRect(
+    x + (westMud ? 0 : tileSize * 0.08),
+    y + (northMud ? 0 : tileSize * 0.1),
+    tileSize * (0.84 + (westMud ? 0.08 : 0) + (eastMud ? 0.08 : 0)),
+    tileSize * (0.8 + (northMud ? 0.1 : 0) + (southMud ? 0.1 : 0))
   );
-  graphics.fillTriangle(
-    x + tileSize * 0.24,
-    y + tileSize * 0.76,
-    x + tileSize * 0.66,
-    y + tileSize * 0.28,
-    x + tileSize * 0.84,
-    y + tileSize * 0.72
-  );
-  graphics.fillStyle(0x4f3422, 0.5);
-  graphics.fillEllipse(centerX - tileSize * 0.16, centerY + tileSize * 0.12, tileSize * 0.34, tileSize * 0.14);
+  graphics.fillStyle(0x5b3b27, 0.34);
+  graphics.fillEllipse(x + tileSize * 0.36, y + tileSize * 0.62, tileSize * 0.48, tileSize * 0.14);
+  graphics.fillEllipse(x + tileSize * 0.68, y + tileSize * 0.34, tileSize * 0.34, tileSize * 0.12);
   graphics.fillStyle(0xd1a36f, 0.28);
-  graphics.fillRect(x + tileSize * 0.22, y + tileSize * 0.63, tileSize * 0.18, Math.max(2, tileSize * 0.035));
-  graphics.fillRect(x + tileSize * 0.58, y + tileSize * 0.34, tileSize * 0.2, Math.max(2, tileSize * 0.035));
+  graphics.fillRect(x + tileSize * 0.18, y + tileSize * 0.62, tileSize * 0.22, Math.max(2, tileSize * 0.03));
+  graphics.fillRect(x + tileSize * 0.56, y + tileSize * 0.34, tileSize * 0.24, Math.max(2, tileSize * 0.03));
 }
 
 function drawPixelTerrainDetail(
@@ -481,18 +520,12 @@ function drawPixelTerrainDetail(
 
   switch (cell.tile.kind) {
     case 'grass': {
-      graphics.lineStyle(2, detail, 0.56);
-      for (let index = 0; index < 5; index += 1) {
-        const bladeX = x + tileSize * (0.2 + index * 0.14);
-        const bladeY = y + tileSize * (0.64 + (index % 2) * 0.08);
-        graphics.beginPath();
-        graphics.moveTo(bladeX, bladeY + 8);
-        graphics.lineTo(bladeX + 4, bladeY - 5);
-        graphics.lineTo(bladeX + 9, bladeY + 7);
-        graphics.strokePath();
-      }
-      graphics.fillStyle(edge, 0.36);
-      graphics.fillCircle(centerX - tileSize * 0.22, centerY - tileSize * 0.14, 3);
+      graphics.fillStyle(detail, 0.16);
+      graphics.fillRect(x + tileSize * 0.24, y + tileSize * 0.28, 3, 3);
+      graphics.fillRect(x + tileSize * 0.62, y + tileSize * 0.34, 2, 2);
+      graphics.fillRect(x + tileSize * 0.46, y + tileSize * 0.68, 3, 2);
+      graphics.fillStyle(edge, 0.22);
+      graphics.fillCircle(centerX - tileSize * 0.22, centerY - tileSize * 0.14, 2);
       graphics.fillCircle(centerX + tileSize * 0.2, centerY + tileSize * 0.18, 2);
       break;
     }
@@ -578,11 +611,11 @@ function drawCharacterToken(
 ) {
   const spriteKey = characterSpriteKey(cell.character?.classId ?? snapshot.character.classId, hero);
   const spec = ACTOR_SPRITES[spriteKey];
-  const spriteScale = (hero ? tileSize * 0.62 : tileSize * 0.54) / spec.frame.height;
+  const spriteScale = (tileSize * (hero ? HERO_SPRITE_TILE_RATIO : ALLY_SPRITE_TILE_RATIO)) / spec.frame.height;
   const spriteBaseY = centerY + tileSize * 0.26;
 
   graphics.fillStyle(0x000000, 0.24);
-  graphics.fillEllipse(centerX, spriteBaseY + 2, hero ? 32 : 26, hero ? 11 : 8);
+  graphics.fillEllipse(centerX, spriteBaseY + 2, hero ? 24 : 20, hero ? 8 : 6);
 
   const actorSprite = scene.add.sprite(centerX, spriteBaseY, actorSpriteTextureKey(spriteKey, 'idle'));
   actorSprite.setOrigin(spec.anchor.x, spec.anchor.y);
@@ -593,10 +626,10 @@ function drawCharacterToken(
   labels.push(actorSprite);
 
   if (hero) {
-    graphics.lineStyle(2, 0xf7d889, 0.42);
-    graphics.strokeCircle(centerX, centerY, 18);
+    graphics.lineStyle(2, 0xf7d889, 0.34);
+    graphics.strokeCircle(centerX, centerY + 2, 14);
     graphics.fillStyle(0xf7d889, 0.92);
-    graphics.fillTriangle(centerX + 10, centerY - 22, centerX + 22, centerY - 18, centerX + 10, centerY - 12);
+    graphics.fillTriangle(centerX + 7, centerY - 18, centerX + 17, centerY - 15, centerX + 7, centerY - 10);
 
     const currentHp = snapshot.character.hitPoints.current;
     const maxHp = snapshot.character.hitPoints.max;
@@ -604,21 +637,11 @@ function drawCharacterToken(
     const filledPips = Math.max(1, Math.ceil(ratio * 5));
 
     for (let index = 0; index < 5; index += 1) {
-      const pipX = centerX - 14 + index * 7;
+      const pipX = centerX - 11 + index * 6;
       graphics.fillStyle(index < filledPips ? 0xf7d889 : 0x31443b, index < filledPips ? 0.94 : 0.72);
-      graphics.fillRoundedRect(pipX, centerY + 21, 5, 4, 2);
+      graphics.fillRoundedRect(pipX, centerY + 17, 4, 3, 1);
     }
   }
-
-  const markerLabel = scene.add.text(centerX, centerY - 1, shortMarkerLabel(cell.character?.name ?? snapshot.character.name, hero ? 'ME' : 'AL'), {
-    color: hero ? '#2f1f10' : '#102215',
-    fontFamily: 'IBM Plex Mono, monospace',
-    fontSize: hero ? '12px' : '11px',
-    fontStyle: '700',
-  });
-  markerLabel.setOrigin(0.5);
-  markerLabel.setShadow(0, 1, 'rgba(255,255,255,0.1)', 2);
-  labels.push(markerLabel);
 }
 
 function drawMonsterToken(
@@ -639,21 +662,21 @@ function drawMonsterToken(
   const activeThreat = cell.monsterRole === 'active-threat';
   const spriteKey = monsterSpriteKey(monster.label);
   const spec = ACTOR_SPRITES[spriteKey];
-  const spriteScale = (activeThreat ? tileSize * 0.66 : tileSize * 0.58) / spec.frame.height;
+  const spriteScale = (tileSize * (activeThreat ? ACTIVE_MONSTER_SPRITE_TILE_RATIO : MONSTER_SPRITE_TILE_RATIO)) / spec.frame.height;
   const spriteBaseY = centerY + tileSize * 0.26;
 
   graphics.fillStyle(0x000000, 0.26);
-  graphics.fillEllipse(centerX, spriteBaseY + 2, activeThreat ? 38 : 30, activeThreat ? 12 : 9);
+  graphics.fillEllipse(centerX, spriteBaseY + 2, activeThreat ? 28 : 23, activeThreat ? 9 : 7);
   graphics.lineStyle(
     activeThreat ? 3 : 2,
     activeThreat ? 0xffc77b : blendHexColor(spec.palette.fill, 0xffd4a2, 0.18),
     activeThreat ? 0.56 : 0.3
   );
-  graphics.strokeCircle(centerX, centerY, activeThreat ? 22 : 18);
+  graphics.strokeCircle(centerX, centerY + 2, activeThreat ? 17 : 14);
 
   if (activeThreat) {
     graphics.lineStyle(2, 0xff7658, 0.62);
-    graphics.strokeCircle(centerX, centerY, 27);
+    graphics.strokeCircle(centerX, centerY + 2, 22);
   }
 
   const actorSprite = scene.add.sprite(centerX, spriteBaseY, actorSpriteTextureKey(spriteKey, 'idle'));
@@ -663,16 +686,7 @@ function drawMonsterToken(
   actorSprite.play(actorSpriteAnimationKey(spriteKey, activeThreat ? 'combat' : 'idle'));
   labels.push(actorSprite);
 
-  const markerLabel = scene.add.text(centerX, centerY + 1, shortMarkerLabel(monster.label, spriteKey === 'mob-sap-wolf' ? 'SW' : 'BG'), {
-    color: '#240f0c',
-    fontFamily: 'IBM Plex Mono, monospace',
-    fontSize: '10px',
-    fontStyle: '700',
-  });
-  markerLabel.setOrigin(0.5);
-  labels.push(markerLabel);
-
-  const levelBadge = scene.add.text(centerX + (activeThreat ? 18 : 15), centerY - (activeThreat ? 21 : 17), activeThreat ? `LV ${monster.level}` : `${monster.level}`, {
+  const levelBadge = scene.add.text(centerX + (activeThreat ? 14 : 12), centerY - (activeThreat ? 17 : 14), activeThreat ? `LV ${monster.level}` : `${monster.level}`, {
     color: activeThreat ? '#2a1009' : '#f7ead2',
     backgroundColor: activeThreat ? '#ffc77bcc' : '#1d0d08cc',
     fontFamily: 'IBM Plex Mono, monospace',

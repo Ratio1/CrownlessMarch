@@ -5,6 +5,7 @@ import { WorldCanvas } from './WorldCanvas';
 
 interface WorldFieldProps {
   snapshot: GameplayShardSnapshot | null;
+  revealFog: boolean;
 }
 
 const DIRECTIONS: Array<{
@@ -85,7 +86,7 @@ function FieldNotesPanel({ snapshot }: { snapshot: GameplayShardSnapshot }) {
   );
 }
 
-export function WorldField({ snapshot }: WorldFieldProps) {
+export function WorldField({ snapshot, revealFog }: WorldFieldProps) {
   if (!snapshot) {
     return (
       <section className="panel world-field" aria-label="World field">
@@ -105,7 +106,7 @@ export function WorldField({ snapshot }: WorldFieldProps) {
         </div>
       ) : null}
 
-      <WorldCanvas snapshot={snapshot} />
+      <WorldCanvas snapshot={snapshot} revealFog={revealFog} />
       <FieldNotesPanel snapshot={snapshot} />
     </section>
   );

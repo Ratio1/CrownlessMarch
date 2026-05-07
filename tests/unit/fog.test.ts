@@ -1,4 +1,4 @@
-import { getVisionWindow } from '../../src/shared/domain/fog';
+import { getMaximumVisionWindow, getVisionWindow } from '../../src/shared/domain/fog';
 
 describe('fog of war vision bands', () => {
   it('uses beta-friendly square visibility by level band', () => {
@@ -10,5 +10,9 @@ describe('fog of war vision bands', () => {
     expect(getVisionWindow(13)).toEqual({ radius: 4, size: 9 });
     expect(getVisionWindow(14)).toEqual({ radius: 5, size: 11 });
     expect(getVisionWindow(99)).toEqual({ radius: 5, size: 11 });
+  });
+
+  it('exposes a max-view window for beta fog removal and fog framing', () => {
+    expect(getMaximumVisionWindow()).toEqual({ radius: 5, size: 11 });
   });
 });

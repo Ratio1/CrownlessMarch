@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   POINT_BUY_BUDGET,
+  POINT_BUY_MAX_SCORE,
+  POINT_BUY_MIN_SCORE,
   getDefaultAttributes,
   validatePointBuy,
 } from '@/shared/domain/point-buy';
@@ -61,7 +63,7 @@ export function PointBuyForm() {
       <div className="eyebrow">Character creation</div>
       <h1>Create Character</h1>
       <p className="lede">
-        Allocate up to {POINT_BUY_BUDGET} points using the simplified D20 rules,
+        Start at 8 in each ability, then allocate up to {POINT_BUY_BUDGET} points using the simplified D20 rules,
         choose a class, and step into the Briar March.
       </p>
 
@@ -98,6 +100,8 @@ export function PointBuyForm() {
           <strong>
             {pointBuy.spent}/{POINT_BUY_BUDGET}
           </strong>
+          <span>Remaining</span>
+          <strong>{pointBuy.remaining}</strong>
         </div>
 
         <div className="attribute-grid">
@@ -105,8 +109,8 @@ export function PointBuyForm() {
             <label className="field" key={attribute}>
               <span>{formatLabel(attribute)}</span>
               <input
-                min={8}
-                max={18}
+                min={POINT_BUY_MIN_SCORE}
+                max={POINT_BUY_MAX_SCORE}
                 step={1}
                 type="number"
                 value={values[attribute]}

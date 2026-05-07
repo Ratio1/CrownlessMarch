@@ -86,6 +86,7 @@ export interface WorldRenderCell {
   monster: GameplayMonsterMarker | null;
   monsterRole: 'active-threat' | 'visible-threat' | null;
   threatLabel: string | null;
+  fogged: boolean;
 }
 
 export interface WorldRenderModel {
@@ -103,16 +104,16 @@ export interface WorldRenderModel {
   currentTerrain: WorldTerrainDetails;
 }
 
-function tileAt(snapshot: GameplayShardSnapshot, x: number, y: number) {
-  return snapshot.visibleTiles.find((entry) => entry.x === x && entry.y === y) ?? null;
+function tileAt(tiles: GameplayTileSnapshot[], x: number, y: number) {
+  return tiles.find((entry) => entry.x === x && entry.y === y) ?? null;
 }
 
-function characterAt(snapshot: GameplayShardSnapshot, x: number, y: number) {
-  return Object.values(snapshot.characters).find((entry) => entry.position.x === x && entry.position.y === y) ?? null;
+function characterAt(characters: Record<string, GameplayCharacterMarker>, x: number, y: number) {
+  return Object.values(characters).find((entry) => entry.position.x === x && entry.position.y === y) ?? null;
 }
 
-function monsterAt(snapshot: GameplayShardSnapshot, x: number, y: number) {
-  return Object.values(snapshot.monsters).find((entry) => entry.position.x === x && entry.position.y === y) ?? null;
+function monsterAt(monsters: Record<string, GameplayMonsterMarker>, x: number, y: number) {
+  return Object.values(monsters).find((entry) => entry.position.x === x && entry.position.y === y) ?? null;
 }
 
 export function shortMarkerLabel(value: string, fallback: string) {
@@ -126,9 +127,15 @@ export function shortMarkerLabel(value: string, fallback: string) {
   return compact || fallback;
 }
 
-export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRenderModel {
-  const xs = snapshot.visibleTiles.map((tile) => tile.x);
-  const ys = snapshot.visibleTiles.map((tile) => tile.y);
+export function buildWorldRenderModel(snapshot: GameplayShardSnapshot, options: { revealFog?: boolean } = {}): WorldRenderModel {
+  const frameTiles = snapshot.maximumVisibleTiles && snapshot.maximumVisibleTiles.length > 0
+    ? snapshot.maximumVisibleTiles
+    : snapshot.visibleTiles;
+  const visibleKeys = new Set(snapshot.visibleTiles.map((tile) => `${tile.x}:${tile.y}`));
+  const renderCharacters = options.revealFog ? snapshot.maximumCharacters ?? snapshot.characters : snapshot.characters;
+  const renderMonsters = options.revealFog ? snapshot.maximumMonsters ?? snapshot.monsters : snapshot.monsters;
+  const xs = frameTiles.map((tile) => tile.x);
+  const ys = frameTiles.map((tile) => tile.y);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
@@ -137,13 +144,15 @@ export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRen
 
   for (let y = minY; y <= maxY; y += 1) {
     for (let x = minX; x <= maxX; x += 1) {
-      const tile = tileAt(snapshot, x, y);
+      const tile = tileAt(frameTiles, x, y);
 
       if (!tile) {
         continue;
       }
-      const character = characterAt(snapshot, x, y);
-      const monster = monsterAt(snapshot, x, y);
+      const key = `${x}:${y}`;
+      const fogged = !options.revealFog && !visibleKeys.has(key);
+      const character = fogged ? null : characterAt(renderCharacters, x, y);
+      const monster = fogged ? null : monsterAt(renderMonsters, x, y);
       const activeEncounterThreat =
         Boolean(monster) &&
         snapshot.encounter?.status === 'active' &&
@@ -165,6 +174,7 @@ export function buildWorldRenderModel(snapshot: GameplayShardSnapshot): WorldRen
         monster,
         monsterRole,
         threatLabel: monster ? `LV ${monster.level}${monsterRole === 'active-threat' ? ' ACTIVE' : ''}` : null,
+        fogged,
       });
     }
   }
