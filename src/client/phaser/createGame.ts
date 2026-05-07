@@ -163,6 +163,7 @@ function drawSnapshot(
   const pulse = 0.48 + Math.sin(Date.now() / 850) * 0.08;
 
   drawBackdrop(graphics, width, height, originX, originY, worldWidth, worldHeight, pulse);
+  drawWorldGroundBase(graphics, originX, originY, worldWidth, worldHeight);
 
   for (const cell of model.cells) {
     const x = originX + (cell.x - model.bounds.minX) * (tileSize + gap);
@@ -195,6 +196,33 @@ function drawSnapshot(
     shardMarker.setOrigin(1, 0);
     shardMarker.setAlpha(0.9);
     labels.push(shardMarker);
+  }
+}
+
+function drawWorldGroundBase(
+  graphics: PhaserType.GameObjects.Graphics,
+  originX: number,
+  originY: number,
+  worldWidth: number,
+  worldHeight: number
+) {
+  graphics.fillGradientStyle(
+    blendHexColor(WORLD_GRASS_BASE_FILL, 0xf3dca6, 0.05),
+    blendHexColor(WORLD_GRASS_BASE_FILL, 0x122416, 0.18),
+    WORLD_GRASS_BASE_DARK,
+    blendHexColor(WORLD_GRASS_BASE_DARK, 0x050807, 0.2),
+    1,
+    1,
+    1,
+    1
+  );
+  graphics.fillRect(originX - 1, originY - 1, worldWidth + 2, worldHeight + 2);
+
+  graphics.fillStyle(0x6a9b54, 0.24);
+  for (let index = 0; index < 36; index += 1) {
+    const x = originX + ((index * 37) % Math.max(1, Math.floor(worldWidth)));
+    const y = originY + ((index * 53) % Math.max(1, Math.floor(worldHeight)));
+    graphics.fillRect(x, y, 4, 4);
   }
 }
 
@@ -406,22 +434,6 @@ function drawSeamlessTerrainPatch(
   y: number,
   tileSize: number
 ) {
-  const patchX = Math.floor(x) - 1;
-  const patchY = Math.floor(y) - 1;
-  const patchSize = Math.ceil(tileSize) + 2;
-
-  graphics.fillGradientStyle(
-    blendHexColor(WORLD_GRASS_BASE_FILL, 0xf3dca6, 0.05),
-    blendHexColor(WORLD_GRASS_BASE_FILL, 0xf3dca6, 0.05),
-    WORLD_GRASS_BASE_DARK,
-    WORLD_GRASS_BASE_DARK,
-    1,
-    1,
-    1,
-    1
-  );
-  graphics.fillRect(patchX, patchY, patchSize, patchSize);
-
   if (cell.tile.kind === 'mud') {
     drawIrregularMudPatch(graphics, x, y, tileSize);
   }

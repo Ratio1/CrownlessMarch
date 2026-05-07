@@ -31,6 +31,7 @@ describe('Phaser renderer configuration', () => {
 
     expect(source).toContain('const TILE_GAP = 0;');
     expect(source).toContain('WORLD_GRASS_BASE_FILL');
+    expect(source).toContain('drawWorldGroundBase');
     expect(source).toContain('drawIrregularMudPatch');
     expect(source).toContain('drawSeamlessTerrainPatch');
     expect(source).toContain('drawPixelTerrainDetail');
