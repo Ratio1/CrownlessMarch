@@ -441,6 +441,7 @@ async function runResetSmoke(page: Page, characterName: string) {
     { characterName: resetCharacterName },
     { timeout: 75_000 }
   );
+  await page.getByRole('tab', { name: 'Field' }).click();
   await waitForCanvasInk(page);
 
   return {
@@ -464,6 +465,7 @@ async function readPlayfieldRetentionDiagnostics(page: Page, characterName: stri
       reconnecting: bodyText.toLowerCase().includes('reconnecting'),
       hasCharacterName: bodyText.includes(input.characterName),
       hasCharacterSheet: bodyText.includes('Character Sheet'),
+      hasFieldTab: bodyText.includes('Field'),
       hasCanvas: canvas instanceof HTMLCanvasElement && canvas.width > 0,
       canvasClientWidth: canvasRect?.width ?? 0,
       canvasClientHeight: canvasRect?.height ?? 0,
@@ -533,7 +535,7 @@ async function runReconnectProbe(context: BrowserContext, page: Page, characterN
     ['during', during],
     ['after', after],
   ] as const) {
-    if (!diagnostics.hasCharacterName || !diagnostics.hasCanvas || !diagnostics.commandInputVisible) {
+    if (!diagnostics.hasCanvas || !diagnostics.commandInputVisible || !diagnostics.movementPadVisible) {
       throw new Error(
         `Reconnect probe depleted playfield during ${phase}: ${JSON.stringify(diagnostics)}`
       );

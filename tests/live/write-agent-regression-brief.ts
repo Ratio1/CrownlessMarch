@@ -24,9 +24,9 @@ interface BrowserProfileEvidence {
   } | null;
   reconnectProbe?: {
     durationMs?: number;
-    before?: { connected?: boolean; hasCharacterName?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean };
-    during?: { connected?: boolean; hasCharacterName?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean };
-    after?: { connected?: boolean; hasCharacterName?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean };
+    before?: { connected?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean; movementPadVisible?: boolean };
+    during?: { connected?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean; movementPadVisible?: boolean };
+    after?: { connected?: boolean; hasCanvas?: boolean; commandInputVisible?: boolean; movementPadVisible?: boolean };
   } | null;
 }
 
@@ -133,10 +133,10 @@ function evaluateRegressionVerdict(evidence: BrowserEvidence) {
       const during = profile.reconnectProbe.during ?? {};
       const after = profile.reconnectProbe.after ?? {};
 
-      if (!during.hasCharacterName || !during.hasCanvas || !during.commandInputVisible) {
+      if (!during.hasCanvas || !during.commandInputVisible || !during.movementPadVisible) {
         blockers.push(`${name}: reconnect probe depleted the retained playfield while offline.`);
       }
-      if (!after.connected || !after.hasCharacterName || !after.hasCanvas || !after.commandInputVisible) {
+      if (!after.connected || !after.hasCanvas || !after.commandInputVisible || !after.movementPadVisible) {
         blockers.push(`${name}: reconnect probe did not recover the playfield after network restoration.`);
       }
     }
