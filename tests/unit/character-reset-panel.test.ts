@@ -6,6 +6,17 @@ function readSource(relativePath: string) {
 }
 
 describe('beta character reset panel', () => {
+  it('keeps the beta reset behind an explicit open and accept flow', () => {
+    const source = readSource('src/components/game/CharacterResetPanel.tsx');
+
+    expect(source).toContain('showResetForm');
+    expect(source).toContain('setShowResetForm(true)');
+    expect(source).toContain('accepted');
+    expect(source).toContain('Accept & Apply Reset');
+    expect(source).toContain('!accepted');
+    expect(source).toContain('Beta testers can rebuild class and ability scores');
+  });
+
   it('forces a fresh playfield attach after reset so the live sheet and sprite class refresh', () => {
     const source = readSource('src/components/game/CharacterResetPanel.tsx');
 

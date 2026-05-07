@@ -1,13 +1,18 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useGameplaySocket } from '@/client/useGameplaySocket';
+import type { GameplayDirection } from '@/shared/gameplay';
+import { CharacterPanel } from './CharacterPanel';
+import { CharacterResetPanel } from './CharacterResetPanel';
 import { CommandPanel } from './CommandPanel';
 import { CombatLogPanel } from './CombatLogPanel';
-import { InfoTabs } from './InfoTabs';
 import { MovementPad } from './MovementPad';
-import { ShortCharacterPanel } from './ShortCharacterPanel';
+import { QuestPanel } from './QuestPanel';
 import { WorldField } from './WorldField';
+
+type GameView = 'field' | 'character' | 'quests';
 
 function describeStatus(status: ReturnType<typeof useGameplaySocket>['status']) {
   switch (status) {
@@ -30,19 +35,61 @@ export function GameShell({
   versionLabel: string;
 }) {
   const { status, statusDetail, shardWorldInstanceId, snapshot, sendMove, sendCommand } = useGameplaySocket(gameplayPath);
+  const [activeView, setActiveView] = useState<GameView>('field');
   const encounter = snapshot?.encounter ?? null;
   const fightActive = encounter?.status === 'active';
   const canMove = status === 'connected' && Boolean(snapshot) && !snapshot?.movementLocked;
   const canCommand = status === 'connected' && Boolean(snapshot);
-  const primaryQuest = snapshot?.character.quests?.[0] ?? null;
-  const objectiveFocus = snapshot?.objectiveFocus ?? null;
+  const tabs: Array<{ id: GameView; label: string }> = [
+    { id: 'field', label: 'Field' },
+    { id: 'character', label: 'Character Sheet' },
+    { id: 'quests', label: 'Quests' },
+  ];
+
+  useEffect(() => {
+    if (activeView !== 'field' || !canMove) {
+      return;
+    }
+
+    const movementKeys: Record<string, GameplayDirection> = {
+      ArrowUp: 'north',
+      ArrowDown: 'south',
+      ArrowLeft: 'west',
+      ArrowRight: 'east',
+    };
+
+    function onKeyDown(event: KeyboardEvent) {
+      const direction = movementKeys[event.key];
+
+      if (!direction || event.repeat) {
+        return;
+      }
+
+      const target = event.target;
+      const element = target instanceof HTMLElement ? target : null;
+
+      if (
+        element?.closest('input, textarea, select, button') ||
+        element?.isContentEditable
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      sendMove(direction);
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeView, canMove, sendMove]);
 
   return (
     <section className="play-shell">
       <header className="panel play-header">
         <div className="play-header__identity">
-          <p className="eyebrow">Thornwrithe live field</p>
-          <h1>Live field</h1>
+          <p className="eyebrow">Thornwrithe</p>
+          <h1>{activeView === 'field' ? 'Live Field' : activeView === 'character' ? 'Character Sheet' : 'Quest Ledger'}</h1>
         </div>
 
         <div className="play-header__status">
@@ -55,28 +102,21 @@ export function GameShell({
           <p className="muted">{statusDetail}</p>
         </div>
 
-        <div className="play-header__chips">
+        <nav className="play-tabs" aria-label="Primary play tabs" role="tablist">
+          {tabs.map((tab) => (
+            <button
+              aria-selected={activeView === tab.id}
+              className={`secondary-button ${activeView === tab.id ? 'secondary-button--active' : ''}`}
+              key={tab.id}
+              onClick={() => setActiveView(tab.id)}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+            </button>
+          ))}
           <span className="status-pill">Release {versionLabel}</span>
-          <span className="status-pill">Region {snapshot?.regionId ?? 'binding'}</span>
-          <span className="status-pill">
-            Directive {objectiveFocus?.label ?? primaryQuest?.label ?? 'Hold until the shard settles'}
-          </span>
-        </div>
-
-        {primaryQuest ? (
-          <div className="play-header__directive">
-            <div className="panel-title">Current directive</div>
-            <strong>{objectiveFocus?.detail ?? primaryQuest.progress}</strong>
-            {objectiveFocus ? (
-              <div className="play-chip-row">
-                <span className="status-pill">{objectiveFocus.stateLabel}</span>
-                <span className="status-pill">
-                  Target {objectiveFocus.target.x},{objectiveFocus.target.y}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        </nav>
 
         {status === 'disconnected' ? (
           <div className="status-banner">
@@ -88,20 +128,32 @@ export function GameShell({
         ) : null}
       </header>
 
-      <section className="play-layout">
-        <WorldField snapshot={snapshot} />
+      {activeView === 'field' ? (
+        <section className="play-layout" role="tabpanel">
+          <WorldField snapshot={snapshot} />
 
-        <aside className="play-sidebar">
-          <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
-          <div className="play-controls">
-            <CommandPanel disabled={!canCommand} combatMode={fightActive} onCommand={sendCommand} />
-            <MovementPad disabled={!canMove} onMove={sendMove} />
-          </div>
-          <ShortCharacterPanel snapshot={snapshot} />
-        </aside>
-      </section>
+          <aside className="play-sidebar">
+            <CombatLogPanel encounter={encounter} status={status} activityLog={snapshot?.activityLog ?? []} />
+            <div className="play-controls">
+              <MovementPad disabled={!canMove} onMove={sendMove} />
+              <CommandPanel disabled={!canCommand} combatMode={fightActive} onCommand={sendCommand} />
+            </div>
+          </aside>
+        </section>
+      ) : null}
 
-      <InfoTabs snapshot={snapshot} />
+      {activeView === 'character' ? (
+        <section className="game-tab-panel" role="tabpanel">
+          <CharacterPanel snapshot={snapshot} />
+          <CharacterResetPanel snapshot={snapshot} />
+        </section>
+      ) : null}
+
+      {activeView === 'quests' ? (
+        <section className="game-tab-panel game-tab-panel--single" role="tabpanel">
+          <QuestPanel snapshot={snapshot} />
+        </section>
+      ) : null}
     </section>
   );
 }

@@ -9,7 +9,6 @@ export function MovementPad({ disabled, onMove }: MovementPadProps) {
   return (
     <section className="panel play-panel play-panel--compact">
       <div className="panel-title">Movement</div>
-      <p className="muted">Movement is shard-local. Wins and quest turn-ins drive durable saves.</p>
       <div className="dpad" aria-label="Movement controls">
         <button disabled={disabled} onClick={() => onMove('north')} type="button">
           North

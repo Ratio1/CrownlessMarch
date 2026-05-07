@@ -24,6 +24,9 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('resolveBrowserExecutable');
     expect(script).toContain('moves north into Grass (5,4)');
     expect(script).toContain('async function runResetSmoke');
+    expect(script).toContain("getByRole('tab', { name: 'Character Sheet' })");
+    expect(script).toContain("getByLabel('Confirm beta character reset')");
+    expect(script).toContain("getByRole('button', { name: 'Accept & Apply Reset' })");
     expect(script).toContain('async function runReconnectProbe');
     expect(script).toContain('async function waitForCommandRoundTrip');
     expect(script).toContain('examine reconnect-probe-');
@@ -38,7 +41,7 @@ describe('live browser smoke runner wiring', () => {
     expect(script).toContain('idleStable');
     expect(script).toContain('page.screenshot');
     expect(script).toContain('bodyTextLower');
-    expect(script).toContain("bodyTextLower.includes('dice log')");
+    expect(script).toContain("bodyTextLower.includes('d20 rolls')");
     expect(script).toContain('moveTextVisible');
     expect(script).toContain('!options.combat && !diagnostics.moveEntryStyled');
     expect(script).toContain('canvasInkRatio');

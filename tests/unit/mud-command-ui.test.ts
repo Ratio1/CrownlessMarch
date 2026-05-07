@@ -11,13 +11,14 @@ describe('MUD command UI wiring', () => {
     const gameShell = readSource('src/components/game/GameShell.tsx');
     const hook = readSource('src/client/useGameplaySocket.ts');
 
-    expect(commandPanel).toContain('Field Command');
+    expect(commandPanel).toContain('Field Commands');
     expect(commandPanel).toContain('onCommand');
-    expect(commandPanel).toContain("placeholder={combatMode ? 'flee' : 'look / consider goblin / lore / inventory'}");
+    expect(commandPanel).toContain("placeholder={combatMode ? 'flee' : 'look / search'}");
     expect(commandPanel).toContain("combatMode ? ['flee'] : QUICK_COMMANDS");
     expect(commandPanel).toContain('command-panel__quick');
-    expect(commandPanel).toContain('inventory');
-    expect(commandPanel).toContain('lore goblin');
+    expect(commandPanel).toContain("const QUICK_COMMANDS: GameplayMudCommand[] = ['look', 'search'];");
+    expect(commandPanel).not.toContain('inventory');
+    expect(commandPanel).not.toContain('lore goblin');
     expect(gameShell).toContain('combatMode={fightActive}');
     expect(hook).toContain("type: 'command'");
   });

@@ -44,8 +44,8 @@ export function CombatLogPanel({ encounter, status, activityLog }: CombatLogPane
     <section className="panel play-panel play-panel--terminal">
       <div className="play-panel__terminal-header">
         <div>
-          <div className="panel-title">{encounter ? 'Dice Log' : 'Field Notes'}</div>
-          <h3 className="terminal-heading">{encounter ? encounter.monsterName ?? 'Encounter feed' : 'March feed'}</h3>
+          <div className="panel-title">D20 Rolls</div>
+          <h3 className="terminal-heading">{encounter ? encounter.monsterName ?? 'Encounter feed' : 'Roll log'}</h3>
         </div>
         {encounter ? (
           <div className="play-chip-row">

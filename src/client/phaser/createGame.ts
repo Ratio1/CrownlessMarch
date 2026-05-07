@@ -21,7 +21,7 @@ export interface ThornwritheGameBridge {
 const MIN_WIDTH = 480;
 const MIN_HEIGHT = 420;
 const BOARD_PADDING = 34;
-const TILE_GAP = 10;
+const TILE_GAP = 0;
 const TEXTURE_FILTER_NEAREST = 1 as PhaserType.Textures.FilterMode;
 
 type WorldRenderCell = ReturnType<typeof buildWorldRenderModel>['cells'][number];
@@ -134,21 +134,6 @@ function cellAt(cellMap: CellMap, x: number, y: number) {
   return cellMap.get(cellKey(x, y)) ?? null;
 }
 
-function tileCenter(
-  x: number,
-  y: number,
-  bounds: { minX: number; minY: number },
-  originX: number,
-  originY: number,
-  tileSize: number,
-  gap: number,
-) {
-  return {
-    x: originX + (x - bounds.minX) * (tileSize + gap) + tileSize / 2,
-    y: originY + (y - bounds.minY) * (tileSize + gap) + tileSize / 2,
-  };
-}
-
 function drawSnapshot(
   scene: PhaserType.Scene,
   graphics: PhaserType.GameObjects.Graphics,
@@ -167,7 +152,7 @@ function drawSnapshot(
   const tileWidth = (boardWidth - TILE_GAP * (model.bounds.columns - 1)) / model.bounds.columns;
   const tileHeight = (boardHeight - TILE_GAP * (model.bounds.rows - 1)) / model.bounds.rows;
   const tileSize = Math.max(48, Math.min(88, Math.floor(Math.min(tileWidth, tileHeight))));
-  const gap = Math.max(4, Math.min(TILE_GAP, Math.floor(tileSize * 0.14)));
+  const gap = TILE_GAP;
   const worldWidth = tileSize * model.bounds.columns + gap * (model.bounds.columns - 1);
   const worldHeight = tileSize * model.bounds.rows + gap * (model.bounds.rows - 1);
   const originX = (width - worldWidth) / 2;
@@ -175,7 +160,6 @@ function drawSnapshot(
   const pulse = 0.48 + Math.sin(Date.now() / 850) * 0.08;
 
   drawBackdrop(graphics, width, height, originX, originY, worldWidth, worldHeight, pulse);
-  drawObjectiveTrail(graphics, snapshot, model, originX, originY, tileSize, gap);
 
   for (const cell of model.cells) {
     const x = originX + (cell.x - model.bounds.minX) * (tileSize + gap);
@@ -349,72 +333,6 @@ function drawBackdrop(
   graphics.strokeRoundedRect(originX - 6, originY - 6, worldWidth + 12, worldHeight + 12, 24);
 }
 
-function drawObjectiveTrail(
-  graphics: PhaserType.GameObjects.Graphics,
-  snapshot: GameplayShardSnapshot,
-  model: ReturnType<typeof buildWorldRenderModel>,
-  originX: number,
-  originY: number,
-  tileSize: number,
-  gap: number
-) {
-  const focus = snapshot.objectiveFocus;
-
-  if (!focus) {
-    return;
-  }
-
-  const route: Array<{ x: number; y: number }> = [];
-  let currentX = snapshot.position.x;
-  let currentY = snapshot.position.y;
-
-  while (currentX !== focus.target.x) {
-    currentX += Math.sign(focus.target.x - currentX);
-    route.push({ x: currentX, y: currentY });
-  }
-
-  while (currentY !== focus.target.y) {
-    currentY += Math.sign(focus.target.y - currentY);
-    route.push({ x: currentX, y: currentY });
-  }
-
-  if (route.length === 0) {
-    return;
-  }
-
-  const start = tileCenter(snapshot.position.x, snapshot.position.y, model.bounds, originX, originY, tileSize, gap);
-  const routePoints = route.map((entry) => tileCenter(entry.x, entry.y, model.bounds, originX, originY, tileSize, gap));
-
-  graphics.lineStyle(8, 0xf7d889, 0.08);
-  graphics.beginPath();
-  graphics.moveTo(start.x, start.y);
-  for (const point of routePoints) {
-    graphics.lineTo(point.x, point.y);
-  }
-  graphics.strokePath();
-
-  graphics.lineStyle(2, 0xf7d889, 0.42);
-  graphics.beginPath();
-  graphics.moveTo(start.x, start.y);
-  for (const point of routePoints) {
-    graphics.lineTo(point.x, point.y);
-  }
-  graphics.strokePath();
-
-  for (const point of routePoints.slice(0, -1)) {
-    graphics.fillStyle(0xf7d889, 0.22);
-    graphics.fillCircle(point.x, point.y, 4);
-  }
-
-  const finalPoint = routePoints[routePoints.length - 1];
-  graphics.fillStyle(0xf7d889, 0.3);
-  graphics.fillCircle(finalPoint.x, finalPoint.y, tileSize * 0.22);
-  graphics.lineStyle(2, 0xf7d889, 0.9);
-  graphics.strokeCircle(finalPoint.x, finalPoint.y, tileSize * 0.18);
-  graphics.fillStyle(0xf7d889, 0.94);
-  graphics.fillTriangle(finalPoint.x, finalPoint.y - 14, finalPoint.x + 10, finalPoint.y + 7, finalPoint.x - 10, finalPoint.y + 7);
-}
-
 function drawTile(
   graphics: PhaserType.GameObjects.Graphics,
   snapshot: GameplayShardSnapshot,
@@ -425,75 +343,59 @@ function drawTile(
   tileSize: number,
   pulse: number
 ) {
-  const { palette } = cell.terrain;
-  const topFill = blendHexColor(palette.fill, 0xf6edd5, 0.08);
-  const bottomFill = blendHexColor(palette.fill, 0x030504, 0.32);
-
-  graphics.fillStyle(0x020605, 0.34);
-  graphics.fillRoundedRect(x + 3, y + 6, tileSize, tileSize, 18);
-
-  graphics.fillGradientStyle(topFill, topFill, bottomFill, bottomFill, 1, 1, 1, 1);
-  graphics.fillRoundedRect(x, y, tileSize, tileSize, 20);
-
-  graphics.fillStyle(0xffffff, 0.028);
-  graphics.fillTriangle(x, y, x + tileSize, y, x, y + tileSize * 0.7);
-
-  graphics.lineStyle(cell.isCurrent ? 3 : 2, cell.isCurrent ? 0xf7c978 : palette.edge, cell.isCurrent ? 1 : 0.86);
-  graphics.strokeRoundedRect(x, y, tileSize, tileSize, 20);
-
-  drawTerrainConnections(graphics, cellMap, cell, x, y, tileSize);
-  drawTerrainDetail(graphics, cell, x, y, tileSize);
+  drawSeamlessTerrainPatch(graphics, cellMap, cell, x, y, tileSize);
+  drawPixelTerrainDetail(graphics, cell, x, y, tileSize);
 
   if (cell.tile.blocked) {
-    graphics.lineStyle(3, 0xf08a6d, 0.9);
-    graphics.beginPath();
-    graphics.moveTo(x + 12, y + 12);
-    graphics.lineTo(x + tileSize - 12, y + tileSize - 12);
-    graphics.moveTo(x + tileSize - 12, y + 12);
-    graphics.lineTo(x + 12, y + tileSize - 12);
-    graphics.strokePath();
+    graphics.fillStyle(0x050807, 0.18);
+    graphics.fillRect(x + tileSize * 0.14, y + tileSize * 0.7, tileSize * 0.72, Math.max(3, tileSize * 0.05));
   }
 
   if (cell.monster) {
-    const glowColor = cell.monsterRole === 'active-threat' ? 0xff7658 : palette.glow;
+    const glowColor = cell.monsterRole === 'active-threat' ? 0xff7658 : cell.terrain.palette.glow;
 
     if (glowColor) {
       graphics.lineStyle(cell.monsterRole === 'active-threat' ? 3 : 2, glowColor, cell.monsterRole === 'active-threat' ? 0.58 : 0.24);
-      graphics.strokeRoundedRect(x + 6, y + 6, tileSize - 12, tileSize - 12, 16);
+      graphics.strokeCircle(x + tileSize * 0.5, y + tileSize * 0.54, tileSize * 0.34);
     }
   }
 
   if (cell.monsterRole === 'active-threat') {
-    const alertInset = 11 + pulse * 2;
+    const centerX = x + tileSize * 0.5;
+    const centerY = y + tileSize * 0.54;
+    const alertInset = tileSize * (0.3 + pulse * 0.02);
     graphics.lineStyle(2, 0xffc77b, 0.38 + pulse * 0.16);
-    graphics.strokeRoundedRect(x + alertInset, y + alertInset, tileSize - alertInset * 2, tileSize - alertInset * 2, 12);
+    graphics.strokeCircle(centerX, centerY, alertInset);
     graphics.lineStyle(2, 0xff7658, 0.5);
     graphics.beginPath();
-    graphics.moveTo(x + tileSize * 0.5, y + 10);
-    graphics.lineTo(x + tileSize * 0.5, y + 23);
-    graphics.moveTo(x + tileSize * 0.5, y + tileSize - 10);
-    graphics.lineTo(x + tileSize * 0.5, y + tileSize - 23);
-    graphics.moveTo(x + 10, y + tileSize * 0.5);
-    graphics.lineTo(x + 23, y + tileSize * 0.5);
-    graphics.moveTo(x + tileSize - 10, y + tileSize * 0.5);
-    graphics.lineTo(x + tileSize - 23, y + tileSize * 0.5);
+    graphics.moveTo(centerX, centerY - tileSize * 0.38);
+    graphics.lineTo(centerX, centerY - tileSize * 0.26);
+    graphics.moveTo(centerX, centerY + tileSize * 0.38);
+    graphics.lineTo(centerX, centerY + tileSize * 0.26);
+    graphics.moveTo(centerX - tileSize * 0.38, centerY);
+    graphics.lineTo(centerX - tileSize * 0.26, centerY);
+    graphics.moveTo(centerX + tileSize * 0.38, centerY);
+    graphics.lineTo(centerX + tileSize * 0.26, centerY);
     graphics.strokePath();
   }
 
   if (cell.isObjectiveTarget) {
     graphics.lineStyle(3, 0xf7d889, 0.92);
-    graphics.strokeRoundedRect(x + 8, y + 8, tileSize - 16, tileSize - 16, 14);
+    graphics.strokeCircle(x + tileSize * 0.5, y + tileSize * 0.52, tileSize * 0.3);
     graphics.lineStyle(1, 0xf7d889, 0.26);
-    graphics.strokeRoundedRect(x + 14, y + 14, tileSize - 28, tileSize - 28, 10);
+    graphics.strokeCircle(x + tileSize * 0.5, y + tileSize * 0.52, tileSize * 0.22);
   }
 
   if (cell.isCurrent && snapshot.encounter?.status === 'active') {
     graphics.lineStyle(3, 0xe77757, 0.54);
-    graphics.strokeRoundedRect(x - 4, y - 4, tileSize + 8, tileSize + 8, 20);
+    graphics.strokeCircle(x + tileSize * 0.5, y + tileSize * 0.55, tileSize * 0.42);
+  } else if (cell.isCurrent) {
+    graphics.lineStyle(2, 0xf7d889, 0.74);
+    graphics.strokeCircle(x + tileSize * 0.5, y + tileSize * 0.55, tileSize * 0.36);
   }
 }
 
-function drawTerrainConnections(
+function drawSeamlessTerrainPatch(
   graphics: PhaserType.GameObjects.Graphics,
   cellMap: CellMap,
   cell: WorldRenderCell,
@@ -501,31 +403,41 @@ function drawTerrainConnections(
   y: number,
   tileSize: number
 ) {
-  const centerX = x + tileSize / 2;
-  const centerY = y + tileSize / 2;
-  const { detail } = cell.terrain.palette;
-  const connections = [
-    { neighbor: cellAt(cellMap, cell.x, cell.y - 1), point: { x: centerX, y: y + 8 } },
-    { neighbor: cellAt(cellMap, cell.x + 1, cell.y), point: { x: x + tileSize - 8, y: centerY } },
-    { neighbor: cellAt(cellMap, cell.x, cell.y + 1), point: { x: centerX, y: y + tileSize - 8 } },
-    { neighbor: cellAt(cellMap, cell.x - 1, cell.y), point: { x: x + 8, y: centerY } },
-  ];
+  const { palette } = cell.terrain;
+  const topFill = blendHexColor(palette.fill, 0xf3dca6, 0.07);
+  const bottomFill = blendHexColor(palette.fill, 0x030504, 0.24);
+  const patchX = Math.floor(x) - 1;
+  const patchY = Math.floor(y) - 1;
+  const patchSize = Math.ceil(tileSize) + 2;
 
-  if (cell.tile.kind === 'mud') {
-    graphics.lineStyle(Math.max(5, tileSize * 0.08), detail, 0.18);
-    for (const { neighbor, point } of connections) {
-      if (!neighbor || neighbor.tile.kind !== 'mud') {
-        continue;
-      }
-      graphics.beginPath();
-      graphics.moveTo(centerX, centerY);
-      graphics.lineTo(point.x, point.y);
-      graphics.strokePath();
-    }
+  graphics.fillGradientStyle(topFill, topFill, bottomFill, bottomFill, 1, 1, 1, 1);
+  graphics.fillRect(patchX, patchY, patchSize, patchSize);
+
+  const north = cellAt(cellMap, cell.x, cell.y - 1);
+  const east = cellAt(cellMap, cell.x + 1, cell.y);
+  const south = cellAt(cellMap, cell.x, cell.y + 1);
+  const west = cellAt(cellMap, cell.x - 1, cell.y);
+  const edgeWidth = Math.max(3, Math.floor(tileSize * 0.08));
+
+  if (north && north.tile.kind !== cell.tile.kind) {
+    graphics.fillStyle(blendHexColor(palette.fill, north.terrain.palette.fill, 0.38), 0.34);
+    graphics.fillRect(patchX, patchY, patchSize, edgeWidth);
+  }
+  if (east && east.tile.kind !== cell.tile.kind) {
+    graphics.fillStyle(blendHexColor(palette.fill, east.terrain.palette.fill, 0.38), 0.34);
+    graphics.fillRect(patchX + patchSize - edgeWidth, patchY, edgeWidth, patchSize);
+  }
+  if (south && south.tile.kind !== cell.tile.kind) {
+    graphics.fillStyle(blendHexColor(palette.fill, south.terrain.palette.fill, 0.38), 0.34);
+    graphics.fillRect(patchX, patchY + patchSize - edgeWidth, patchSize, edgeWidth);
+  }
+  if (west && west.tile.kind !== cell.tile.kind) {
+    graphics.fillStyle(blendHexColor(palette.fill, west.terrain.palette.fill, 0.38), 0.34);
+    graphics.fillRect(patchX, patchY, edgeWidth, patchSize);
   }
 }
 
-function drawTerrainDetail(
+function drawPixelTerrainDetail(
   graphics: PhaserType.GameObjects.Graphics,
   cell: WorldRenderCell,
   x: number,

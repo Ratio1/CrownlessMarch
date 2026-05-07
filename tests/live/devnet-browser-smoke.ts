@@ -420,10 +420,12 @@ async function runResetSmoke(page: Page, characterName: string) {
   const resetCharacterName = `${characterName}Reset`;
 
   logStage(`resetting browser smoke character to ${resetCharacterName}`);
-  await page.getByRole('tab', { name: 'Full Character' }).click();
+  await page.getByRole('tab', { name: 'Character Sheet' }).click();
+  await page.getByRole('button', { name: 'Reset Character' }).click();
   await page.getByLabel('Character name').fill(resetCharacterName);
   await page.getByLabel('Class').selectOption('wizard');
-  await page.getByRole('button', { name: 'Reset Character' }).click();
+  await page.getByLabel('Confirm beta character reset').check();
+  await page.getByRole('button', { name: 'Accept & Apply Reset' }).click();
   await page.waitForFunction(
     (input) => {
       const bodyText = document.body.innerText;
@@ -459,7 +461,7 @@ async function readPlayfieldRetentionDiagnostics(page: Page, characterName: stri
       connected: bodyText.includes('Connected to live shard.'),
       reconnecting: bodyText.toLowerCase().includes('reconnecting'),
       hasCharacterName: bodyText.includes(input.characterName),
-      hasShortSheet: bodyText.includes('Short Sheet'),
+      hasCharacterSheet: bodyText.includes('Character Sheet'),
       hasCanvas: canvas instanceof HTMLCanvasElement && canvas.width > 0,
       canvasClientWidth: canvasRect?.width ?? 0,
       canvasClientHeight: canvasRect?.height ?? 0,
@@ -638,7 +640,7 @@ async function clickMovementAndWait(page: Page, direction: string, expectedMoveT
 
           return (
             bodyText.includes(input.expectedMoveText) ||
-            (input.combat && bodyTextLower.includes('dice log') && bodyText.includes('D20'))
+            (input.combat && bodyTextLower.includes('d20 rolls') && bodyText.includes('D20'))
           );
         },
         { expectedMoveText, combat },
@@ -730,7 +732,7 @@ async function runBrowserSmoke(
           const bodyText = document.body.innerText;
           const bodyTextLower = bodyText.toLowerCase();
 
-          return bodyTextLower.includes('dice log') && bodyText.includes('D20');
+          return bodyTextLower.includes('d20 rolls') && bodyText.includes('D20');
         },
         null,
         {
@@ -763,15 +765,16 @@ async function runBrowserSmoke(
         connected: bodyText.includes('Connected to live shard.'),
         hasCanvas: input.lastCanvasDiagnostics.canvas.width > 0,
         statusLine: document.querySelector('.status-line')?.textContent ?? null,
-        ground:
-          Array.from(document.querySelectorAll('.world-field__badges .status-pill'))
+        fieldNotes:
+          Array.from(document.querySelectorAll('.field-notes li'))
             .map((node) => node.textContent)
-            .find((text) => text?.startsWith('Ground')) ?? null,
+            .filter(Boolean)
+            .join(' | ') || null,
         moveText,
         moveTextVisible: bodyText.includes(moveText),
         moveEntryText: moveEntry?.textContent ?? null,
         moveEntryStyled: Boolean(moveEntry),
-        combatActive: bodyTextLower.includes('dice log') && bodyText.includes('D20'),
+        combatActive: bodyTextLower.includes('d20 rolls') && bodyText.includes('D20'),
         d20LogVisible: bodyText.includes('D20'),
         horizontalOverflowPx,
         movementPadVisible: Boolean(movementPadRect && movementPadRect.width > 0 && movementPadRect.height > 0),

@@ -35,6 +35,8 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
     wisdom: 10,
     charisma: 10,
   });
+  const [showResetForm, setShowResetForm] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const budget = pointBuyBudgetForLevel(card?.realLevel ?? 1);
@@ -49,6 +51,9 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
     setName(cardName);
     setClassId(cardClassId);
     setValues(cloneAttributes(cardAttributes));
+    setShowResetForm(false);
+    setAccepted(false);
+    setError(null);
   }, [cardAttributes, cardCid, cardClassId, cardName]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -88,7 +93,17 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
     <section className="panel play-panel character-reset-panel">
       <div className="panel-title">Beta Reset</div>
       {!card ? <p className="muted">No character checkpoint is loaded.</p> : null}
-      {card ? (
+      {card && !showResetForm ? (
+        <div className="character-reset-panel__closed">
+          <p className="muted">
+            Beta testers can rebuild class and ability scores while preserving level and earned level-up extras.
+          </p>
+          <button className="secondary-button" onClick={() => setShowResetForm(true)} type="button">
+            Reset Character
+          </button>
+        </div>
+      ) : null}
+      {card && showResetForm ? (
         <form className="stack" onSubmit={onSubmit}>
           <label className="field">
             <span>Character name</span>
@@ -134,11 +149,27 @@ export function CharacterResetPanel({ snapshot }: CharacterResetPanelProps) {
               </label>
             ))}
           </div>
+          <label className="checkbox-row">
+            <input
+              checked={accepted}
+              onChange={(event) => setAccepted(event.currentTarget.checked)}
+              type="checkbox"
+              aria-label="Confirm beta character reset"
+            />
+            <span>
+              I accept this beta reset. Level and earned level-up extras stay; class, name, and point-buy scores are rebuilt.
+            </span>
+          </label>
           {error ? <p className="error">{error}</p> : null}
           {!error && !pointBuy.valid ? <p className="error">This spread exceeds the level {card.realLevel} reset budget.</p> : null}
-          <button className="primary-button" disabled={!canSubmit} type="submit">
-            {pending ? 'Resetting...' : 'Reset Character'}
-          </button>
+          <div className="character-reset-panel__actions">
+            <button className="secondary-button" disabled={pending} onClick={() => setShowResetForm(false)} type="button">
+              Cancel
+            </button>
+            <button className="primary-button" disabled={!canSubmit || !accepted} type="submit">
+              {pending ? 'Resetting...' : 'Accept & Apply Reset'}
+            </button>
+          </div>
         </form>
       ) : null}
     </section>

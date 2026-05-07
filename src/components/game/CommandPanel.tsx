@@ -9,7 +9,7 @@ interface CommandPanelProps {
   onCommand: (command: GameplayMudCommand) => void;
 }
 
-const QUICK_COMMANDS: GameplayMudCommand[] = ['look', 'consider goblin', 'lore goblin', 'inventory'];
+const QUICK_COMMANDS: GameplayMudCommand[] = ['look', 'search'];
 
 export function CommandPanel({ disabled, combatMode = false, onCommand }: CommandPanelProps) {
   const [command, setCommand] = useState('');
@@ -33,7 +33,7 @@ export function CommandPanel({ disabled, combatMode = false, onCommand }: Comman
 
   return (
     <section className="panel play-panel play-panel--compact command-panel">
-      <div className="panel-title">Field Command</div>
+      <div className="panel-title">Field Commands</div>
       <form className="command-panel__form" onSubmit={submitCommand}>
         <label className="command-panel__label" htmlFor="mud-command">
           <span>&gt;</span>
@@ -43,7 +43,7 @@ export function CommandPanel({ disabled, combatMode = false, onCommand }: Comman
             id="mud-command"
             name="command"
             onChange={(event) => setCommand(event.target.value)}
-            placeholder={combatMode ? 'flee' : 'look / consider goblin / lore / inventory'}
+            placeholder={combatMode ? 'flee' : 'look / search'}
             type="text"
             value={command}
           />

@@ -25,4 +25,15 @@ describe('Phaser renderer configuration', () => {
     expect(source).toContain('characterSpriteKey');
     expect(source).toContain('monsterSpriteKey');
   });
+
+  it('renders terrain as a seamless old-school bitmap field instead of separated square tiles', () => {
+    const source = readSource('src/client/phaser/createGame.ts');
+
+    expect(source).toContain('const TILE_GAP = 0;');
+    expect(source).toContain('drawSeamlessTerrainPatch');
+    expect(source).toContain('drawPixelTerrainDetail');
+    expect(source).not.toContain('drawObjectiveTrail');
+    expect(source).not.toContain('strokeRoundedRect(x, y, tileSize, tileSize');
+    expect(source).not.toContain('fillRoundedRect(x, y, tileSize, tileSize');
+  });
 });
